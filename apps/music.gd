@@ -104,7 +104,7 @@ func _build_ui() -> void:
 	trans_view = _lyric_panel(two, sb)
 	var wp := PanelContainer.new(); wp.custom_minimum_size.y = 96
 	var sb2 := sb.duplicate(); sb2.bg_color = Color("1d2330"); sb2.set_content_margin_all(12); wp.add_theme_stylebox_override("panel", sb2); right.add_child(wp)
-	word_view = RichTextLabel.new(); word_view.bbcode_enabled = true; word_view.add_theme_font_size_override("normal_font_size", 17)
+	word_view = RichTextLabel.new(); word_view.bbcode_enabled = true; word_view.selection_enabled = true; word_view.context_menu_enabled = true; word_view.add_theme_font_size_override("normal_font_size", 17)
 	word_view.text = "[color=#8f9bb3]Clique un mot des paroles pour voir sa traduction (dictionnaire hors ligne).[/color]"; wp.add_child(word_view)
 	# Transport
 	var tp := HBoxContainer.new(); tp.add_theme_constant_override("separation", 8); root.add_child(tp)
@@ -130,6 +130,7 @@ func _lyric_panel(parent: Control, sb: StyleBoxFlat) -> RichTextLabel:
 	pc.size_flags_stretch_ratio = 1.0; pc.add_theme_stylebox_override("panel", sb); parent.add_child(pc)
 	var r := RichTextLabel.new(); r.bbcode_enabled = true; r.scroll_active = false; r.meta_underlined = false
 	r.add_theme_font_size_override("normal_font_size", 19); r.add_theme_font_size_override("bold_font_size", 24)
+	r.selection_enabled = true; r.context_menu_enabled = true
 	r.meta_clicked.connect(_word_clicked); pc.add_child(r)
 	return r
 

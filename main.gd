@@ -81,6 +81,8 @@ func _ready() -> void:
 		set_cfg["src"] = "spa"; set_cfg["tgt"] = "fra"; _apply_langs()
 		await get_tree().create_timer(1.0).timeout
 		print("LANGS2: ", dic_note.text)
+		edit.text = "bonjour tout le monde"; edit.grab_focus(); _clip_action("all"); _clip_action("copy"); edit.text = ""; _clip_action("paste")
+		print("CLIP: ", edit.text)
 		print("OS-TEST OK wins=", wins.size())
 		get_tree().quit()
 
@@ -311,6 +313,10 @@ func _build_keyboard() -> void:
 	kb.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	var kv := VBoxContainer.new(); kv.alignment = BoxContainer.ALIGNMENT_CENTER
 	kv.add_theme_constant_override("separation", 6); kb.add_child(kv)
+	var act := HBoxContainer.new(); act.alignment = BoxContainer.ALIGNMENT_CENTER
+	act.add_theme_constant_override("separation", 6); kv.add_child(act)
+	for e in [["Tout", "all"], ["Copier", "copy"], ["Couper", "cut"], ["Coller", "paste"], ["↑", "up"], ["↓", "down"], ["⇤", "home"], ["⇥", "end"]]:
+		var ab := _mk_btn(e[0], 92 if e[0].length() > 1 else 56, 44); ab.pressed.connect(_clip_action.bind(e[1])); act.add_child(ab)
 	for r in ROWS_LOWER.size():
 		var row := HBoxContainer.new(); row.alignment = BoxContainer.ALIGNMENT_CENTER
 		row.add_theme_constant_override("separation", 6); kv.add_child(row)
@@ -347,6 +353,32 @@ func _bs() -> void:
 	var f := _target()
 	if f is TextEdit: f.backspace()
 	elif f is LineEdit and f.caret_column > 0: f.delete_text(f.caret_column - 1, f.caret_column)
+
+## Actions presse-papiers / curseur du clavier visuel (utile sur tablette, sans Ctrl+C / Ctrl+V).
+func _clip_action(a: String) -> void:
+	var f := get_viewport().gui_get_focus_owner()
+	if f is RichTextLabel:
+		if a == "all": f.select_all()
+		elif a == "copy" and f.get_selected_text() != "": DisplayServer.clipboard_set(f.get_selected_text())
+		return
+	if f is TextEdit:
+		match a:
+			"all": f.select_all()
+			"copy": f.copy()
+			"cut": if f.editable: f.cut()
+			"paste": if f.editable: f.paste()
+			"up": f.set_caret_line(maxi(0, f.get_caret_line() - 1))
+			"down": f.set_caret_line(mini(f.get_line_count() - 1, f.get_caret_line() + 1))
+			"home": f.set_caret_column(0)
+			"end": f.set_caret_column(f.get_line(f.get_caret_line()).length())
+	elif f is LineEdit:
+		match a:
+			"all": f.select_all()
+			"copy": f.menu_option(LineEdit.MENU_COPY)
+			"cut": f.menu_option(LineEdit.MENU_CUT)
+			"paste": f.menu_option(LineEdit.MENU_PASTE)
+			"home": f.caret_column = 0
+			"end": f.caret_column = f.text.length()
 
 func _toggle_kb() -> void:
 	kb.visible = not kb.visible
@@ -882,7 +914,7 @@ func _app_dict() -> void:
 	var nx := _mk_btn("▶", 48, 36); nx.pressed.connect(_dic_page.bind(1)); pg.add_child(nx)
 	var pc := PanelContainer.new(); pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pc.add_theme_stylebox_override("panel", _box(Color("171b25"), 10, Color(1, 1, 1, 0.07), 1, 0, 16)); hb.add_child(pc)
-	dic_def = RichTextLabel.new(); dic_def.bbcode_enabled = true; dic_def.selection_enabled = true
+	dic_def = RichTextLabel.new(); dic_def.bbcode_enabled = true; dic_def.selection_enabled = true; dic_def.context_menu_enabled = true
 	dic_def.add_theme_font_size_override("normal_font_size", 20); dic_def.add_theme_font_size_override("bold_font_size", 28)
 	pc.add_child(dic_def)
 	_dic_load()

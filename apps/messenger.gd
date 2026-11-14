@@ -248,11 +248,13 @@ func _add_bubble(m: Dictionary) -> void:
 	tl.add_theme_color_override("font_color", Color(1, 1, 1, 0.5)); tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT; v.add_child(tl)
 
 
-func _wrap_label(t: String) -> Label:
-	var l := Label.new(); l.text = t; l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+func _wrap_label(t: String) -> RichTextLabel:
+	var l := RichTextLabel.new(); l.text = t; l.fit_content = true; l.scroll_active = false
+	l.selection_enabled = true; l.context_menu_enabled = true; l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.add_theme_font_size_override("normal_font_size", 17)
 	var f := get_theme_default_font()
 	var w := f.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, 17).x
-	l.custom_minimum_size.x = clampf(w + 4, 40, 380)
+	l.custom_minimum_size.x = clampf(w + 8, 40, 380)
 	return l
 
 
