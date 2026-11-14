@@ -26,15 +26,15 @@ else
 	unzip -q "$TMP/sl.zip" -d "$TMP"
 	SRC="$TMP/BlocNote"
 fi
-cp -f "$SRC"/BlocNote.x86_64 "$SRC"/icon.svg "$SRC"/install.sh "$APP"/
-chmod +x "$APP/BlocNote.x86_64"
-ln -sf "$APP/BlocNote.x86_64" "$BIN"
+cp -f "$SRC"/BlocNote.x86_64 "$SRC"/langos.sh "$SRC"/icon.svg "$SRC"/install.sh "$APP"/
+chmod +x "$APP/BlocNote.x86_64" "$APP/langos.sh"
+ln -sf "$APP/langos.sh" "$BIN"
 cat > "$DESK" <<D
 [Desktop Entry]
 Type=Application
-Name=Bloc-notes
+Name=LangOS
 Comment=Bloc-notes avec clavier visuel
-Exec=$APP/BlocNote.x86_64
+Exec=$APP/langos.sh
 Icon=$APP/icon.svg
 Terminal=false
 Categories=Utility;TextEditor;

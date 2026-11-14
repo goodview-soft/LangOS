@@ -6,6 +6,10 @@ run/main_scene="res://boot.tscn"
 config/icon="res://icon.svg"
 config/features=PackedStringArray("4.7")
 
+[audio]
+
+driver/enable_input=true
+
 [display]
 window/size/viewport_width=1280
 window/size/viewport_height=800

@@ -49,6 +49,8 @@ const APPS := {
 	"system": ["Système", "res://icons/app_system.svg"],
 	"translate": ["Traducteur", "res://icons/app_translate.svg"],
 	"dict": ["Dictionnaire", "res://icons/app_dict.svg"],
+	"music": ["Music", "res://icons/app_music.svg"],
+	"soundlink": ["Sound Link", "res://icons/app_soundlink.svg"],
 	"update": ["Mise à jour", "res://icons/app_update.svg"],
 }
 var active := ""
@@ -364,6 +366,8 @@ func _open_app(id: String) -> void:
 		"system": _app_system()
 		"translate": _app_translate()
 		"dict": _app_dict()
+		"music": _app_music()
+		"soundlink": _app_soundlink()
 		"update": _app_update()
 
 func _show(id: String) -> void:
@@ -774,6 +778,27 @@ func _on_tr_done(result: int, code: int, _h: PackedStringArray, body: PackedByte
 	var rx := RegEx.create_from_string("(?s)<think>.*?</think>")
 	tr_out.text = rx.sub(str(info["message"]["content"]), "", true).strip_edges()
 	tr_status.text = "✓ %.1f s — traduit localement" % ((Time.get_ticks_msec() - tr_t0) / 1000.0)
+
+# ---------------------------------------------------------------- Music (app intégrée)
+
+func _app_music() -> void:
+	var wv := _make_window("music", "", Vector2(1040, 660), Vector2(110, 10))
+	var mu := Control.new()
+	mu.set_script(load("res://apps/music.gd"))
+	mu.set("ollama_url", set_cfg["ollama"])
+	mu.size_flags_vertical = Control.SIZE_EXPAND_FILL; mu.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mu.custom_minimum_size = Vector2(900, 520); mu.clip_contents = true
+	wv.add_child(mu)
+
+# ---------------------------------------------------------------- Sound Link (app intégrée)
+
+func _app_soundlink() -> void:
+	var wv := _make_window("soundlink", "", Vector2(500, 740), Vector2(240, 16))
+	var sl := Control.new()
+	sl.set_script(load("res://apps/soundlink.gd"))
+	sl.size_flags_vertical = Control.SIZE_EXPAND_FILL; sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sl.custom_minimum_size = Vector2(440, 560); sl.clip_contents = true
+	wv.add_child(sl)
 
 # ---------------------------------------------------------------- Dictionnaire (hors ligne, données FreeDict)
 
