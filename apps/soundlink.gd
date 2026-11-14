@@ -1184,11 +1184,13 @@ func _play_process(now: float) -> Vector2:
 	var in_v := AudioServer.output_device == VSINK
 	if want_v and not in_v:
 		AudioServer.output_device = VSINK
+		_move_output(VSINK)
 	elif not want_v and in_v:
 		for e in rxs.values():
 			if e["bus"] != "":
 				AudioServer.set_bus_mute(AudioServer.get_bus_index(e["bus"]), true)
 		AudioServer.output_device = "Default"
+		_move_output("")
 	in_v = AudioServer.output_device == VSINK
 	var peak := Vector2.ZERO
 	for key in rxs.keys():
@@ -1536,3 +1538,33 @@ func _pulse_monitor() -> void:
 			OS.execute("pactl", ["move-source-output", str(so["index"]), mon], [])
 	capture.clear_buffer()
 	cap_hold = false
+
+
+## PipeWire mémorise la sortie de l'app (stream-restore) et peut ignorer le changement de périphérique :
+## on déplace explicitement notre flux de lecture vers « sink » (vide = sortie par défaut du système).
+func _move_output(sink: String) -> void:
+	if OS.get_name() != "Linux" or OS.has_feature("mobile"):
+		return
+	for delay in [0.5, 2.0]:
+		await get_tree().create_timer(delay).timeout
+		var target := sink
+		var out := []
+		if target == "":
+			if OS.execute("pactl", ["get-default-sink"], out) != 0 or out.is_empty():
+				return
+			target = str(out[0]).strip_edges()
+			if target == VSINK or target == "":
+				return
+		elif AudioServer.output_device != VSINK:
+			return  # entre-temps le micro s'est arrêté
+		out = []
+		if OS.execute("pactl", ["-f", "json", "list", "sink-inputs"], out) != 0 or out.is_empty():
+			return
+		var list = JSON.parse_string(str(out[0]))
+		if not (list is Array):
+			return
+		var app_name := str(ProjectSettings.get_setting("application/config/name", ""))
+		for si in list:
+			var pr: Dictionary = si.get("properties", {})
+			if pr.get("application.name", "") == app_name and str(pr.get("application.process.id", OS.get_process_id())) == str(OS.get_process_id()):
+				OS.execute("pactl", ["move-sink-input", str(si["index"]), target], [])
