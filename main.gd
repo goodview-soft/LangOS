@@ -60,14 +60,12 @@ const APPS := {
 	"f_games": ["Jeux", "res://icons/app_f_games.svg"],
 	"f_comm": ["Communication", "res://icons/app_f_comm.svg"],
 	"hika": ["Hikabrain", "res://icons/app_hika.svg"],
-	"f_perso": ["Personnel", "res://icons/app_f_perso.svg"],
 }
 ## Dossiers du bureau : id -> applications contenues (affichées seulement dans le dossier).
 const FOLDERS := {
 	"f_lang": ["translate", "dict", "music"],
-	"f_games": ["chess"],
+	"f_games": ["chess", "hika"],
 	"f_comm": ["messenger", "remote", "chat", "soundlink"],
-	"f_perso": ["hika"],
 }
 
 func _top_ids() -> Array:
