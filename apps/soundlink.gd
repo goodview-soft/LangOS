@@ -1394,7 +1394,8 @@ func _discovery(now: float, delta: float) -> void:
 	else:
 		peers.erase("manual")
 	for k in peers.keys():
-		if now - peers[k]["t"] > 4.0:
+		# un appareil écouté est gardé 30 s sans annonce : le Wi-Fi perd souvent des broadcasts (tablette en veille)
+		if now - peers[k]["t"] > (30.0 if listening.has(k) else 4.0):
 			peers.erase(k)
 	var sig := "%s" % [listening.keys()]
 	for k in peers:
