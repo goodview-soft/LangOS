@@ -27,13 +27,14 @@ var status: Label
 var list: ItemList
 var now_lbl: Label
 var lyrics_view: RichTextLabel
+var trans_view: RichTextLabel
 var word_view: RichTextLabel
 var seek: HSlider
 var time_lbl: Label
 var play_btn: Button
 var off_lbl: Label
-var src_opt: OptionButton
-var tgt_opt: OptionButton
+var src := "spa"
+var tgt := "fra"
 var tr_btn: Button
 var dl_btn: Button
 var _seeking := false
@@ -89,15 +90,6 @@ func _build_ui() -> void:
 	var left := VBoxContainer.new(); left.custom_minimum_size.x = 290; left.add_theme_constant_override("separation", 6); hb.add_child(left)
 	list = ItemList.new(); list.size_flags_vertical = SIZE_EXPAND_FILL
 	list.item_activated.connect(_play); left.add_child(list)
-	var lr := HBoxContainer.new(); left.add_child(lr)
-	var l1 := Label.new(); l1.text = "Paroles en"; l1.size_flags_horizontal = SIZE_EXPAND_FILL; lr.add_child(l1)
-	src_opt = OptionButton.new(); src_opt.focus_mode = Control.FOCUS_NONE; lr.add_child(src_opt)
-	var tr := HBoxContainer.new(); left.add_child(tr)
-	var l2 := Label.new(); l2.text = "Traduire en"; l2.size_flags_horizontal = SIZE_EXPAND_FILL; tr.add_child(l2)
-	tgt_opt = OptionButton.new(); tgt_opt.focus_mode = Control.FOCUS_NONE; tr.add_child(tgt_opt)
-	for l in LANGS: src_opt.add_item(l[0]); tgt_opt.add_item(l[0])
-	src_opt.select(0); tgt_opt.select(2)
-	src_opt.item_selected.connect(func(_i): _lang_changed()); tgt_opt.item_selected.connect(func(_i): _lang_changed())
 	var br := HBoxContainer.new(); br.add_theme_constant_override("separation", 6); left.add_child(br)
 	br.add_child(_btn("Paroles", func(): _fetch_lyrics(current, true), "", 0))
 	tr_btn = _btn("Traduire", _translate_current, "", 0); br.add_child(tr_btn)
@@ -105,13 +97,11 @@ func _build_ui() -> void:
 	# Colonne droite : karaoké
 	var right := VBoxContainer.new(); right.size_flags_horizontal = SIZE_EXPAND_FILL; right.add_theme_constant_override("separation", 8); hb.add_child(right)
 	now_lbl = Label.new(); now_lbl.add_theme_font_size_override("font_size", 20); now_lbl.text = "Aucun morceau"; now_lbl.clip_text = true; right.add_child(now_lbl)
-	var pc := PanelContainer.new(); pc.size_flags_vertical = SIZE_EXPAND_FILL
-	var sb := StyleBoxFlat.new(); sb.bg_color = Color("171b25"); sb.set_corner_radius_all(12); sb.set_content_margin_all(16); pc.add_theme_stylebox_override("panel", sb)
-	right.add_child(pc)
-	lyrics_view = RichTextLabel.new(); lyrics_view.bbcode_enabled = true; lyrics_view.scroll_active = false
-	lyrics_view.meta_underlined = false; lyrics_view.add_theme_font_size_override("normal_font_size", 20)
-	lyrics_view.add_theme_font_size_override("bold_font_size", 28)
-	lyrics_view.meta_clicked.connect(_word_clicked); pc.add_child(lyrics_view)
+	var two := HBoxContainer.new(); two.size_flags_vertical = SIZE_EXPAND_FILL
+	two.add_theme_constant_override("separation", 10); right.add_child(two)
+	var sb := StyleBoxFlat.new(); sb.bg_color = Color("171b25"); sb.set_corner_radius_all(12); sb.set_content_margin_all(16)
+	lyrics_view = _lyric_panel(two, sb)
+	trans_view = _lyric_panel(two, sb)
 	var wp := PanelContainer.new(); wp.custom_minimum_size.y = 96
 	var sb2 := sb.duplicate(); sb2.bg_color = Color("1d2330"); sb2.set_content_margin_all(12); wp.add_theme_stylebox_override("panel", sb2); right.add_child(wp)
 	word_view = RichTextLabel.new(); word_view.bbcode_enabled = true; word_view.add_theme_font_size_override("normal_font_size", 17)
@@ -135,12 +125,25 @@ func _build_ui() -> void:
 		status.text = "Le téléchargement YouTube (yt-dlp) n'est disponible que sur PC."
 
 
-func _lang_changed() -> void:
-	if current >= 0:
-		tracks[current]["src"] = LANGS[src_opt.selected][1]
-		tracks[current]["tgt"] = LANGS[tgt_opt.selected][1]
-		_save_lib(false)
-		_load_lines()
+func _lyric_panel(parent: Control, sb: StyleBoxFlat) -> RichTextLabel:
+	var pc := PanelContainer.new(); pc.size_flags_vertical = SIZE_EXPAND_FILL; pc.size_flags_horizontal = SIZE_EXPAND_FILL
+	pc.size_flags_stretch_ratio = 1.0; pc.add_theme_stylebox_override("panel", sb); parent.add_child(pc)
+	var r := RichTextLabel.new(); r.bbcode_enabled = true; r.scroll_active = false; r.meta_underlined = false
+	r.add_theme_font_size_override("normal_font_size", 19); r.add_theme_font_size_override("bold_font_size", 24)
+	r.meta_clicked.connect(_word_clicked); pc.add_child(r)
+	return r
+
+
+func _name(code: String, i: int) -> String:
+	for l in LANGS:
+		if l[1] == code: return l[i]
+	return code
+
+
+## Appelé par LangOS quand les langues des Paramètres changent.
+func set_langs(s: String, t: String) -> void:
+	src = s; tgt = t
+	if current >= 0: _load_lines()
 
 
 # ---------------------------------------------------------------- Lecture
@@ -160,9 +163,6 @@ func _play(i: int) -> void:
 	player.stream = s; player.play()
 	seek.max_value = s.get_length()
 	now_lbl.text = "%s — %s" % [t.artist, t.track]
-	for k in LANGS.size():
-		if LANGS[k][1] == t.get("src", "spa"): src_opt.select(k)
-		if LANGS[k][1] == t.get("tgt", "fra"): tgt_opt.select(k)
 	_load_lines()
 	if lines.is_empty(): _fetch_lyrics(i, false)
 
@@ -229,26 +229,32 @@ func _line_bb(text: String, glossed: Dictionary, links := true) -> String:
 
 func _render(idx: int) -> void:
 	if lines.is_empty():
-		lyrics_view.text = "[center][color=#8f9bb3]Pas de paroles synchronisées.[/color][/center]"; return
-	var b := ""
-	for k in range(maxi(idx - 3, 0), mini(lines.size(), idx + 8)):
+		lyrics_view.text = "[center][color=#8f9bb3]Pas de paroles synchronisées.[/color][/center]"
+		trans_view.text = ""; return
+	var a := "[color=#8f9bb3][font_size=14]%s[/font_size][/color]\n\n" % _name(src, 0)
+	var b := "[color=#8f9bb3][font_size=14]%s[/font_size][/color]\n\n" % _name(tgt, 0)
+	if trans.is_empty(): b += "[color=#6b7488]Clique « Traduire » pour afficher la traduction ici.[/color]"
+	for k in range(maxi(idx - 3, 0), mini(lines.size(), idx + 9)):
 		var txt: String = str(lines[k][1])
 		if txt == "": txt = "♪"
+		var tl: Dictionary = trans.get(k, {})
+		var ft := str(tl.get("tr", "")).replace("[", "[lb]")
+		if ft == "" and txt == "♪": ft = "♪"
 		if k == idx:
-			var tl: Dictionary = trans.get(k, {})
 			var gl := {}
 			for w in tl.get("words", []): gl[_clean(str(w.get("w", "")))] = str(w.get("sens", ""))
-			b += "[b][color=#ffd040]%s[/color][/b]\n" % _line_bb(txt, gl)
-			var f := str(tl.get("tr", "")).replace("[", "[lb]")
-			if f != "": b += "[font_size=18][color=#6fcf97]%s[/color][/font_size]\n" % f
+			a += "[b][color=#ffd040]%s[/color][/b]\n" % _line_bb(txt, gl)
 			if not gl.is_empty():
 				var g := []
 				for w in tl.get("words", []): g.append("[color=#7dd3fc]%s[/color] = %s" % [str(w.get("w", "")).replace("[", "[lb]"), str(w.get("sens", "")).replace("[", "[lb]")])
-				b += "[font_size=15]%s[/font_size]\n" % "   ".join(g)
-			b += "\n"
+				a += "[font_size=14]%s[/font_size]\n" % "   ".join(g)
+			a += "\n"
+			if not trans.is_empty(): b += "[b][color=#6fcf97]%s[/color][/b]\n\n" % (ft if ft != "" else "…")
 		else:
-			b += "[color=%s]%s[/color]\n" % ["#6b7488" if k < idx else "#aab2c5", _line_bb(txt, {}, true)]
-	lyrics_view.text = b
+			a += "[color=%s]%s[/color]\n" % ["#6b7488" if k < idx else "#aab2c5", _line_bb(txt, {}, true)]
+			if not trans.is_empty(): b += "[color=%s]%s[/color]\n" % ["#6b7488" if k < idx else "#aab2c5", ft if ft != "" else "…"]
+	lyrics_view.text = a
+	trans_view.text = b
 
 
 func _load_lines() -> void:
@@ -308,8 +314,6 @@ func _first_en(def: String) -> Array:
 
 func _word_clicked(meta: Variant) -> void:
 	var w := str(meta)
-	var src: String = LANGS[src_opt.selected][1]
-	var tgt: String = LANGS[tgt_opt.selected][1]
 	var gloss := ""
 	for k in trans:
 		for g in trans[k].get("words", []):
@@ -331,7 +335,7 @@ func _word_clicked(meta: Variant) -> void:
 				for e in _first_en(d1):
 					var d2 := _find("eng-%s" % tgt, e)
 					if d2 != "": tr.append("%s → %s" % [e, "; ".join(_first_en(d2))])
-				if not tr.is_empty(): txt += "\n[color=#6fcf97]%s :[/color] %s" % [LANGS[tgt_opt.selected][0], "  ·  ".join(tr).replace("[", "[lb]")]
+				if not tr.is_empty(): txt += "\n[color=#6fcf97]%s :[/color] %s" % [_name(tgt, 0), "  ·  ".join(tr).replace("[", "[lb]")]
 	if not found and gloss == "": txt += "\n[color=#8f9bb3]Pas dans le dictionnaire hors ligne (formes conjuguées : essayer l'infinitif).[/color]"
 	word_view.text = txt
 
@@ -369,7 +373,7 @@ func _drain_lyr_queue() -> void:
 # ---------------------------------------------------------------- Traduction des paroles (Ollama local)
 
 func _tr_path(t: Dictionary) -> String:
-	return MUSIC_DIR.path_join("%s.%s.json" % [t.id, t.get("tgt", "fra")])
+	return MUSIC_DIR.path_join("%s.%s.json" % [t.id, tgt])
 
 
 func _pick_model() -> String:
@@ -381,7 +385,7 @@ func _pick_model() -> String:
 	var d = JSON.parse_string(r[3].get_string_from_utf8())
 	var names := []
 	if d is Dictionary: for m in d.get("models", []): names.append(str(m["name"]))
-	for pref in ["qwen3:14b", "qwen3:8b", "llama3.1:8b", "gemma3:4b", "llama3.2:3b"]:
+	for pref in ["gemma3:4b", "qwen3:8b", "llama3.1:8b", "qwen3:14b", "llama3.2:3b"]:
 		if pref in names: return pref
 	return names[0] if not names.is_empty() else ""
 
@@ -396,20 +400,25 @@ func _translate_current() -> void:
 		status.text = "Ollama introuvable (réglage du serveur dans Traducteur / Paramètres)."
 		_tr_busy = false; tr_btn.disabled = false; return
 	var t: Dictionary = tracks[current]
-	var src: String = LANGS[src_opt.selected][2]
-	var tgt: String = LANGS[tgt_opt.selected][2]
+	var src_n := _name(src, 2)
+	var tgt_n := _name(tgt, 2)
 	var out := {}
+	trans = {}
 	var k := 0
 	while k < lines.size():
 		var chunk := []
-		for j in range(k, mini(k + 14, lines.size())):
+		for j in range(k, mini(k + 10, lines.size())):
 			if str(lines[j][1]).strip_edges() != "": chunk.append("%d: %s" % [j, lines[j][1]])
-		var res = await _ask(model, src, tgt, chunk) if not chunk.is_empty() else []
+		var res = await _ask(model, src_n, tgt_n, chunk) if not chunk.is_empty() else []
+		if res == null and not chunk.is_empty(): res = await _ask(model, src_n, tgt_n, chunk)
 		if res == null:
-			status.text = "Échec de la traduction."; _tr_busy = false; tr_btn.disabled = false; return
-		for r in res: out[int(r.get("i", -1))] = {"tr": str(r.get("tr", "")), "words": r.get("words", [])}
-		k += 14
-		status.text = "Traduction (%s) : %d %%" % [model, int(100.0 * minf(1.0, float(k) / lines.size()))]
+			status.text = "Échec de la traduction (modèle %s trop lent ou arrêté ?)." % model; _tr_busy = false; tr_btn.disabled = false; return
+		for r in res:
+			out[int(r.get("i", -1))] = {"tr": str(r.get("tr", "")), "words": r.get("words", [])}
+			trans[int(r.get("i", -1))] = out[int(r.get("i", -1))]
+		_last_idx = -2
+		k += 10
+		status.text = "Traduction (%s) : %d %%  — les lignes apparaissent au fur et à mesure" % [model, int(100.0 * minf(1.0, float(k) / lines.size()))]
 	var f := FileAccess.open(_tr_path(t), FileAccess.WRITE); f.store_string(JSON.stringify(out)); f.close()
 	_tr_busy = false; tr_btn.disabled = false
 	status.text = "Traduction terminée ✓"
@@ -417,7 +426,7 @@ func _translate_current() -> void:
 
 
 func _ask(model: String, src: String, tgt: String, chunk: Array):
-	var prompt := "Song lyrics in %s (slang possible), for a learner whose language is %s. For EACH numbered line give:\n- \"tr\": natural %s translation of THIS line (meaning of slang, not word-for-word).\n- \"words\": 0 to 3 words of THIS line a beginner would not know (slang, rare verbs). \"w\" = the word as written in the line; \"sens\" = its %s translation in 1-3 words, DIFFERENT from the original word. Ignore basic words and words identical in %s.\nAnswer in JSON, one entry per line (\"i\" = line number).\n\n%s" % [src, tgt, tgt, tgt, tgt, "\n".join(chunk)]
+	var prompt := "IMPORTANT: every \"tr\" and every \"sens\" MUST be written in %s (never in English unless %s is English).\nSong lyrics in %s (slang possible), for a learner whose language is %s. For EACH numbered line give:\n- \"tr\": natural %s translation of THIS line (meaning of slang, not word-for-word).\n- \"words\": 0 to 3 words of THIS line a beginner would not know (slang, rare verbs). \"w\" = the word as written in the line; \"sens\" = its %s translation in 1-3 words, DIFFERENT from the original word. Ignore basic words and words identical in %s.\nAnswer in JSON, one entry per line (\"i\" = line number).\n\n%s" % [tgt, tgt, src, tgt, tgt, tgt, tgt, "\n".join(chunk)]
 	var body := {"model": model, "stream": false, "think": false, "format": SCHEMA, "options": {"temperature": 0.2},
 		"messages": [{"role": "user", "content": prompt}]}
 	var http := HTTPRequest.new(); http.timeout = 240; add_child(http)
@@ -475,7 +484,7 @@ func _on_line(line: String) -> void:
 		for t in tracks:
 			if t.id == p[1]: status.text = "Déjà dans la bibliothèque : " + p[2]; return
 		tracks.append({"id": p[1], "title": p[2], "artist": g[0], "track": g[1], "duration": p[6].to_float(),
-			"file": MUSIC_DIR.path_join(p[1] + ".mp3"), "lrc": "", "offset": 0.0, "src": "spa", "tgt": "fra"})
+			"file": MUSIC_DIR.path_join(p[1] + ".mp3"), "lrc": "", "offset": 0.0})
 		_save_lib(); status.text = "Ajouté : " + p[2]
 		_lyr_queue.append(p[1])
 		if not _lyr_busy: _drain_lyr_queue()
@@ -490,7 +499,7 @@ func _delete() -> void:
 	if sel.is_empty(): return
 	var i: int = sel[0]
 	var t: Dictionary = tracks[i]
-	if i == current: player.stop(); player.stream = null; current = -1; lines = []; trans = {}; now_lbl.text = "Aucun morceau"; lyrics_view.text = ""
+	if i == current: player.stop(); player.stream = null; current = -1; lines = []; trans = {}; now_lbl.text = "Aucun morceau"; lyrics_view.text = ""; trans_view.text = ""
 	for f in [t.file, t.get("lrc", ""), _tr_path(t)]:
 		if f != "" and FileAccess.file_exists(f): DirAccess.remove_absolute(f)
 	tracks.remove_at(i)

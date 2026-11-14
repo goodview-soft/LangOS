@@ -49,12 +49,13 @@ const APPS := {
 	"system": ["Système", "res://icons/app_system.svg"],
 	"translate": ["Traducteur", "res://icons/app_translate.svg"],
 	"dict": ["Dictionnaire", "res://icons/app_dict.svg"],
+	"messenger": ["Messenger", "res://icons/app_messenger.svg"],
 	"music": ["Music", "res://icons/app_music.svg"],
 	"soundlink": ["Sound Link", "res://icons/app_soundlink.svg"],
 	"update": ["Mise à jour", "res://icons/app_update.svg"],
 }
 var active := ""
-var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "model": "", "engine": -1}
+var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "model": "", "engine": -1, "src": "spa", "tgt": "fra"}
 var kb: PanelContainer
 var upd_http: HTTPRequest
 var upd_btn: Button
@@ -74,6 +75,12 @@ func _ready() -> void:
 		await get_tree().create_timer(1.0).timeout
 		_dic_search("casa")
 		print("DICT: ", dic_list.get_item_text(0), " | ", dic_def.get_parsed_text().replace("\n", " ").substr(0, 70), " | ", dic_info.text)
+		set_cfg["src"] = "fra"; set_cfg["tgt"] = "eng"; _apply_langs()
+		await get_tree().create_timer(1.0).timeout
+		print("LANGS: ", dic_note.text, " | ", dic_info.text, " | music=", music_node.get("src"), ">", music_node.get("tgt"), " | tr=", tr_pair.text)
+		set_cfg["src"] = "spa"; set_cfg["tgt"] = "fra"; _apply_langs()
+		await get_tree().create_timer(1.0).timeout
+		print("LANGS2: ", dic_note.text)
 		print("OS-TEST OK wins=", wins.size())
 		get_tree().quit()
 
@@ -366,6 +373,7 @@ func _open_app(id: String) -> void:
 		"system": _app_system()
 		"translate": _app_translate()
 		"dict": _app_dict()
+		"messenger": _app_messenger()
 		"music": _app_music()
 		"soundlink": _app_soundlink()
 		"update": _app_update()
@@ -499,7 +507,7 @@ func _app_notepad() -> void:
 	_update_status()
 
 func _app_settings() -> void:
-	var wv := _make_window("settings", "⚙ Paramètres", Vector2(520, 420), Vector2(220, 60))
+	var wv := _make_window("settings", "⚙ Paramètres", Vector2(540, 520), Vector2(220, 40))
 	var m := MarginContainer.new(); m.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	for k in ["left", "right", "top", "bottom"]: m.add_theme_constant_override("margin_" + k, 18)
 	wv.add_child(m)
@@ -513,6 +521,20 @@ func _app_settings() -> void:
 		b.add_theme_stylebox_override("normal", sw); b.add_theme_stylebox_override("hover", swh); b.add_theme_stylebox_override("pressed", swh)
 		b.pressed.connect(func(): set_cfg["bg"] = i; _apply_bg(); _save_settings())
 		row.add_child(b)
+	v.add_child(_dlbl("Langues (Traducteur, Dictionnaire, Music)"))
+	var lr := HBoxContainer.new(); lr.add_theme_constant_override("separation", 8); v.add_child(lr)
+	var so := OptionButton.new(); var to := OptionButton.new()
+	for o in [so, to]:
+		o.focus_mode = Control.FOCUS_NONE
+		for l in GL: o.add_item(l[0])
+	so.select(GL.find_custom(func(l): return l[1] == set_cfg["src"])); to.select(GL.find_custom(func(l): return l[1] == set_cfg["tgt"]))
+	so.item_selected.connect(func(i: int): set_cfg["src"] = GL[i][1]; _apply_langs())
+	to.item_selected.connect(func(i: int): set_cfg["tgt"] = GL[i][1]; _apply_langs())
+	var sw := _mk_btn("⇄", 48, 40)
+	sw.pressed.connect(func():
+		var t: String = set_cfg["src"]; set_cfg["src"] = set_cfg["tgt"]; set_cfg["tgt"] = t
+		so.select(GL.find_custom(func(l): return l[1] == set_cfg["src"])); to.select(GL.find_custom(func(l): return l[1] == set_cfg["tgt"])); _apply_langs())
+	lr.add_child(_mlbl("Origine")); lr.add_child(so); lr.add_child(sw); lr.add_child(_mlbl("Traduction")); lr.add_child(to)
 	var fl := _mlbl("Taille du texte du Bloc-notes : %d" % set_cfg["font"]); v.add_child(fl)
 	var sl := HSlider.new(); sl.min_value = 14; sl.max_value = 40; sl.step = 1; sl.value = set_cfg["font"]
 	sl.custom_minimum_size.y = 28; sl.focus_mode = Control.FOCUS_NONE
@@ -565,8 +587,24 @@ func _app_update() -> void:
 
 # ---------------------------------------------------------------- Traducteur (modèle local, sans API)
 
-const LANGS := [["Français", "French"], ["English", "English"], ["Español", "Spanish"], ["Deutsch", "German"],
-	["Italiano", "Italian"], ["Português", "Portuguese"], ["Nederlands", "Dutch"], ["日本語", "Japanese"]]
+const GL := [["Français", "fra", "French"], ["English", "eng", "English"], ["Español", "spa", "Spanish"], ["Deutsch", "deu", "German"],
+	["Italiano", "ita", "Italian"], ["Português", "por", "Portuguese"], ["Nederlands", "nld", "Dutch"], ["日本語", "jpn", "Japanese"]]
+var music_node: Control
+var tr_pair: Label
+
+func _gname(code: String, i := 0) -> String:
+	for l in GL:
+		if l[1] == code: return l[i if i != 2 else 2] if i != 1 else l[0]
+	return code
+
+func _pair_text() -> String:
+	return "%s  →  %s" % [_gname(set_cfg["src"], 1), _gname(set_cfg["tgt"], 1)]
+
+func _apply_langs() -> void:
+	_save_settings()
+	if wins.has("translate") and is_instance_valid(tr_pair): tr_pair.text = _pair_text()
+	if wins.has("dict"): _dic_load()
+	if wins.has("music") and is_instance_valid(music_node): music_node.call("set_langs", set_cfg["src"], set_cfg["tgt"])
 const LOCAL_URL := "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf"
 const LOCAL_FILE := "user://models/qwen2.5-1.5b-instruct-q4_k_m.gguf"
 const LOCAL_MIN := 1000000000
@@ -577,8 +615,6 @@ var tr_engine: OptionButton
 var tr_srv: HBoxContainer
 var tr_timer: Timer
 var tr_tags: HTTPRequest
-var tr_src: OptionButton
-var tr_dst: OptionButton
 var tr_model: OptionButton
 var tr_in: TextEdit
 var tr_out: TextEdit
@@ -593,12 +629,9 @@ func _app_translate() -> void:
 	wv.add_child(m)
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 10); m.add_child(v)
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 8); v.add_child(row)
-	tr_src = OptionButton.new(); tr_src.focus_mode = Control.FOCUS_NONE; tr_src.add_item("Détecter")
-	for l in LANGS: tr_src.add_item(l[0])
-	tr_dst = OptionButton.new(); tr_dst.focus_mode = Control.FOCUS_NONE
-	for l in LANGS: tr_dst.add_item(l[0])
+	tr_pair = _dlbl(_pair_text(), 18)
 	var sw := _mk_btn("⇄", 48, 40); sw.pressed.connect(_tr_swap)
-	row.add_child(tr_src); row.add_child(sw); row.add_child(tr_dst)
+	row.add_child(tr_pair); row.add_child(sw)
 	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(sp)
 	tr_engine = OptionButton.new(); tr_engine.focus_mode = Control.FOCUS_NONE
 	tr_engine.add_item("Sur l'appareil"); tr_engine.add_item("Serveur Ollama")
@@ -697,9 +730,8 @@ func _tr_local_translate(text: String) -> void:
 		tr_llm.set("should_output_prompt", false); tr_llm.set("should_output_special", false)
 		tr_llm.set("n_threads", maxi(2, OS.get_processor_count() / 2))
 		tr_llm.connect("generate_text_finished", _on_tr_local_done)
-	var from_part := ""
-	if tr_src.selected > 0: from_part = "from %s " % LANGS[tr_src.selected - 1][1]
-	var sys := "You are a translation engine. Translate the user's text %sinto %s. Output ONLY the translation: no notes, no quotes, no explanations." % [from_part, LANGS[tr_dst.selected][1]]
+	var from_part := "from %s " % _gname(set_cfg["src"], 2)
+	var sys := "You are a translation engine. Translate the user's text %sinto %s. Output ONLY the translation: no notes, no quotes, no explanations." % [from_part, _gname(set_cfg["tgt"], 2)]
 	var prompt := "<|im_start|>system\n%s<|im_end|>\n<|im_start|>user\n%s<|im_end|>\n<|im_start|>assistant\n" % [sys, text]
 	tr_btn.disabled = true; tr_status.text = "Traduction sur l'appareil (le premier appel charge le modèle)…"
 	tr_t0 = Time.get_ticks_msec()
@@ -713,11 +745,9 @@ func _on_tr_local_done(t: String) -> void:
 	tr_status.text = "✓ %.1f s — traduit sur l'appareil" % ((Time.get_ticks_msec() - tr_t0) / 1000.0)
 
 func _tr_swap() -> void:
-	var s := tr_src.selected
-	if s > 0:
-		var d := tr_dst.selected
-		tr_dst.select(s - 1); tr_src.select(d + 1)
+	var s: String = set_cfg["src"]; set_cfg["src"] = set_cfg["tgt"]; set_cfg["tgt"] = s
 	var t := tr_in.text; tr_in.text = tr_out.text; tr_out.text = t
+	_apply_langs()
 
 func _tr_models() -> void:
 	if tr_tags == null: tr_tags = HTTPRequest.new(); tr_tags.timeout = 5.0; add_child(tr_tags)
@@ -759,9 +789,8 @@ func _tr_translate() -> void:
 	var text := tr_in.text.strip_edges()
 	if text.is_empty() or tr_model.item_count == 0: return
 	if tr_http == null: tr_http = HTTPRequest.new(); tr_http.timeout = 180.0; add_child(tr_http)
-	var from_part := ""
-	if tr_src.selected > 0: from_part = "from %s " % LANGS[tr_src.selected - 1][1]
-	var sys := "You are a translation engine. Translate the user's text %sinto %s. Output ONLY the translation: no notes, no quotes, no explanations." % [from_part, LANGS[tr_dst.selected][1]]
+	var from_part := "from %s " % _gname(set_cfg["src"], 2)
+	var sys := "You are a translation engine. Translate the user's text %sinto %s. Output ONLY the translation: no notes, no quotes, no explanations." % [from_part, _gname(set_cfg["tgt"], 2)]
 	var body := {"model": tr_model.get_item_text(tr_model.selected), "stream": false, "keep_alive": "10m",
 		"options": {"temperature": 0.1, "num_predict": 1024},
 		"messages": [{"role": "system", "content": sys}, {"role": "user", "content": text}]}
@@ -779,13 +808,23 @@ func _on_tr_done(result: int, code: int, _h: PackedStringArray, body: PackedByte
 	tr_out.text = rx.sub(str(info["message"]["content"]), "", true).strip_edges()
 	tr_status.text = "✓ %.1f s — traduit localement" % ((Time.get_ticks_msec() - tr_t0) / 1000.0)
 
+# ---------------------------------------------------------------- Messenger (app intégrée)
+
+func _app_messenger() -> void:
+	var wv := _make_window("messenger", "", Vector2(960, 620), Vector2(120, 20))
+	var ms := Control.new()
+	ms.set_script(load("res://apps/messenger.gd"))
+	ms.size_flags_vertical = Control.SIZE_EXPAND_FILL; ms.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ms.custom_minimum_size = Vector2(860, 500); ms.clip_contents = true
+	wv.add_child(ms)
+
 # ---------------------------------------------------------------- Music (app intégrée)
 
 func _app_music() -> void:
 	var wv := _make_window("music", "", Vector2(1040, 660), Vector2(110, 10))
 	var mu := Control.new()
 	mu.set_script(load("res://apps/music.gd"))
-	mu.set("ollama_url", set_cfg["ollama"])
+	mu.set("ollama_url", set_cfg["ollama"]); mu.set("src", set_cfg["src"]); mu.set("tgt", set_cfg["tgt"]); music_node = mu
 	mu.size_flags_vertical = Control.SIZE_EXPAND_FILL; mu.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	mu.custom_minimum_size = Vector2(900, 520); mu.clip_contents = true
 	wv.add_child(mu)
@@ -807,15 +846,13 @@ const DIC_PAIRS := ["fra-eng", "eng-fra", "spa-eng", "eng-spa", "ita-eng", "eng-
 const DIC_PAGE := 200
 const ACC := {"à": "a", "á": "a", "â": "a", "ã": "a", "ä": "a", "å": "a", "ç": "c", "è": "e", "é": "e", "ê": "e", "ë": "e",
 	"ì": "i", "í": "i", "î": "i", "ï": "i", "ñ": "n", "ò": "o", "ó": "o", "ô": "o", "õ": "o", "ö": "o", "ù": "u", "ú": "u", "û": "u", "ü": "u", "ý": "y", "ÿ": "y"}
-var dic_src: OptionButton
-var dic_dst: OptionButton
+var dic_note: Label
 var dic_search: LineEdit
 var dic_list: ItemList
 var dic_def: RichTextLabel
 var dic_info: Label
 var dic_lines := PackedStringArray()
 var dic_start := 0
-var dic_codes: Array = []   # codes langue de dic_src
 var dic_loading := false
 
 func _dkey(t: String) -> String:
@@ -825,22 +862,11 @@ func _dkey(t: String) -> String:
 
 func _app_dict() -> void:
 	var wv := _make_window("dict", "", Vector2(920, 580), Vector2(170, 24))
-	var m := MarginContainer.new(); m.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	for k in ["left", "right", "top", "bottom"]: m.add_theme_constant_override("margin_" + k, 14)
-	wv.add_child(m)
-	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 10); m.add_child(v)
-	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 8); v.add_child(row)
-	row.add_child(_mlbl("Mots en"))
-	dic_src = OptionButton.new(); dic_src.focus_mode = Control.FOCUS_NONE; row.add_child(dic_src)
-	row.add_child(_mlbl("→"))
-	dic_dst = OptionButton.new(); dic_dst.focus_mode = Control.FOCUS_NONE; row.add_child(dic_dst)
-	dic_codes = []
-	for p in DIC_PAIRS:
-		var a: String = p.split("-")[0]
-		if not a in dic_codes: dic_codes.append(a)
-	for c in dic_codes: dic_src.add_item(DIC_LANGS[c])
-	dic_src.item_selected.connect(func(_i: int): _dic_fill_dst(); _dic_load())
-	dic_dst.item_selected.connect(func(_i: int): _dic_load())
+	var mm := MarginContainer.new(); mm.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	for k in ["left", "right", "top", "bottom"]: mm.add_theme_constant_override("margin_" + k, 14)
+	wv.add_child(mm)
+	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 10); mm.add_child(v)
+	dic_note = _mlbl("", 14); v.add_child(dic_note)
 	dic_search = LineEdit.new(); dic_search.placeholder_text = "Rechercher un mot…"; dic_search.virtual_keyboard_enabled = false
 	dic_search.clear_button_enabled = true; dic_search.add_theme_font_size_override("font_size", 20)
 	dic_search.text_changed.connect(_dic_search); v.add_child(dic_search)
@@ -859,27 +885,24 @@ func _app_dict() -> void:
 	dic_def = RichTextLabel.new(); dic_def.bbcode_enabled = true; dic_def.selection_enabled = true
 	dic_def.add_theme_font_size_override("normal_font_size", 20); dic_def.add_theme_font_size_override("bold_font_size", 28)
 	pc.add_child(dic_def)
-	var def_idx := dic_codes.find("spa") if dic_codes.has("spa") else 0
-	dic_src.select(def_idx)
-	_dic_fill_dst(); _dic_load()
+	_dic_load()
 
-func _dic_fill_dst() -> void:
-	var a: String = dic_codes[dic_src.selected]
-	dic_dst.clear()
-	for p in DIC_PAIRS:
-		if p.begins_with(a + "-"): dic_dst.add_item(DIC_LANGS[p.get_slice("-", 1)])
-	dic_dst.select(0)
-
+## Fichier à utiliser pour la paire des paramètres ; repli sur « langue → English » si pas de dictionnaire direct.
 func _dic_pair() -> String:
-	var a: String = dic_codes[dic_src.selected]
-	var b := ""
-	for c in DIC_LANGS:
-		if DIC_LANGS[c] == dic_dst.get_item_text(dic_dst.selected): b = c
-	return "%s-%s" % [a, b]
+	var s: String = set_cfg["src"]; var t: String = set_cfg["tgt"]
+	if FileAccess.file_exists("res://dicts/%s-%s.tsv" % [s, t]): return "%s-%s" % [s, t]
+	if s != "eng" and FileAccess.file_exists("res://dicts/%s-eng.tsv" % s): return "%s-eng" % s
+	return ""
 
 func _dic_load() -> void:
-	var path := "res://dicts/%s.tsv" % _dic_pair()
+	var pair := _dic_pair()
 	dic_list.clear(); dic_def.text = ""
+	if pair == "":
+		dic_lines = PackedStringArray(); dic_info.text = ""
+		dic_note.text = "%s : pas de dictionnaire pour cette langue." % _pair_text(); return
+	var real := "%s  →  %s" % [_gname(pair.get_slice("-", 0), 1), _gname(pair.get_slice("-", 1), 1)]
+	dic_note.text = real if real == _pair_text() else "%s  (pas de dictionnaire direct vers %s : traductions en anglais)" % [real, _gname(set_cfg["tgt"], 1)]
+	var path := "res://dicts/%s.tsv" % pair
 	dic_info.text = "Chargement…"
 	dic_loading = true
 	await get_tree().process_frame
@@ -938,11 +961,13 @@ func _load_settings() -> void:
 		set_cfg["ollama"] = str(c.get_value("translate", "server", set_cfg["ollama"]))
 		set_cfg["model"] = str(c.get_value("translate", "model", ""))
 		set_cfg["engine"] = int(c.get_value("translate", "engine", -1))
+		set_cfg["src"] = str(c.get_value("lang", "src", "spa")); set_cfg["tgt"] = str(c.get_value("lang", "tgt", "fra"))
 
 func _save_settings() -> void:
 	var c := ConfigFile.new()
 	c.set_value("ui", "bg", set_cfg["bg"]); c.set_value("ui", "font", set_cfg["font"])
 	c.set_value("translate", "server", set_cfg["ollama"]); c.set_value("translate", "model", set_cfg["model"]); c.set_value("translate", "engine", set_cfg["engine"])
+	c.set_value("lang", "src", set_cfg["src"]); c.set_value("lang", "tgt", set_cfg["tgt"])
 	c.save("user://settings.cfg")
 
 func _type_key(r: int, c: int) -> void:
