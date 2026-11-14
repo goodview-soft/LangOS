@@ -48,6 +48,7 @@ const APPS := {
 	"settings": ["Paramètres", "res://icons/app_settings.svg"],
 	"system": ["Système", "res://icons/app_system.svg"],
 	"translate": ["Traducteur", "res://icons/app_translate.svg"],
+	"dict": ["Dictionnaire", "res://icons/app_dict.svg"],
 	"update": ["Mise à jour", "res://icons/app_update.svg"],
 }
 var active := ""
@@ -69,6 +70,8 @@ func _ready() -> void:
 		for id in APPS: _open_app(id)
 		_toggle_menu(); _toggle_menu(); _toggle_kb()
 		await get_tree().create_timer(1.0).timeout
+		_dic_search("casa")
+		print("DICT: ", dic_list.get_item_text(0), " | ", dic_def.get_parsed_text().replace("\n", " ").substr(0, 70), " | ", dic_info.text)
 		print("OS-TEST OK wins=", wins.size())
 		get_tree().quit()
 
@@ -128,6 +131,12 @@ func _build_theme() -> void:
 	th.set_stylebox("hover", "PopupMenu", _box(Color(ACCENT, 0.35), 6))
 	th.set_color("font_color", "PopupMenu", TEXT); th.set_font_size("font_size", "PopupMenu", 17)
 	th.set_constant("v_separation", "PopupMenu", 8)
+	th.set_stylebox("panel", "ItemList", _box(Color("171b25"), 10, w.call(0.07), 1, 0, 6))
+	th.set_stylebox("selected", "ItemList", _box(Color(ACCENT, 0.35), 6)); th.set_stylebox("selected_focus", "ItemList", _box(Color(ACCENT, 0.35), 6))
+	th.set_stylebox("hovered", "ItemList", _box(w.call(0.06), 6)); th.set_stylebox("focus", "ItemList", StyleBoxEmpty.new())
+	th.set_color("font_color", "ItemList", TEXT); th.set_color("font_selected_color", "ItemList", Color.WHITE)
+	th.set_font_size("font_size", "ItemList", 19); th.set_constant("v_separation", "ItemList", 6)
+	th.set_color("default_color", "RichTextLabel", TEXT)
 	# Variante transparente
 	th.set_type_variation("Flat", "Button")
 	for st in [["normal", 0.0], ["hover", 0.09], ["pressed", 0.16]]:
@@ -354,6 +363,7 @@ func _open_app(id: String) -> void:
 		"settings": _app_settings()
 		"system": _app_system()
 		"translate": _app_translate()
+		"dict": _app_dict()
 		"update": _app_update()
 
 func _show(id: String) -> void:
@@ -764,6 +774,134 @@ func _on_tr_done(result: int, code: int, _h: PackedStringArray, body: PackedByte
 	var rx := RegEx.create_from_string("(?s)<think>.*?</think>")
 	tr_out.text = rx.sub(str(info["message"]["content"]), "", true).strip_edges()
 	tr_status.text = "✓ %.1f s — traduit localement" % ((Time.get_ticks_msec() - tr_t0) / 1000.0)
+
+# ---------------------------------------------------------------- Dictionnaire (hors ligne, données FreeDict)
+
+const DIC_LANGS := {"fra": "Français", "eng": "English", "spa": "Español", "ita": "Italiano", "por": "Português", "nld": "Nederlands", "jpn": "日本語"}
+const DIC_PAIRS := ["fra-eng", "eng-fra", "spa-eng", "eng-spa", "ita-eng", "eng-ita", "por-eng", "eng-por", "nld-eng", "eng-nld", "jpn-eng", "eng-jpn"]
+const DIC_PAGE := 200
+const ACC := {"à": "a", "á": "a", "â": "a", "ã": "a", "ä": "a", "å": "a", "ç": "c", "è": "e", "é": "e", "ê": "e", "ë": "e",
+	"ì": "i", "í": "i", "î": "i", "ï": "i", "ñ": "n", "ò": "o", "ó": "o", "ô": "o", "õ": "o", "ö": "o", "ù": "u", "ú": "u", "û": "u", "ü": "u", "ý": "y", "ÿ": "y"}
+var dic_src: OptionButton
+var dic_dst: OptionButton
+var dic_search: LineEdit
+var dic_list: ItemList
+var dic_def: RichTextLabel
+var dic_info: Label
+var dic_lines := PackedStringArray()
+var dic_start := 0
+var dic_codes: Array = []   # codes langue de dic_src
+var dic_loading := false
+
+func _dkey(t: String) -> String:
+	var o := ""
+	for c in t.strip_edges().to_lower(): o += ACC.get(c, c)
+	return o
+
+func _app_dict() -> void:
+	var wv := _make_window("dict", "", Vector2(920, 580), Vector2(170, 24))
+	var m := MarginContainer.new(); m.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	for k in ["left", "right", "top", "bottom"]: m.add_theme_constant_override("margin_" + k, 14)
+	wv.add_child(m)
+	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 10); m.add_child(v)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 8); v.add_child(row)
+	row.add_child(_mlbl("Mots en"))
+	dic_src = OptionButton.new(); dic_src.focus_mode = Control.FOCUS_NONE; row.add_child(dic_src)
+	row.add_child(_mlbl("→"))
+	dic_dst = OptionButton.new(); dic_dst.focus_mode = Control.FOCUS_NONE; row.add_child(dic_dst)
+	dic_codes = []
+	for p in DIC_PAIRS:
+		var a: String = p.split("-")[0]
+		if not a in dic_codes: dic_codes.append(a)
+	for c in dic_codes: dic_src.add_item(DIC_LANGS[c])
+	dic_src.item_selected.connect(func(_i: int): _dic_fill_dst(); _dic_load())
+	dic_dst.item_selected.connect(func(_i: int): _dic_load())
+	dic_search = LineEdit.new(); dic_search.placeholder_text = "Rechercher un mot…"; dic_search.virtual_keyboard_enabled = false
+	dic_search.clear_button_enabled = true; dic_search.add_theme_font_size_override("font_size", 20)
+	dic_search.text_changed.connect(_dic_search); v.add_child(dic_search)
+	var hb := HBoxContainer.new(); hb.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	hb.add_theme_constant_override("separation", 10); v.add_child(hb)
+	var left := VBoxContainer.new(); left.custom_minimum_size.x = 330; left.add_theme_constant_override("separation", 6); hb.add_child(left)
+	dic_list = ItemList.new(); dic_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	dic_list.item_selected.connect(_dic_show); left.add_child(dic_list)
+	var pg := HBoxContainer.new(); pg.add_theme_constant_override("separation", 6); left.add_child(pg)
+	var pv := _mk_btn("◀", 48, 36); pv.pressed.connect(_dic_page.bind(-1)); pg.add_child(pv)
+	dic_info = _mlbl("", 13); dic_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dic_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; pg.add_child(dic_info)
+	var nx := _mk_btn("▶", 48, 36); nx.pressed.connect(_dic_page.bind(1)); pg.add_child(nx)
+	var pc := PanelContainer.new(); pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pc.add_theme_stylebox_override("panel", _box(Color("171b25"), 10, Color(1, 1, 1, 0.07), 1, 0, 16)); hb.add_child(pc)
+	dic_def = RichTextLabel.new(); dic_def.bbcode_enabled = true; dic_def.selection_enabled = true
+	dic_def.add_theme_font_size_override("normal_font_size", 20); dic_def.add_theme_font_size_override("bold_font_size", 28)
+	pc.add_child(dic_def)
+	var def_idx := dic_codes.find("spa") if dic_codes.has("spa") else 0
+	dic_src.select(def_idx)
+	_dic_fill_dst(); _dic_load()
+
+func _dic_fill_dst() -> void:
+	var a: String = dic_codes[dic_src.selected]
+	dic_dst.clear()
+	for p in DIC_PAIRS:
+		if p.begins_with(a + "-"): dic_dst.add_item(DIC_LANGS[p.get_slice("-", 1)])
+	dic_dst.select(0)
+
+func _dic_pair() -> String:
+	var a: String = dic_codes[dic_src.selected]
+	var b := ""
+	for c in DIC_LANGS:
+		if DIC_LANGS[c] == dic_dst.get_item_text(dic_dst.selected): b = c
+	return "%s-%s" % [a, b]
+
+func _dic_load() -> void:
+	var path := "res://dicts/%s.tsv" % _dic_pair()
+	dic_list.clear(); dic_def.text = ""
+	dic_info.text = "Chargement…"
+	dic_loading = true
+	await get_tree().process_frame
+	if not is_instance_valid(dic_list): return
+	dic_lines = FileAccess.get_file_as_string(path).split("\n", false)
+	dic_loading = false
+	dic_search.text = ""; dic_start = 0
+	_dic_refresh(); dic_search.grab_focus()
+
+func _dic_refresh() -> void:
+	dic_list.clear()
+	var n := dic_lines.size()
+	dic_start = clampi(dic_start, 0, maxi(0, n - 1))
+	var e := mini(n, dic_start + DIC_PAGE)
+	for i in range(dic_start, e): dic_list.add_item(dic_lines[i].get_slice("\t", 1))
+	dic_info.text = "%d–%d / %d mots" % [dic_start + 1, e, n]
+	if dic_list.item_count > 0: dic_list.select(0); _dic_show(0)
+	else: dic_def.text = ""
+
+func _dic_page(d: int) -> void:
+	if dic_loading: return
+	dic_start += d * DIC_PAGE; _dic_refresh()
+
+func _dic_search(t: String) -> void:
+	if dic_loading: return
+	var k := _dkey(t)
+	if k.is_empty(): dic_start = 0
+	else:
+		var lo := 0; var hi := dic_lines.size()
+		while lo < hi:
+			var mid := (lo + hi) / 2
+			if dic_lines[mid].get_slice("\t", 0) < k: lo = mid + 1
+			else: hi = mid
+		dic_start = lo
+	_dic_refresh()
+
+func _dic_show(i: int) -> void:
+	var line := dic_lines[dic_start + i]
+	var word := line.get_slice("\t", 1).replace("[", "[lb]")
+	var out := "[b]%s[/b]\n\n" % word
+	for d in line.get_slice("\t", 2).split("¶"):
+		var t := d.replace("[", "[lb]")
+		if t.begins_with("("):
+			var e := t.find(")")
+			out += "[color=#8f9bb3]%s[/color] %s\n\n" % [t.substr(0, e + 1), t.substr(e + 1)]
+		else: out += t + "\n\n"
+	dic_def.text = out
 
 # ---------------------------------------------------------------- Réglages
 
