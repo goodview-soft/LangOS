@@ -50,6 +50,7 @@ const APPS := {
 	"translate": ["Traducteur", "res://icons/app_translate.svg"],
 	"dict": ["Dictionnaire", "res://icons/app_dict.svg"],
 	"messenger": ["Messenger", "res://icons/app_messenger.svg"],
+	"remote": ["RemoteDesk", "res://icons/app_remote.svg"],
 	"music": ["Music", "res://icons/app_music.svg"],
 	"soundlink": ["Sound Link", "res://icons/app_soundlink.svg"],
 	"update": ["Mise à jour", "res://icons/app_update.svg"],
@@ -407,9 +408,15 @@ func _target() -> Control:
 func _ins(t: String) -> void:
 	var f := _target()
 	if f: f.insert_text_at_caret(t)
+	else:
+		var r := get_viewport().gui_get_focus_owner()
+		if r and r.has_meta("remote"): r.get_meta("remote").call("send_text", t)
 
 func _bs() -> void:
 	var f := _target()
+	if f == null:
+		var r := get_viewport().gui_get_focus_owner()
+		if r and r.has_meta("remote"): r.get_meta("remote").call("send_key", KEY_BACKSPACE)
 	if f is TextEdit: f.backspace()
 	elif f is LineEdit and f.caret_column > 0: f.delete_text(f.caret_column - 1, f.caret_column)
 
@@ -465,6 +472,7 @@ func _open_app(id: String) -> void:
 		"translate": _app_translate()
 		"dict": _app_dict()
 		"messenger": _app_messenger()
+		"remote": _app_remote()
 		"music": _app_music()
 		"soundlink": _app_soundlink()
 		"update": _app_update()
@@ -904,6 +912,16 @@ func _on_tr_done(result: int, code: int, _h: PackedStringArray, body: PackedByte
 	var rx := RegEx.create_from_string("(?s)<think>.*?</think>")
 	tr_out.text = rx.sub(str(info["message"]["content"]), "", true).strip_edges()
 	tr_status.text = "✓ %.1f s — traduit localement" % ((Time.get_ticks_msec() - tr_t0) / 1000.0)
+
+# ---------------------------------------------------------------- RemoteDesk (app intégrée)
+
+func _app_remote() -> void:
+	var wv := _make_window("remote", "", Vector2(940, 620), Vector2(130, 18))
+	var rd := Control.new()
+	rd.set_script(load("res://apps/remotedesk.gd"))
+	rd.size_flags_vertical = Control.SIZE_EXPAND_FILL; rd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rd.custom_minimum_size = Vector2(840, 480); rd.clip_contents = true
+	wv.add_child(rd)
 
 # ---------------------------------------------------------------- Messenger (app intégrée)
 
