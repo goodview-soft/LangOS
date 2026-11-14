@@ -46,10 +46,10 @@ func _ready() -> void:
 	if udp_port == 0: udp_port = PORTS.get(game_id, 4400 + game_id.hash() % 100 * 2)
 	if tcp_port == 0: tcp_port = udp_port + 1
 	if my_name == "": my_name = _device_name()
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	var bg := ColorRect.new(); bg.color = Color(0.07, 0.08, 0.12, 0.96); bg.set_anchors_preset(Control.PRESET_FULL_RECT); add_child(bg)
-	var cc := CenterContainer.new(); cc.set_anchors_preset(Control.PRESET_FULL_RECT); add_child(cc)
+	var bg := ColorRect.new(); bg.color = Color(0.09, 0.10, 0.15, 1.0); bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); add_child(bg)
+	var cc := CenterContainer.new(); cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); add_child(cc)
 	box = VBoxContainer.new(); box.custom_minimum_size.x = 340; box.add_theme_constant_override("separation", 10); cc.add_child(box)
 	_build_menu()
 
