@@ -15,6 +15,7 @@ var human: PlayerController
 var bot: PlayerController
 var hud: HUD
 var test_mode := false
+signal exit_requested   # demandé par le HUD : l'hôte (fenêtre) ferme la partie
 
 func _ready() -> void:
 	test_mode = "--hb-test" in OS.get_cmdline_user_args()

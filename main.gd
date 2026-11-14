@@ -60,11 +60,14 @@ const APPS := {
 	"f_games": ["Jeux", "res://icons/app_f_games.svg"],
 	"f_comm": ["Communication", "res://icons/app_f_comm.svg"],
 	"hika": ["Hikabrain", "res://icons/app_hika.svg"],
+	"chromium": ["Chromium", "res://icons/app_chromium.svg"],
+	"f_soft": ["Logiciels", "res://icons/app_f_soft.svg"],
 }
 ## Dossiers du bureau : id -> applications contenues (affichées seulement dans le dossier).
 const FOLDERS := {
 	"f_lang": ["translate", "dict", "music"],
 	"f_games": ["chess", "hika"],
+	"f_soft": ["chromium"],
 	"f_comm": ["messenger", "remote", "chat", "soundlink"],
 }
 
@@ -81,6 +84,7 @@ var upd_info := {}
 var bar_h := 48.0
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS   # le bureau reste actif quand un jeu se met en pause
 	_load_settings()
 	OS.low_processor_usage_mode = true
 	OS.low_processor_usage_mode_sleep_usec = 16000
@@ -104,7 +108,7 @@ func _ready() -> void:
 		print("CTL fermé après 2e toggle: ", chat_ov != null and not chat_ov.is_open())
 		get_tree().quit()
 	if "--os-test" in OS.get_cmdline_user_args():
-		for id in APPS: if id != "hika": _open_app(id)
+		for id in APPS: if id != "chromium": _open_app(id)
 		_toggle_menu(); _toggle_menu(); _toggle_kb()
 		await get_tree().create_timer(1.0).timeout
 		_dic_search("casa")
@@ -558,7 +562,8 @@ func _open_app(id: String) -> void:
 		_show(id); return
 	if FOLDERS.has(id): _app_folder(id); return
 	match id:
-		"hika": _launch_hika()
+		"chromium": _launch_browser()
+		"hika": _app_hika()
 		"chess": _app_chess()
 		"notepad": _app_notepad()
 		"settings": _app_settings()
@@ -1093,11 +1098,22 @@ func _app_folder(fid: String) -> void:
 		l.mouse_filter = Control.MOUSE_FILTER_IGNORE; v.add_child(l)
 		b.pressed.connect(_open_app.bind(id)); g.add_child(b)
 
-## Hikabrain (jeu 3D) prend tout l'écran ; « Retour à LangOS » dans son menu relance le bureau.
-func _launch_hika() -> void:
-	if dirty: _save()
-	OS.low_processor_usage_mode = false
-	get_tree().change_scene_to_file("res://games/hikabrain/scenes/main_menu.tscn")
+## Lance Chromium (ou, à défaut, Chrome / Chromium Flatpak) hors de LangOS ; sur Android, le navigateur par défaut.
+func _launch_browser() -> void:
+	if OS.get_name() == "Android": OS.shell_open("https://www.google.com"); return
+	var sh := "for b in chromium chromium-browser google-chrome google-chrome-stable; do command -v $b >/dev/null 2>&1 && exec $b; done; flatpak info org.chromium.Chromium >/dev/null 2>&1 && exec flatpak run org.chromium.Chromium; exit 127"
+	var args := ["-c", sh]
+	var cmd := "sh"
+	if FileAccess.file_exists("/.flatpak-info"): cmd = "flatpak-spawn"; args = ["--host", "sh", "-c", sh]   # Godot lancé en Flatpak
+	if OS.create_process(cmd, args) < 0: status.text = "Impossible de lancer Chromium."
+	else: status.text = "Chromium lancé (s'il est installé : sudo apt install chromium)."
+
+func _app_hika() -> void:
+	var big := Vector2(minf(1100.0, desk.size.x - 24.0), minf(700.0, desk.size.y - 16.0))
+	var wv := _make_window("hika", "", big, Vector2(12, 8))
+	var h := Control.new(); h.set_script(load("res://apps/hika_host.gd"))
+	h.size_flags_vertical = Control.SIZE_EXPAND_FILL; h.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h.custom_minimum_size = Vector2(800, 520); wv.add_child(h)
 
 func _app_chess() -> void:
 	var wv := _make_window("chess", "", Vector2(900, 680), Vector2(180, 10))

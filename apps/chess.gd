@@ -28,50 +28,33 @@ var org := Vector2.ZERO
 var status: Label
 var list: Label
 
-# --- Réseau local (balises UDP + TCP direct, sans serveur ni compte ; non chiffré : réseau de confiance)
-const BEACON := "CH1"
-var udp_port := 4352
-var tcp_port := 4353
-var udp := PacketPeerUDP.new()
-var server := TCPServer.new()
-var conn: StreamPeerTCP
-var buf := ""
-var outq: Array = []
-var net := ""                # "" (local) | "lobby" | "out" | "in" | "play"
-var my_col := ""             # couleur jouée en réseau
-var my_id := str(randi())
-var my_name := ""
-var peers := {}              # id -> {ip, port, name, busy, t}
-var beacon_t := 0.0
-var inc := {}                # défi reçu : {name, col}
+var menu: GameMenu
+var net := false             # partie réseau en cours
+var ai := ""                 # couleur jouée par l'IA ("" = pas d'IA)
+var my_col := ""
 var peer_name := ""
-var lobby: VBoxContainer
-var net_btn: Button
 var resign_btn: Button
-var inc_box: HBoxContainer
-var lobby_sig := ""
+const VAL := {"P": 100, "N": 320, "B": 330, "R": 500, "Q": 900, "K": 0}
 
 func _ready() -> void:
 	var side := VBoxContainer.new(); side.custom_minimum_size = Vector2(190, 0)
 	side.set_anchors_preset(Control.PRESET_RIGHT_WIDE); side.offset_left = -200; side.offset_right = -10; side.offset_top = 10; side.offset_bottom = -10
 	add_child(side)
 	status = Label.new(); status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; status.add_theme_font_size_override("font_size", 18); side.add_child(status)
-	for it in [["Nouvelle partie", func(): if net == "" or net == "lobby": _new()], ["Annuler le coup", _undo], ["Retourner", func(): flipped = not flipped; queue_redraw()]]:
+	for it in [["Nouvelle partie", func(): if not net: _new()], ["Annuler le coup", _undo], ["Retourner", func(): flipped = not flipped; queue_redraw()]]:
 		var bt := Button.new(); bt.text = it[0]; bt.custom_minimum_size.y = 40; bt.pressed.connect(it[1]); side.add_child(bt)
-	net_btn = Button.new(); net_btn.custom_minimum_size.y = 40; net_btn.pressed.connect(_toggle_net); side.add_child(net_btn)
+	var mb := Button.new(); mb.text = "Menu"; mb.custom_minimum_size.y = 40; mb.pressed.connect(func(): net = false; ai = ""; menu.show_menu()); side.add_child(mb)
 	resign_btn = Button.new(); resign_btn.text = "Abandonner"; resign_btn.custom_minimum_size.y = 40; resign_btn.visible = false
-	resign_btn.pressed.connect(func(): _send({"t": "resign"}); _end_net(my_col, "Tu as abandonné.")); side.add_child(resign_btn)
-	inc_box = HBoxContainer.new(); inc_box.visible = false; side.add_child(inc_box)
-	for it in [["Accepter", _accept], ["Refuser", _decline]]:
-		var ib := Button.new(); ib.text = it[0]; ib.size_flags_horizontal = Control.SIZE_EXPAND_FILL; ib.pressed.connect(it[1]); inc_box.add_child(ib)
-	lobby = VBoxContainer.new(); lobby.visible = false; side.add_child(lobby)
+	resign_btn.pressed.connect(func(): menu.send({"t": "resign"}); over = "fin"; over_msg = "Tu as abandonné."; _refresh()); side.add_child(resign_btn)
 	list = Label.new(); list.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	list.add_theme_color_override("font_color", MUTED); list.size_flags_vertical = Control.SIZE_EXPAND_FILL; side.add_child(list)
 	resized.connect(queue_redraw)
-	my_name = _device_name()
 	_new()
-
-func _exit_tree() -> void: _net_stop()
+	menu = GameMenu.new(); menu.game_id = "chess"; menu.title = "Échecs"; add_child(menu)
+	menu.chosen.connect(func(m: String): net = false; flipped = false; ai = "b" if m == "ai" else ""; _new())
+	menu.net_started.connect(func(slot: int, nm: String): net = true; ai = ""; my_col = "w" if slot == 0 else "b"; peer_name = nm; flipped = my_col == "b"; _new())
+	menu.net_msg.connect(_on_msg)
+	menu.net_closed.connect(func(r: String): if over == "": over = "fin"; over_msg = r; _refresh())
 
 func _new() -> void:
 	b = []; b.resize(64); b.fill("")
@@ -193,8 +176,8 @@ func _has_move(col: String) -> bool:
 func _name(i: int) -> String: return "abcdefgh"[i % 8] + str(8 - i / 8)
 
 func _play(from: int, m: Dictionary, remote := false) -> void:
-	if net == "play" and not remote:
-		_send({"t": "move", "f": from, "to": m["to"], "p": m.get("promo", "")})
+	if net and not remote:
+		menu.send({"t": "move", "f": from, "to": m["to"], "p": m.get("promo", "")})
 	hist.append({"b": b.duplicate(), "turn": turn, "castle": castle.duplicate(), "ep": ep, "last": last, "cap": {"w": cap["w"].duplicate(), "b": cap["b"].duplicate()}, "n": san.size()})
 	var p: String = b[from]; var to: int = m["to"]
 	var taken: String = b[to] if m["kind"] != "ep" else b[from / 8 * 8 + to % 8]
@@ -222,26 +205,29 @@ func _play(from: int, m: Dictionary, remote := false) -> void:
 	san.append(txt)
 	sel = -1; moves = []
 	_refresh()
+	if ai != "" and turn == ai and over == "": get_tree().create_timer(0.4).timeout.connect(_ai_move)
 
 func _undo() -> void:
-	if hist.is_empty() or net != "": return
+	if hist.is_empty() or net: return
+	_undo_one()
+	if ai != "" and turn == ai and not hist.is_empty(): _undo_one()
+
+func _undo_one() -> void:
 	var h: Dictionary = hist.pop_back()
 	b = h["b"]; turn = h["turn"]; castle = h["castle"]; ep = h["ep"]; last = h["last"]; cap = h["cap"]
 	san.resize(h["n"]); over = ""; sel = -1; moves = []; promo = {}
 	_refresh()
 
 func _refresh() -> void:
-	net_btn.text = "Mode local" if net != "" else "Jouer en réseau"
-	resign_btn.visible = net == "play" and over == ""
+	resign_btn.visible = net and over == ""
 	var who := "Blancs" if turn == "w" else "Noirs"
 	if over == "mat": status.text = "Échec et mat ! %s gagnent." % ("Noirs" if turn == "w" else "Blancs")
 	elif over == "pat": status.text = "Pat : partie nulle."
 	else: status.text = "Au tour des %s%s" % [who, "\nÉchec !" if _in_check(b, turn) else ""]
-	if net == "play":
+	if net:
 		status.text = ("Tu joues les %s contre %s\n" % ["Blancs" if my_col == "w" else "Noirs", peer_name]) + status.text
 		if over == "" and turn == my_col: status.text += "\nÀ toi de jouer."
-	elif net == "out": status.text = "Défi envoyé à %s… en attente de réponse." % peer_name
-	elif net == "lobby": status.text = "Joueurs trouvés sur le réseau local :" if not peers.is_empty() else "Recherche de joueurs sur le réseau local…"
+	elif ai != "": status.text = "Contre l'IA (tu joues les Blancs)\n" + status.text
 	if over != "" and over_msg != "": status.text = over_msg + "\n" + status.text
 	var s := ""
 	for i in san.size():
@@ -266,8 +252,7 @@ func _gui_input(ev: InputEvent) -> void:
 	if not promo.is_empty():
 		_pick_promo(ev.position); return
 	if over != "": return
-	if net == "play" and turn != my_col: return
-	if net in ["lobby", "out", "in"]: return
+	if (net and turn != my_col) or (ai != "" and turn == ai): return
 	var rel: Vector2 = (ev.position - org) / bs
 	if rel.x < 0 or rel.y < 0 or rel.x >= 8 or rel.y >= 8: sel = -1; moves = []; queue_redraw(); return
 	var c := int(rel.x); var r := int(rel.y)
@@ -366,154 +351,53 @@ func _piece(o: Vector2, code: String) -> void:
 func _disc(c: Vector2, r: float, fill: Color, line: Color) -> void:
 	draw_circle(c, r, fill); draw_arc(c, r, 0, TAU, 24, line, 2.5)
 
-# ---------------------------------------------------------------- Réseau
-
-func _device_name() -> String:
-	var n := ""
-	if OS.get_name() == "Android": n = OS.get_model_name()
-	for k in ["HOSTNAME", "HOST", "COMPUTERNAME"]:
-		if n == "": n = OS.get_environment(k)
-	if n == "" and FileAccess.file_exists("/etc/hostname"): n = FileAccess.get_file_as_string("/etc/hostname").strip_edges()
-	return n.substr(0, 24) if n != "" else "Joueur"
-
-func _toggle_net() -> void:
-	if net == "":
-		if server.listen(tcp_port) != OK: status.text = "Port %d indisponible : réseau impossible." % tcp_port; return
-		net = "lobby"; lobby.visible = true; peers = {}; lobby_sig = "x"; _new()
-		net = "lobby"; _refresh()
-	else:
-		_net_stop(); net = ""; lobby.visible = false; inc_box.visible = false; _new()
-
-func _net_stop() -> void:
-	if conn: _send({"t": "bye"}); conn.poll(); _flush(); conn.disconnect_from_host(); conn = null
-	server.stop(); udp.close(); buf = ""; outq = []
-
-func _broadcast_addrs() -> PackedStringArray:
-	var out: PackedStringArray = ["255.255.255.255"]
-	for a in IP.get_local_addresses():
-		if a.contains(".") and not a.begins_with("127.") and not a.begins_with("169.254"): out.append(a.substr(0, a.rfind(".")) + ".255")
-	return out
-
-func _flush() -> void:
-	if conn and conn.get_status() == StreamPeerTCP.STATUS_CONNECTED:
-		while not outq.is_empty(): conn.put_data(outq.pop_front().to_utf8_buffer())
-
-func _send(d: Dictionary) -> void:
-	outq.append(JSON.stringify(d) + "\n")
-
-func _process(delta: float) -> void:
-	if net == "": return
-	var now := Time.get_ticks_msec() / 1000.0
-	if not udp.is_bound():
-		if udp.bind(udp_port) == OK: udp.set_broadcast_enabled(true)
-	beacon_t -= delta
-	if beacon_t <= 0.0 and udp.is_bound():
-		beacon_t = 2.0
-		var msg := ("%s|%s|%d|%d|%s" % [BEACON, my_id, tcp_port, 0 if net == "lobby" else 1, my_name.replace("|", " ")]).to_utf8_buffer()
-		for a in _broadcast_addrs(): udp.set_dest_address(a, udp_port); udp.put_packet(msg)
-	while udp.is_bound() and udp.get_available_packet_count() > 0:
-		var parts := udp.get_packet().get_string_from_utf8().split("|", true, 4)
-		var ip := udp.get_packet_ip()
-		if parts.size() < 5 or parts[0] != BEACON or parts[1] == my_id: continue
-		peers[parts[1]] = {"ip": ip, "port": parts[2].to_int(), "busy": parts[3] == "1", "name": parts[4].substr(0, 24), "t": now}
-	for k in peers.keys():
-		if now - peers[k]["t"] > 7.0: peers.erase(k)
-	_rebuild_lobby()
-	while server.is_connection_available():
-		var p := server.take_connection()
-		if conn == null and net == "lobby": conn = p; buf = ""; outq = []
-		else: p.disconnect_from_host()
-	if conn == null: return
-	conn.poll()
-	var st := conn.get_status()
-	if st == StreamPeerTCP.STATUS_CONNECTED:
-		while not outq.is_empty():
-			conn.put_data(outq.pop_front().to_utf8_buffer())
-		var n := conn.get_available_bytes()
-		if n > 0: buf += conn.get_data(n)[1].get_string_from_utf8()
-		while buf.contains("\n"):
-			var i := buf.find("\n"); var line := buf.substr(0, i); buf = buf.substr(i + 1)
-			var d = JSON.parse_string(line)
-			if d is Dictionary: _on_msg(d)
-			if conn == null: return
-	elif st == StreamPeerTCP.STATUS_NONE or st == StreamPeerTCP.STATUS_ERROR:
-		_lost()
-
-func _rebuild_lobby() -> void:
-	var sig := str(net)
-	for k in peers: sig += "|" + k + peers[k]["name"] + str(peers[k]["busy"])
-	if sig == lobby_sig: return
-	lobby_sig = sig
-	for c in lobby.get_children(): c.queue_free()
-	if net != "lobby": return
-	for k in peers:
-		var pr: Dictionary = peers[k]
-		var bt := Button.new(); bt.text = "Défier " + pr["name"] + (" (en partie)" if pr["busy"] else ""); bt.disabled = pr["busy"]
-		bt.custom_minimum_size.y = 40; bt.pressed.connect(_challenge.bind(k)); lobby.add_child(bt)
-	_refresh()
-
-func connect_to(ip: String, port: int, nm := "Adversaire") -> void:
-	conn = StreamPeerTCP.new(); buf = ""; outq = []
-	if conn.connect_to_host(ip, port) != OK: conn = null; status.text = "Connexion impossible."; return
-	peer_name = nm; net = "out"
-	var theirs := "w" if randi() % 2 == 0 else "b"
-	my_col = "b" if theirs == "w" else "w"
-	_send({"t": "challenge", "name": my_name, "col": theirs}); _refresh()
-
-func _challenge(id: String) -> void:
-	if conn != null: return
-	connect_to(peers[id]["ip"], peers[id]["port"], peers[id]["name"])
+# ---------------------------------------------------------------- Réseau (via GameMenu) et IA
 
 func _on_msg(d: Dictionary) -> void:
 	match str(d.get("t", "")):
-		"challenge":
-			if net != "lobby": _send({"t": "decline"}); return
-			inc = {"name": str(d.get("name", "Joueur")).substr(0, 24), "col": "b" if str(d.get("col", "w")) == "b" else "w"}
-			peer_name = inc["name"]; net = "in"; inc_box.visible = true; lobby.visible = false
-			status.text = "%s te défie ! Tu jouerais les %s." % [peer_name, "Blancs" if inc["col"] == "w" else "Noirs"]
-		"accept":
-			if net == "out": _start_net()
-		"decline":
-			if net == "out": _drop_conn("%s a refusé le défi." % peer_name)
 		"move":
-			if net != "play" or over != "" or turn == my_col: return
+			if not net or over != "" or turn == my_col: return
 			var f := int(d.get("f", -1)); var to := int(d.get("to", -1))
 			if f < 0 or f > 63 or b[f] == "" or b[f][0] != turn: return
 			for m in _legal(f):
 				if m["to"] == to:
-					var mm: Dictionary = m.duplicate()
-					var pr := str(d.get("p", ""))
+					var mm: Dictionary = m.duplicate(); var pr := str(d.get("p", ""))
 					if b[f][1] == "P" and (to / 8 == 0 or to / 8 == 7): mm["promo"] = pr if pr in ["Q", "R", "B", "N"] else "Q"
 					_play(f, mm, true); return
 		"resign":
-			if net == "play": _end_net("b" if my_col == "w" else "w", "%s a abandonné." % peer_name)
-		"bye": _lost()
+			if net and over == "": over = "fin"; over_msg = "%s a abandonné." % peer_name; _refresh()
 
-func _accept() -> void:
-	my_col = inc["col"]   # couleur que le challenger m'attribue
-	inc_box.visible = false; _send({"t": "accept"}); _start_net()
+func _eval(bd: Array, col: String) -> int:
+	var sc := 0
+	for i in 64:
+		if bd[i] == "": continue
+		var v: int = VAL[bd[i][1]]
+		if bd[i][1] in ["P", "N", "B"]: v += 12 - int(absf(i / 8 - 3.5) + absf(i % 8 - 3.5)) * 3
+		sc += v if bd[i][0] == col else -v
+	return sc
 
-func _decline() -> void:
-	inc_box.visible = false; _send({"t": "decline"}); _flush(); _drop_conn("")
-
-func _start_net() -> void:
-	net = "lobby"; _new(); net = "play"; flipped = my_col == "b"; lobby.visible = false; _refresh()
-
-func _end_net(winner: String, msg: String) -> void:
-	over = "fin"; over_msg = msg if winner != "" else msg; _refresh()
-
-func _drop_conn(msg: String) -> void:
-	if conn: conn.poll(); conn.disconnect_from_host()
-	conn = null; buf = ""; outq = []; inc_box.visible = false
-	net = "lobby"; lobby.visible = true; lobby_sig = "x"; _new(); net = "lobby"; _refresh()
-	if msg != "": status.text = msg
-
-func _lost() -> void:
-	if net == "play" and over == "":
-		if conn: conn.disconnect_from_host()
-		conn = null; over = "fin"; over_msg = "%s s'est déconnecté." % peer_name; net = "play"; _refresh()
-		net = "play"
-	elif net == "play":
-		if conn: conn.disconnect_from_host()
-		conn = null
-	else: _drop_conn("Connexion perdue." if net == "out" else "")
+## IA : un coup + meilleure réponse adverse (profondeur 2), avec un peu de hasard.
+func _ai_move() -> void:
+	if ai == "" or over != "" or turn != ai or net: return
+	var foe := "w" if ai == "b" else "b"
+	var saved := b; var saved_ep := ep
+	var best := {}; var best_i := -1; var best_s := -INF
+	for i in 64:
+		if b[i] == "" or b[i][0] != ai: continue
+		for m in _legal(i):
+			var m2: Dictionary = m.duplicate()
+			if b[i][1] == "P" and (m["to"] / 8 == 0 or m["to"] / 8 == 7): m2["promo"] = "Q"
+			var nb := saved.duplicate(); _apply(nb, i, m2)
+			b = nb; ep = -1
+			var worst := INF; var any := false
+			for j in 64:
+				if nb[j] == "" or nb[j][0] != foe: continue
+				for r in _legal(j):
+					any = true
+					var nb2 := nb.duplicate(); _apply(nb2, j, r)
+					worst = minf(worst, _eval(nb2, ai))
+			if not any: worst = 100000.0 if _in_check(nb, foe) else 0.0
+			b = saved; ep = saved_ep
+			var sc := worst + randf() * 6.0
+			if sc > best_s: best_s = sc; best = m2; best_i = i
+	if best_i >= 0: _play(best_i, best)

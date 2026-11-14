@@ -148,7 +148,7 @@ func _ready() -> void:
 	b2.custom_minimum_size = Vector2(260, 46)
 	b2.pressed.connect(func() -> void:
 		get_tree().paused = false
-		get_tree().change_scene_to_file("res://games/hikabrain/scenes/main_menu.tscn"))
+		game.exit_requested.emit())
 	pb.add_child(b2)
 
 func bind(g: GameManager) -> void:
@@ -231,7 +231,7 @@ func _unhandled_input(e: InputEvent) -> void:
 	if e is InputEventKey and e.pressed and not e.echo:
 		if e.keycode == KEY_ESCAPE:
 			if game.match_manager.state == Cfg.State.MATCH_FINISHED:
-				get_tree().change_scene_to_file("res://games/hikabrain/scenes/main_menu.tscn")
+				game.exit_requested.emit()
 			else:
 				_toggle_pause()
 		elif e.keycode == KEY_R and game.match_manager.state == Cfg.State.MATCH_FINISHED:
