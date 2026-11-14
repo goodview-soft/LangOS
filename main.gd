@@ -55,7 +55,22 @@ const APPS := {
 	"music": ["Music", "res://icons/app_music.svg"],
 	"soundlink": ["Sound Link", "res://icons/app_soundlink.svg"],
 	"update": ["Mise à jour", "res://icons/app_update.svg"],
+	"chess": ["Échecs", "res://icons/app_chess.svg"],
+	"f_lang": ["Langue", "res://icons/app_f_lang.svg"],
+	"f_games": ["Jeux", "res://icons/app_f_games.svg"],
+	"f_comm": ["Communication", "res://icons/app_f_comm.svg"],
 }
+## Dossiers du bureau : id -> applications contenues (affichées seulement dans le dossier).
+const FOLDERS := {
+	"f_lang": ["translate", "dict", "music"],
+	"f_games": ["chess"],
+	"f_comm": ["messenger", "remote", "chat", "soundlink"],
+}
+
+func _top_ids() -> Array:
+	var inside := []
+	for f in FOLDERS: inside += FOLDERS[f]
+	return APPS.keys().filter(func(k): return not inside.has(k))
 var active := ""
 var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "model": "", "engine": -1, "src": "spa", "tgt": "fra"}
 var kb: PanelContainer
@@ -347,7 +362,7 @@ func _build_desktop() -> void:
 	add_child(root)
 	desk = Control.new(); desk.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	desk.clip_contents = true; root.add_child(desk)
-	for id in APPS: _desk_icon(id, Vector2.ZERO)
+	for id in _top_ids(): _desk_icon(id, Vector2.ZERO)
 	desk.resized.connect(_layout_icons); _layout_icons.call_deferred()
 	# Barre des tâches
 	var bar := PanelContainer.new()
@@ -410,7 +425,7 @@ func _build_menu() -> void:
 	var ht := Label.new(); ht.text = " LangOS"; ht.add_theme_font_size_override("font_size", 20); ht.size_flags_horizontal = Control.SIZE_EXPAND_FILL; head.add_child(ht)
 	var hv := Label.new(); hv.text = "v" + VERSION; hv.add_theme_color_override("font_color", MUTED); hv.add_theme_font_size_override("font_size", 14); head.add_child(hv)
 	var sp := Control.new(); sp.custom_minimum_size.y = 6; v.add_child(sp)
-	for id in APPS:
+	for id in _top_ids():
 		var b := _mk_btn(APPS[id][0], 300, 50); b.theme_type_variation = "Flat"; b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.icon = load(APPS[id][1]); b.add_theme_constant_override("icon_max_width", 34)
 		b.add_theme_color_override("icon_normal_color", Color.WHITE); b.add_theme_color_override("icon_hover_color", Color.WHITE)
@@ -540,7 +555,9 @@ func _mlbl(t: String, sz := 14) -> Label:
 func _open_app(id: String) -> void:
 	if wins.has(id):
 		_show(id); return
+	if FOLDERS.has(id): _app_folder(id); return
 	match id:
+		"chess": _app_chess()
 		"notepad": _app_notepad()
 		"settings": _app_settings()
 		"system": _app_system()
@@ -1053,6 +1070,34 @@ func _app_music() -> void:
 	mu.size_flags_vertical = Control.SIZE_EXPAND_FILL; mu.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	mu.custom_minimum_size = Vector2(900, 520); mu.clip_contents = true
 	wv.add_child(mu)
+
+# ---------------------------------------------------------------- Dossiers et Échecs
+
+func _app_folder(fid: String) -> void:
+	var wv := _make_window(fid, "", Vector2(420, 300), Vector2(200 + randi() % 60, 60 + randi() % 40))
+	var g := GridContainer.new(); g.columns = 3; g.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	g.add_theme_constant_override("h_separation", 8); g.add_theme_constant_override("v_separation", 8)
+	var m := MarginContainer.new(); m.add_theme_constant_override("margin_left", 12); m.add_theme_constant_override("margin_top", 12)
+	m.size_flags_vertical = Control.SIZE_EXPAND_FILL; m.add_child(g); wv.add_child(m)
+	for id in FOLDERS[fid]:
+		var b := Button.new(); b.theme_type_variation = "Flat"; b.focus_mode = Control.FOCUS_NONE
+		b.custom_minimum_size = Vector2(120, 100)
+		var v := VBoxContainer.new(); v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		v.set_anchors_preset(Control.PRESET_FULL_RECT); v.alignment = BoxContainer.ALIGNMENT_CENTER; b.add_child(v)
+		var t := TextureRect.new(); t.texture = load(APPS[id][1]); t.custom_minimum_size = Vector2(56, 56)
+		t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		t.mouse_filter = Control.MOUSE_FILTER_IGNORE; v.add_child(t)
+		var l := Label.new(); l.text = APPS[id][0]; l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.mouse_filter = Control.MOUSE_FILTER_IGNORE; v.add_child(l)
+		b.pressed.connect(_open_app.bind(id)); g.add_child(b)
+
+func _app_chess() -> void:
+	var wv := _make_window("chess", "", Vector2(900, 680), Vector2(180, 10))
+	var ch := Control.new()
+	ch.set_script(load("res://apps/chess.gd"))
+	ch.size_flags_vertical = Control.SIZE_EXPAND_FILL; ch.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ch.custom_minimum_size = Vector2(760, 560); ch.clip_contents = true
+	wv.add_child(ch)
 
 # ---------------------------------------------------------------- Sound Link (app intégrée)
 
