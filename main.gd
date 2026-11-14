@@ -51,6 +51,7 @@ const APPS := {
 	"dict": ["Dictionnaire", "res://icons/app_dict.svg"],
 	"messenger": ["Messenger", "res://icons/app_messenger.svg"],
 	"remote": ["RemoteDesk", "res://icons/app_remote.svg"],
+	"chat": ["Chat IA", "res://icons/app_chat.svg"],
 	"music": ["Music", "res://icons/app_music.svg"],
 	"soundlink": ["Sound Link", "res://icons/app_soundlink.svg"],
 	"update": ["Mise à jour", "res://icons/app_update.svg"],
@@ -65,11 +66,27 @@ var bar_h := 48.0
 
 func _ready() -> void:
 	_load_settings()
+	OS.low_processor_usage_mode = true
+	OS.low_processor_usage_mode_sleep_usec = 16000
 	_build_theme()
 	_build_desktop()
+	_setup_chat()
 	var t := Timer.new(); t.wait_time = 1.0; t.autostart = true
 	t.timeout.connect(_tick); add_child(t); _tick()
 	_check_update()
+	if "--perf-test" in OS.get_cmdline_user_args():
+		_perf_test(); return
+	if "--ctl-test" in OS.get_cmdline_user_args():
+		await get_tree().create_timer(1.5).timeout
+		var snd := PacketPeerUDP.new(); var tp := 4360
+		for a in OS.get_cmdline_user_args():
+			if a.begins_with("--ctl-port="): tp = a.get_slice("=", 1).to_int()
+		snd.set_dest_address("127.0.0.1", tp); snd.put_packet("toggle-chat".to_utf8_buffer())
+		await get_tree().create_timer(0.6).timeout
+		print("CTL ctl.bound=", ctl.is_bound(), " ouvert après toggle UDP: ", chat_ov != null and chat_ov.is_open(), " win=", chat_ov.win != null if chat_ov else "-")
+		snd.put_packet("toggle-chat".to_utf8_buffer()); await get_tree().create_timer(0.6).timeout
+		print("CTL fermé après 2e toggle: ", chat_ov != null and not chat_ov.is_open())
+		get_tree().quit()
 	if "--os-test" in OS.get_cmdline_user_args():
 		for id in APPS: _open_app(id)
 		_toggle_menu(); _toggle_menu(); _toggle_kb()
@@ -91,6 +108,10 @@ func _ready() -> void:
 # ---------------------------------------------------------------- Appui long : menu Copier / Coller
 
 func _input(ev: InputEvent) -> void:
+	if ev is InputEventKey and ev.pressed and not ev.echo and ev.keycode == KEY_MINUS and chat_ov:
+		var fo := get_viewport().gui_get_focus_owner()
+		if not (fo is LineEdit or fo is TextEdit):
+			chat_ov.toggle(); get_viewport().set_input_as_handled(); return
 	if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT:
 		lp_active = ev.pressed; lp_pos = ev.position; lp_t = Time.get_ticks_msec()
 	elif ev is InputEventMouseMotion and lp_active and ev.position.distance_to(lp_pos) > 16.0:
@@ -145,6 +166,55 @@ func _hide_ctx() -> void:
 
 func _process(_d: float) -> void:
 	_check_longpress()
+	_poll_ctl()
+
+func _cpu_ticks() -> int:
+	var out := []
+	OS.execute("cat", ["/proc/%d/stat" % OS.get_process_id()], out)
+	if out.is_empty(): return 0
+	var f: String = out[0]
+	var p := f.substr(f.rfind(")") + 2).split(" ")
+	return int(p[11]) + int(p[12])
+
+func _perf_sample(label: String, secs: float) -> void:
+	var c0 := _cpu_ticks(); var t0 := Time.get_ticks_msec()
+	var n := 0; var worst := 0.0; var dc := 0.0; var last := Time.get_ticks_usec()
+	while Time.get_ticks_msec() - t0 < secs * 1000.0:
+		await get_tree().process_frame
+		var now := Time.get_ticks_usec(); var dt := (now - last) / 1000.0; last = now
+		worst = maxf(worst, dt); n += 1
+		dc += Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
+	var wall := (Time.get_ticks_msec() - t0) / 1000.0
+	var cpu := float(_cpu_ticks() - c0) / 100.0 / wall * 100.0
+	print("PERF %-38s CPU=%5.1f%%  fps=%5.1f  pire image=%6.1f ms  draw_calls=%4.0f" % [label, cpu, n / wall, worst, dc / maxf(1, n)])
+
+func _perf_test() -> void:
+	await get_tree().create_timer(1.0).timeout
+	await _perf_sample("bureau seul", 5.0)
+	_open_app("music")
+	await get_tree().create_timer(0.8).timeout
+	var mu := music_node
+	mu.set("tracks", [{"id": "perf", "title": "T", "artist": "A", "track": "Titre", "duration": 120.0, "file": OS.get_environment("HOME") + "/mtest/s.mp3", "lrc": "", "offset": 0.0, "no_lyrics": true, "video": OS.get_environment("HOME") + "/mtest/c.ogv" if "--perf-video" in OS.get_cmdline_user_args() else ""}])
+	mu.call("_play", 0)
+	var ls := []
+	for i in 30: ls.append([i * 3.0, "Voy de buena onda, me invita a tu casa y ahora tú me dice' que yo me agacha %d" % i])
+	mu.set("lines", ls)
+	var tr := {}
+	for i in 30: tr[i] = {"tr": "Je suis cool, il m'invite chez lui et maintenant tu me dis", "words": [{"w": "onda", "sens": "ambiance"}, {"w": "casa", "sens": "maison"}, {"w": "agacha", "sens": "me baisser"}]}
+	mu.set("trans", tr)
+	mu.get("kv").call("set_data", ls, tr)
+	await _perf_sample("Music : lecteur karaoké (au 1er plan)", 6.0)
+	mu.set("ov_mode", 1); mu.set("cw_mode", 2)
+	await _perf_sample("+ overlay paroles + mot centre", 6.0)
+	mu.set("ov_mode", 0); mu.set("cw_mode", 0)
+	await get_tree().create_timer(2.0).timeout
+	await _perf_sample("Music, overlays coupés (après 2 s)", 4.0)
+	get_tree().quit()
+
+func _notification(what: int) -> void:
+	# Au premier plan : ~60 images/s ; en arrière-plan (jeu au premier plan) : ~30, les overlays suffisent.
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT: OS.low_processor_usage_mode_sleep_usec = 33000
+	elif what == NOTIFICATION_APPLICATION_FOCUS_IN or what == NOTIFICATION_WM_WINDOW_FOCUS_IN: OS.low_processor_usage_mode_sleep_usec = 16000
 
 func _tick() -> void:
 	var d := Time.get_date_dict_from_system()
@@ -277,9 +347,8 @@ func _build_desktop() -> void:
 	add_child(root)
 	desk = Control.new(); desk.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	desk.clip_contents = true; root.add_child(desk)
-	var i := 0
-	for id in APPS:
-		_desk_icon(id, Vector2(16, 16 + i * 108)); i += 1
+	for id in APPS: _desk_icon(id, Vector2.ZERO)
+	desk.resized.connect(_layout_icons); _layout_icons.call_deferred()
 	# Barre des tâches
 	var bar := PanelContainer.new()
 	var bs := _box(Color(0.07, 0.08, 0.11, 0.9), 0); bs.border_width_top = 1; bs.border_color = Color(1, 1, 1, 0.08)
@@ -302,6 +371,12 @@ func _build_desktop() -> void:
 	_build_keyboard()
 	_build_menu()
 
+## Range les icônes en colonnes ; passe à la colonne suivante quand la hauteur est atteinte.
+func _layout_icons() -> void:
+	var per_col := maxi(1, int((desk.size.y - 16.0) / 108.0))
+	for i in desk_icons.size():
+		desk_icons[i].position = Vector2(16 + (i / per_col) * 108, 16 + (i % per_col) * 108)
+
 func _desk_icon(id: String, pos: Vector2) -> void:
 	var b := Button.new(); b.theme_type_variation = "Flat"; b.focus_mode = Control.FOCUS_NONE
 	b.custom_minimum_size = Vector2(100, 100); b.position = pos; b.size = Vector2(100, 100)
@@ -316,7 +391,7 @@ func _desk_icon(id: String, pos: Vector2) -> void:
 	l.add_theme_constant_override("shadow_offset_x", 1); l.add_theme_constant_override("shadow_offset_y", 1)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE; v.add_child(l)
 	b.pressed.connect(_open_app.bind(id))
-	desk.add_child(b)
+	desk.add_child(b); desk_icons.append(b)
 
 # ---------------------------------------------------------------- Menu Démarrer
 
@@ -473,6 +548,7 @@ func _open_app(id: String) -> void:
 		"dict": _app_dict()
 		"messenger": _app_messenger()
 		"remote": _app_remote()
+		"chat": _app_chat()
 		"music": _app_music()
 		"soundlink": _app_soundlink()
 		"update": _app_update()
@@ -644,7 +720,7 @@ func _app_settings() -> void:
 	v.add_child(sl)
 	v.add_child(_dlbl("Serveur de traduction (Ollama local)"))
 	var le := LineEdit.new(); le.text = set_cfg["ollama"]; le.virtual_keyboard_enabled = false
-	le.text_changed.connect(func(t: String): set_cfg["ollama"] = t.strip_edges().rstrip("/"); _save_settings())
+	le.text_changed.connect(func(t: String): set_cfg["ollama"] = t.strip_edges().rstrip("/"); _save_settings(); chat_core.ollama_url = set_cfg["ollama"])
 	v.add_child(le)
 	v.add_child(_mlbl("Sur téléphone : adresse du PC, ex. http://192.168.1.20:11434"))
 
@@ -689,6 +765,7 @@ func _app_update() -> void:
 const GL := [["Français", "fra", "French"], ["English", "eng", "English"], ["Español", "spa", "Spanish"], ["Deutsch", "deu", "German"],
 	["Italiano", "ita", "Italian"], ["Português", "por", "Portuguese"], ["Nederlands", "nld", "Dutch"], ["日本語", "jpn", "Japanese"]]
 var music_node: Control
+var desk_icons: Array = []
 var lp_active := false
 var lp_pos := Vector2.ZERO
 var lp_t := 0
@@ -933,10 +1010,43 @@ func _app_messenger() -> void:
 	ms.custom_minimum_size = Vector2(860, 500); ms.clip_contents = true
 	wv.add_child(ms)
 
+# ---------------------------------------------------------------- Chat IA (app + overlay « - »)
+
+var chat_core: ChatCore
+var chat_ov: ChatOverlay
+var ctl := PacketPeerUDP.new()
+
+func _setup_chat() -> void:
+	chat_core = ChatCore.new(); chat_core.ollama_url = set_cfg["ollama"]; add_child(chat_core)
+	if OS.has_feature("mobile"): return
+	chat_ov = ChatOverlay.new(); chat_ov.core = chat_core; add_child(chat_ov)
+	# Canal de commande local : le raccourci global du système envoie « toggle-chat » (voir langos-chat.sh)
+	var cport := 4360
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--ctl-port="): cport = a.get_slice("=", 1).to_int()
+	var be := ctl.bind(cport, "127.0.0.1")
+	if be != OK: push_warning("Port 4360 occupé : raccourci global du chat indisponible (%d)" % be)
+
+func _poll_ctl() -> void:
+	while ctl.is_bound() and ctl.get_available_packet_count() > 0:
+		var cmd := ctl.get_packet().get_string_from_utf8().strip_edges()
+		if cmd == "toggle-chat" and chat_ov: chat_ov.toggle()
+		elif cmd == "show-chat" and chat_ov: chat_ov.show_chat()
+
+func _app_chat() -> void:
+	var wv := _make_window("chat", "", Vector2(820, 600), Vector2(160, 20))
+	var c := Control.new()
+	c.set_script(load("res://apps/chat.gd"))
+	c.set("core", chat_core)
+	c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c.custom_minimum_size = Vector2(700, 480); c.clip_contents = true
+	wv.add_child(c)
+
 # ---------------------------------------------------------------- Music (app intégrée)
 
 func _app_music() -> void:
-	var wv := _make_window("music", "", Vector2(1040, 660), Vector2(110, 10))
+	var big := Vector2(minf(1500.0, desk.size.x - 24.0), minf(900.0, desk.size.y - 16.0))
+	var wv := _make_window("music", "", big, Vector2(12, 8))
 	var mu := Control.new()
 	mu.set_script(load("res://apps/music.gd"))
 	mu.set("ollama_url", set_cfg["ollama"]); mu.set("src", set_cfg["src"]); mu.set("tgt", set_cfg["tgt"]); music_node = mu

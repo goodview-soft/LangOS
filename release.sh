@@ -14,7 +14,7 @@ sed -i "s/^const VERSION := .*/const VERSION := \"$V\"/" version.gd
 $GODOT --headless --path . --export-pack "Linux" "$OUT/blocnote-$V.pck"
 $GODOT --headless --path . --export-release "Linux" build/linux/BlocNote.x86_64
 $GODOT --headless --path . --export-debug "Android" "$OUT/BlocNote-$V.apk"
-cp install.sh icon.svg langos.sh build/linux/
+cp install.sh icon.svg langos.sh langos-chat.sh langos-hotkey.sh build/linux/
 rm -rf build/BlocNote && cp -r build/linux build/BlocNote
 (cd build && zip -qr "release/BlocNote-$V-linux.zip" BlocNote) && rm -rf build/BlocNote
 

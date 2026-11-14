@@ -26,8 +26,8 @@ else
 	unzip -q "$TMP/sl.zip" -d "$TMP"
 	SRC="$TMP/BlocNote"
 fi
-cp -f "$SRC"/BlocNote.x86_64 "$SRC"/langos.sh "$SRC"/icon.svg "$SRC"/install.sh "$APP"/
-chmod +x "$APP/BlocNote.x86_64" "$APP/langos.sh"
+cp -f "$SRC"/BlocNote.x86_64 "$SRC"/langos.sh "$SRC"/langos-chat.sh "$SRC"/langos-hotkey.sh "$SRC"/icon.svg "$SRC"/install.sh "$APP"/
+chmod +x "$APP/BlocNote.x86_64" "$APP/langos.sh" "$APP/langos-chat.sh" "$APP/langos-hotkey.sh"
 ln -sf "$APP/langos.sh" "$BIN"
 cat > "$DESK" <<D
 [Desktop Entry]

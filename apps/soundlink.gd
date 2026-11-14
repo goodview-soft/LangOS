@@ -97,8 +97,8 @@ class RxStream:
 	var last_seq := -1
 	var lost := 0
 	var last_rx := -100.0
-	var prebuffer := 4
-	var max_queue := 8
+	var prebuffer := 8
+	var max_queue := 24
 	var stereo: bool
 	var hdr: int
 	var parent: Node
@@ -163,7 +163,7 @@ class RxStream:
 	func latency_ms() -> int:
 		if playback == null or rate <= 0:
 			return 0
-		var frames := queue.size() * 480 + int(0.1 * rate) - playback.get_frames_available()
+		var frames := queue.size() * 480 + int(0.4 * rate) - playback.get_frames_available()
 		return int(frames * 1000.0 / rate)
 
 	func _setup(r: int) -> void:
@@ -172,7 +172,7 @@ class RxStream:
 		if "mix_rate_mode" in gen:
 			gen.set("mix_rate_mode", 2)  # MIX_RATE_CUSTOM
 		gen.mix_rate = r
-		gen.buffer_length = 0.1
+		gen.buffer_length = 0.4
 		player = AudioStreamPlayer.new()
 		player.stream = gen
 		player.bus = bus
@@ -429,6 +429,7 @@ func _ready() -> void:
 	_refresh_devices()
 	if udp.bind(data_port) != OK:
 		pill_txt.text = "Port %d indisponible" % data_port
+	_ensure_vsink()
 	vsink_exists = VSINK in AudioServer.get_output_device_list()
 	_check_update()
 
@@ -982,7 +983,10 @@ func _remove_bus(bus: String) -> void:
 func _start_capture(dev: String) -> void:
 	if mic_player:
 		return
-	if OS.get_name() == "Android":
+	if OS.get_name() == "Android" and "android.permission.RECORD_AUDIO" not in OS.get_granted_permissions():
+		# sans permission le micro reste muet : on relance la capture dès qu'elle est accordée
+		if not get_tree().on_request_permissions_result.is_connected(_on_perm):
+			get_tree().on_request_permissions_result.connect(_on_perm)
 		OS.request_permissions()
 	if capture == null:
 		capture = AudioEffectCapture.new()
@@ -1481,3 +1485,21 @@ func _broadcast_addrs() -> PackedStringArray:
 		if a.contains(".") and not a.begins_with("127.") and not a.begins_with("169.254"):
 			out.append(a.substr(0, a.rfind(".")) + ".255")
 	return out
+
+
+## Linux : crée le micro virtuel « Sound-Link-Micro » si le lanceur ne l'a pas fait.
+func _ensure_vsink() -> void:
+	if OS.get_name() != "Linux" or VSINK in AudioServer.get_output_device_list():
+		return
+	var out := []
+	if OS.execute("pactl", ["load-module", "module-null-sink", "sink_name=" + VSINK,
+			"sink_properties=device.description=Sound-Link-Sortie"], out) != 0:
+		return
+	OS.execute("pactl", ["load-module", "module-remap-source", "master=" + VSINK + ".monitor",
+			"source_name=soundlink_mic", "source_properties=device.description=Sound-Link-Micro"], out)
+
+
+func _on_perm(perm: String, granted: bool) -> void:
+	if perm.ends_with("RECORD_AUDIO") and granted and cap_kind != "":
+		_stop_capture()
+		_start_capture("Default")
