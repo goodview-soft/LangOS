@@ -83,8 +83,67 @@ func _ready() -> void:
 		print("LANGS2: ", dic_note.text)
 		edit.text = "bonjour tout le monde"; edit.grab_focus(); _clip_action("all"); _clip_action("copy"); edit.text = ""; _clip_action("paste")
 		print("CLIP: ", edit.text)
+		_show_ctx(edit, Vector2(400, 300)); print("CTX: ", ctx_menu.visible, " ", ctx_menu.get_child(0).get_child_count(), " boutons"); _hide_ctx()
 		print("OS-TEST OK wins=", wins.size())
 		get_tree().quit()
+
+# ---------------------------------------------------------------- Appui long : menu Copier / Coller
+
+func _input(ev: InputEvent) -> void:
+	if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT:
+		lp_active = ev.pressed; lp_pos = ev.position; lp_t = Time.get_ticks_msec()
+	elif ev is InputEventMouseMotion and lp_active and ev.position.distance_to(lp_pos) > 16.0:
+		lp_active = false
+
+func _check_longpress() -> void:
+	if lp_active and Time.get_ticks_msec() - lp_t > 550:
+		lp_active = false
+		var c := get_viewport().gui_get_hovered_control()
+		while c and not (c is TextEdit or c is LineEdit or c is RichTextLabel): c = c.get_parent() as Control
+		if c: _show_ctx(c, lp_pos)
+
+func _show_ctx(t: Control, at: Vector2) -> void:
+	_hide_ctx()
+	ctx_target = t
+	var editable: bool = (t is TextEdit and t.editable) or (t is LineEdit and t.editable)
+	if t is TextEdit and not t.has_selection(): t.select_word_under_caret()
+	var has_sel := false
+	if t is TextEdit or t is LineEdit: has_sel = t.has_selection() if t is TextEdit else t.has_selection()
+	ctx_catcher = Control.new(); ctx_catcher.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ctx_catcher.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed: _hide_ctx())
+	add_child(ctx_catcher)
+	ctx_menu = PanelContainer.new()
+	ctx_menu.add_theme_stylebox_override("panel", _box(Color(0.12, 0.14, 0.2, 0.98), 12, Color(1, 1, 1, 0.14), 1, 18, 6))
+	add_child(ctx_menu)
+	var h := HBoxContainer.new(); h.add_theme_constant_override("separation", 2); ctx_menu.add_child(h)
+	var items := []
+	if editable and has_sel: items.append(["Couper", "cut"])
+	items.append(["Copier", "copy"])
+	if editable: items.append(["Coller", "paste"])
+	items.append(["Tout sélectionner", "all"])
+	for e in items:
+		var b := _mk_btn(e[0], 0, 48); b.theme_type_variation = "Flat"; b.add_theme_font_size_override("font_size", 18)
+		b.pressed.connect(func(): _ctx_do(e[1]))
+		h.add_child(b)
+	ctx_menu.size = ctx_menu.get_combined_minimum_size()
+	ctx_menu.position = Vector2(clampf(at.x - ctx_menu.size.x / 2.0, 8, size.x - ctx_menu.size.x - 8), maxf(8, at.y - ctx_menu.size.y - 28))
+
+func _ctx_do(a: String) -> void:
+	var t := ctx_target
+	if is_instance_valid(t):
+		t.grab_focus()
+		if t is RichTextLabel and a == "copy":
+			var s: String = t.get_selected_text()
+			DisplayServer.clipboard_set(s if s != "" else t.get_parsed_text())
+		else: _clip_action(a)
+	_hide_ctx()
+
+func _hide_ctx() -> void:
+	if is_instance_valid(ctx_menu): ctx_menu.queue_free()
+	if is_instance_valid(ctx_catcher): ctx_catcher.queue_free()
+
+func _process(_d: float) -> void:
+	_check_longpress()
 
 func _tick() -> void:
 	var d := Time.get_date_dict_from_system()
@@ -622,6 +681,12 @@ func _app_update() -> void:
 const GL := [["Français", "fra", "French"], ["English", "eng", "English"], ["Español", "spa", "Spanish"], ["Deutsch", "deu", "German"],
 	["Italiano", "ita", "Italian"], ["Português", "por", "Portuguese"], ["Nederlands", "nld", "Dutch"], ["日本語", "jpn", "Japanese"]]
 var music_node: Control
+var lp_active := false
+var lp_pos := Vector2.ZERO
+var lp_t := 0
+var ctx_menu: PanelContainer
+var ctx_catcher: Control
+var ctx_target: Control
 var tr_pair: Label
 
 func _gname(code: String, i := 0) -> String:
