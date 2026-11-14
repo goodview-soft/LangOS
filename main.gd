@@ -59,12 +59,15 @@ const APPS := {
 	"f_lang": ["Langue", "res://icons/app_f_lang.svg"],
 	"f_games": ["Jeux", "res://icons/app_f_games.svg"],
 	"f_comm": ["Communication", "res://icons/app_f_comm.svg"],
+	"hika": ["Hikabrain", "res://icons/app_hika.svg"],
+	"f_perso": ["Personnel", "res://icons/app_f_perso.svg"],
 }
 ## Dossiers du bureau : id -> applications contenues (affichées seulement dans le dossier).
 const FOLDERS := {
 	"f_lang": ["translate", "dict", "music"],
 	"f_games": ["chess"],
 	"f_comm": ["messenger", "remote", "chat", "soundlink"],
+	"f_perso": ["hika"],
 }
 
 func _top_ids() -> Array:
@@ -103,7 +106,7 @@ func _ready() -> void:
 		print("CTL fermé après 2e toggle: ", chat_ov != null and not chat_ov.is_open())
 		get_tree().quit()
 	if "--os-test" in OS.get_cmdline_user_args():
-		for id in APPS: _open_app(id)
+		for id in APPS: if id != "hika": _open_app(id)
 		_toggle_menu(); _toggle_menu(); _toggle_kb()
 		await get_tree().create_timer(1.0).timeout
 		_dic_search("casa")
@@ -557,6 +560,7 @@ func _open_app(id: String) -> void:
 		_show(id); return
 	if FOLDERS.has(id): _app_folder(id); return
 	match id:
+		"hika": _launch_hika()
 		"chess": _app_chess()
 		"notepad": _app_notepad()
 		"settings": _app_settings()
@@ -1090,6 +1094,12 @@ func _app_folder(fid: String) -> void:
 		var l := Label.new(); l.text = APPS[id][0]; l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.mouse_filter = Control.MOUSE_FILTER_IGNORE; v.add_child(l)
 		b.pressed.connect(_open_app.bind(id)); g.add_child(b)
+
+## Hikabrain (jeu 3D) prend tout l'écran ; « Retour à LangOS » dans son menu relance le bureau.
+func _launch_hika() -> void:
+	if dirty: _save()
+	OS.low_processor_usage_mode = false
+	get_tree().change_scene_to_file("res://games/hikabrain/scenes/main_menu.tscn")
 
 func _app_chess() -> void:
 	var wv := _make_window("chess", "", Vector2(900, 680), Vector2(180, 10))
