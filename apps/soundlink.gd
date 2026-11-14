@@ -62,6 +62,7 @@ const C_DANGER := Color("#f87171")
 var dev_opt: OptionButton
 var mic_opt: OptionButton
 var vsink_lbl: Label
+var monitor_module := ""  # id du module-loopback pactl (retour son)
 var ip_edit: LineEdit
 var name_edit: LineEdit
 var bal_slider: HSlider
@@ -439,6 +440,7 @@ func _exit_tree() -> void:
 	for id in listening.keys():
 		_unlisten(id)
 	_stop_capture()
+	_stop_monitor()
 	for k in rxs.keys():
 		_free_rx(k)
 	if AudioServer.output_device == VSINK:
@@ -632,6 +634,11 @@ func _build_ui() -> void:
 	mute.toggled.connect(func(on: bool) -> void: muted = on)
 	brow.add_child(mute)
 	_button("Centrer", brow).pressed.connect(func() -> void: bal_slider.value = 0)
+	if not mobile and OS.get_name() == "Linux":
+		var mon := CheckButton.new()
+		mon.text = "Retour son (entendre les micros reçus)"
+		mon.toggled.connect(_set_monitor)
+		gl.add_child(mon)
 	vsink_lbl = _hint("", gl)
 
 	var gi := _vbox(gs, 8)
@@ -1568,3 +1575,24 @@ func _move_output(sink: String) -> void:
 			var pr: Dictionary = si.get("properties", {})
 			if pr.get("application.name", "") == app_name and str(pr.get("application.process.id", OS.get_process_id())) == str(OS.get_process_id()):
 				OS.execute("pactl", ["move-sink-input", str(si["index"]), target], [])
+
+
+## Retour son : branche « Sound-Link-Micro » sur la sortie par défaut pour entendre ce que la tablette envoie.
+func _set_monitor(on: bool) -> void:
+	_stop_monitor()
+	if not on:
+		return
+	var out := []
+	if OS.execute("pactl", ["get-default-sink"], out) != 0 or out.is_empty():
+		return
+	var sink := str(out[0]).strip_edges()
+	out = []
+	if OS.execute("pactl", ["load-module", "module-loopback", "source=soundlink_mic", "sink=" + sink,
+			"latency_msec=40"], out) == 0 and out.size() > 0:
+		monitor_module = str(out[0]).strip_edges()
+
+
+func _stop_monitor() -> void:
+	if monitor_module != "":
+		OS.execute("pactl", ["unload-module", monitor_module], [])
+		monitor_module = ""
