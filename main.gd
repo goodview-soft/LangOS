@@ -51,7 +51,7 @@ const APPS := {
 	"update": ["Mise à jour", "res://icons/app_update.svg"],
 }
 var active := ""
-var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "model": ""}
+var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "model": "", "engine": -1}
 var kb: PanelContainer
 var upd_http: HTTPRequest
 var upd_btn: Button
@@ -553,7 +553,15 @@ func _app_update() -> void:
 
 const LANGS := [["Français", "French"], ["English", "English"], ["Español", "Spanish"], ["Deutsch", "German"],
 	["Italiano", "Italian"], ["Português", "Portuguese"], ["Nederlands", "Dutch"], ["日本語", "Japanese"]]
+const LOCAL_URL := "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf"
+const LOCAL_FILE := "user://models/qwen2.5-1.5b-instruct-q4_k_m.gguf"
+const LOCAL_MIN := 1000000000
 var tr_http: HTTPRequest
+var tr_dl: HTTPRequest
+var tr_llm: Object
+var tr_engine: OptionButton
+var tr_srv: HBoxContainer
+var tr_timer: Timer
 var tr_tags: HTTPRequest
 var tr_src: OptionButton
 var tr_dst: OptionButton
@@ -578,9 +586,27 @@ func _app_translate() -> void:
 	var sw := _mk_btn("⇄", 48, 40); sw.pressed.connect(_tr_swap)
 	row.add_child(tr_src); row.add_child(sw); row.add_child(tr_dst)
 	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(sp)
+	tr_engine = OptionButton.new(); tr_engine.focus_mode = Control.FOCUS_NONE
+	tr_engine.add_item("Sur l'appareil"); tr_engine.add_item("Serveur Ollama")
+	if set_cfg["engine"] < 0: set_cfg["engine"] = 0 if OS.has_feature("android") else 1
+	tr_engine.select(set_cfg["engine"])
+	tr_engine.item_selected.connect(func(i: int): set_cfg["engine"] = i; _save_settings(); _tr_engine_changed())
+	row.add_child(tr_engine)
 	tr_model = OptionButton.new(); tr_model.focus_mode = Control.FOCUS_NONE
 	tr_model.item_selected.connect(func(i: int): set_cfg["model"] = tr_model.get_item_text(i); _save_settings())
 	row.add_child(tr_model)
+	var srv := HBoxContainer.new(); srv.add_theme_constant_override("separation", 8); v.add_child(srv); tr_srv = srv
+	srv.add_child(_mlbl("Serveur"))
+	var le := LineEdit.new(); le.text = set_cfg["ollama"]; le.virtual_keyboard_enabled = false
+	le.placeholder_text = "http://IP-du-PC:11434"; le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	srv.add_child(le)
+	var cn := _mk_btn("Connecter", 120, 38); cn.theme_type_variation = "Flat"
+	cn.pressed.connect(func():
+		var t := le.text.strip_edges().rstrip("/")
+		if not t.begins_with("http"): t = "http://" + t
+		if not ":" in t.substr(7): t += ":11434"
+		le.text = t; set_cfg["ollama"] = t; _save_settings(); _tr_models())
+	srv.add_child(cn)
 	var tx := HBoxContainer.new(); tx.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	tx.add_theme_constant_override("separation", 10); v.add_child(tx)
 	tr_in = TextEdit.new(); tr_out = TextEdit.new()
@@ -596,7 +622,81 @@ func _app_translate() -> void:
 	tr_btn = _mk_btn("Traduire", 130, 42); tr_btn.theme_type_variation = "Accent"
 	tr_btn.pressed.connect(_tr_translate); bt.add_child(tr_btn)
 	tr_in.grab_focus()
-	_tr_models()
+	_tr_engine_changed()
+
+func _tr_engine_changed() -> void:
+	var local: bool = set_cfg["engine"] == 0
+	tr_srv.visible = not local; tr_model.visible = not local
+	tr_btn.text = "Traduire"; tr_btn.disabled = false
+	if local: _tr_local_check()
+	else: _tr_models()
+
+func _tr_local_check() -> void:
+	if not ClassDB.class_exists("GDLlama"):
+		tr_status.text = "Moteur local indisponible sur cet appareil : utiliser « Serveur Ollama »."
+		tr_btn.disabled = true
+	elif not _tr_model_ok():
+		tr_status.text = "Modèle local à télécharger une seule fois (≈ 1,1 Go, Wi-Fi conseillé)."
+		tr_btn.text = "Télécharger le modèle"
+	else:
+		tr_status.text = "Prêt (sur l'appareil, hors ligne)."
+
+func _tr_model_ok() -> bool:
+	if not FileAccess.file_exists(LOCAL_FILE): return false
+	var f := FileAccess.open(LOCAL_FILE, FileAccess.READ)
+	return f != null and f.get_length() > LOCAL_MIN
+
+func _tr_download() -> void:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("user://models"))
+	if tr_dl == null:
+		tr_dl = HTTPRequest.new(); tr_dl.download_chunk_size = 1048576; tr_dl.timeout = 0.0; add_child(tr_dl)
+		tr_dl.request_completed.connect(_on_tr_dl)
+		tr_timer = Timer.new(); tr_timer.wait_time = 0.5; add_child(tr_timer)
+		tr_timer.timeout.connect(func():
+			if is_instance_valid(tr_status) and tr_dl.get_body_size() > 0:
+				tr_status.text = "Téléchargement du modèle : %d %%  (%d / %d Mo)" % [100 * tr_dl.get_downloaded_bytes() / tr_dl.get_body_size(), tr_dl.get_downloaded_bytes() / 1048576, tr_dl.get_body_size() / 1048576])
+	tr_dl.download_file = ProjectSettings.globalize_path("user://models/model.tmp")
+	tr_btn.disabled = true; tr_status.text = "Téléchargement du modèle…"
+	tr_timer.start()
+	var err := tr_dl.request(LOCAL_URL)
+	if err != OK: tr_status.text = "Téléchargement impossible (réseau ?)."; tr_btn.disabled = false; tr_timer.stop()
+
+func _on_tr_dl(result: int, code: int, _h: PackedStringArray, _b: PackedByteArray) -> void:
+	tr_timer.stop()
+	var tmp := "user://models/model.tmp"
+	var ok := result == HTTPRequest.RESULT_SUCCESS and code == 200 and FileAccess.file_exists(tmp)
+	if ok:
+		var f := FileAccess.open(tmp, FileAccess.READ); ok = f != null and f.get_length() > LOCAL_MIN
+	if not ok:
+		DirAccess.remove_absolute(tmp)
+		if is_instance_valid(tr_status): tr_status.text = "Échec du téléchargement, réessayer."; tr_btn.disabled = false
+		return
+	DirAccess.rename_absolute(tmp, LOCAL_FILE)
+	if is_instance_valid(tr_status): _tr_engine_changed()
+
+func _tr_local_translate(text: String) -> void:
+	if tr_llm == null:
+		tr_llm = ClassDB.instantiate("GDLlama")
+		add_child(tr_llm)
+		tr_llm.set("model_path", ProjectSettings.globalize_path(LOCAL_FILE))
+		tr_llm.set("n_predict", 400); tr_llm.set("n_ctx", 2048)
+		tr_llm.set("should_output_prompt", false); tr_llm.set("should_output_special", false)
+		tr_llm.set("n_threads", maxi(2, OS.get_processor_count() / 2))
+		tr_llm.connect("generate_text_finished", _on_tr_local_done)
+	var from_part := ""
+	if tr_src.selected > 0: from_part = "from %s " % LANGS[tr_src.selected - 1][1]
+	var sys := "You are a translation engine. Translate the user's text %sinto %s. Output ONLY the translation: no notes, no quotes, no explanations." % [from_part, LANGS[tr_dst.selected][1]]
+	var prompt := "<|im_start|>system\n%s<|im_end|>\n<|im_start|>user\n%s<|im_end|>\n<|im_start|>assistant\n" % [sys, text]
+	tr_btn.disabled = true; tr_status.text = "Traduction sur l'appareil (le premier appel charge le modèle)…"
+	tr_t0 = Time.get_ticks_msec()
+	tr_llm.call("run_generate_text", prompt, "", "")
+
+func _on_tr_local_done(t: String) -> void:
+	if not is_instance_valid(tr_out): return
+	tr_btn.disabled = false
+	var out := t.get_slice("<|im_end|>", 0).strip_edges()
+	tr_out.text = out
+	tr_status.text = "✓ %.1f s — traduit sur l'appareil" % ((Time.get_ticks_msec() - tr_t0) / 1000.0)
 
 func _tr_swap() -> void:
 	var s := tr_src.selected
@@ -615,7 +715,8 @@ func _on_tr_tags(result: int, code: int, _h: PackedStringArray, body: PackedByte
 	if not is_instance_valid(tr_model): return
 	var info = JSON.parse_string(body.get_string_from_utf8()) if result == HTTPRequest.RESULT_SUCCESS and code == 200 else null
 	if not (info is Dictionary) or not info.has("models"):
-		tr_status.text = "Modèle local introuvable : lancer « ollama serve » ou régler le serveur dans Paramètres."
+		tr_status.text = ("Sur téléphone, « Serveur » = adresse du PC (ex. http://192.168.1.20:11434), Ollama lancé avec OLLAMA_HOST=0.0.0.0, même Wi-Fi." \
+			if OS.has_feature("android") else "Modèle local introuvable : lancer « ollama serve » ou régler le serveur ci-dessus.")
 		tr_btn.disabled = true; return
 	tr_model.clear()
 	var names: Array = []
@@ -636,6 +737,11 @@ func _tr_rank(n: String) -> int:
 	return 5
 
 func _tr_translate() -> void:
+	if set_cfg["engine"] == 0:
+		if not _tr_model_ok(): _tr_download(); return
+		var lt := tr_in.text.strip_edges()
+		if not lt.is_empty(): _tr_local_translate(lt)
+		return
 	var text := tr_in.text.strip_edges()
 	if text.is_empty() or tr_model.item_count == 0: return
 	if tr_http == null: tr_http = HTTPRequest.new(); tr_http.timeout = 180.0; add_child(tr_http)
@@ -668,11 +774,12 @@ func _load_settings() -> void:
 		set_cfg["font"] = clampi(int(c.get_value("ui", "font", 22)), 14, 40)
 		set_cfg["ollama"] = str(c.get_value("translate", "server", set_cfg["ollama"]))
 		set_cfg["model"] = str(c.get_value("translate", "model", ""))
+		set_cfg["engine"] = int(c.get_value("translate", "engine", -1))
 
 func _save_settings() -> void:
 	var c := ConfigFile.new()
 	c.set_value("ui", "bg", set_cfg["bg"]); c.set_value("ui", "font", set_cfg["font"])
-	c.set_value("translate", "server", set_cfg["ollama"]); c.set_value("translate", "model", set_cfg["model"])
+	c.set_value("translate", "server", set_cfg["ollama"]); c.set_value("translate", "model", set_cfg["model"]); c.set_value("translate", "engine", set_cfg["engine"])
 	c.save("user://settings.cfg")
 
 func _type_key(r: int, c: int) -> void:
