@@ -41,6 +41,7 @@ var cap_kind := ""
 var seq := 0
 var host_gain := 1.0
 var mic_gain := 1.0
+var cap_hold := false  # capture en cours de redirection vers le moniteur : on n'envoie rien
 var volume := 1.0
 var balance := 0.0
 var muted := false
@@ -999,6 +1000,9 @@ func _start_capture(dev: String) -> void:
 	add_child(mic_player)
 	mic_player.play()
 	capture.clear_buffer()
+	if cap_kind == "snd" and OS.get_name() == "Linux" and not OS.has_feature("mobile") and OS.get_environment("PULSE_SOURCE") == "":
+		cap_hold = true
+		_pulse_monitor()
 
 
 func _stop_capture() -> void:
@@ -1040,6 +1044,9 @@ func _share_process(now: float) -> Vector2:
 	var rate := int(AudioServer.get_mix_rate())
 	var pl := 0.0
 	var pr := 0.0
+	if cap_hold:
+		capture.clear_buffer()
+		return Vector2.ZERO
 	while capture.get_frames_available() >= FRAMES_PER_PACKET:
 		var frames := capture.get_buffer(FRAMES_PER_PACKET)
 		var snd := cap_kind == "snd"
@@ -1503,3 +1510,29 @@ func _on_perm(perm: String, granted: bool) -> void:
 	if perm.ends_with("RECORD_AUDIO") and granted and cap_kind != "":
 		_stop_capture()
 		_start_capture("Default")
+
+
+## Lancé sans langos.sh : « Default » est le vrai micro (Godot ne liste pas les moniteurs).
+## On redirige donc notre flux de capture vers le moniteur de la sortie du PC.
+func _pulse_monitor() -> void:
+	await get_tree().create_timer(0.6).timeout
+	if cap_kind != "snd":
+		cap_hold = false
+		return
+	var out := []
+	if OS.execute("pactl", ["get-default-sink"], out) != 0 or out.is_empty():
+		return
+	var mon := str(out[0]).strip_edges() + ".monitor"
+	out = []
+	if OS.execute("pactl", ["-f", "json", "list", "source-outputs"], out) != 0 or out.is_empty():
+		return
+	var list = JSON.parse_string(str(out[0]))
+	if not (list is Array):
+		return
+	var name := str(ProjectSettings.get_setting("application/config/name", ""))
+	for so in list:
+		var pr: Dictionary = so.get("properties", {})
+		if pr.get("application.name", "") == name and str(so.get("source", "")) != "":
+			OS.execute("pactl", ["move-source-output", str(so["index"]), mon], [])
+	capture.clear_buffer()
+	cap_hold = false
