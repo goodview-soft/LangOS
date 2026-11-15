@@ -1,0 +1,41 @@
+extends Control
+## Curseur de souris affiché là où le doigt touche (écrans tactiles), et cible des clics du pavé tactile (apps/flex_pad.gd).
+
+var pos := Vector2(-200, -200)
+var pressed := false
+var mode := "auto"            # auto (écrans tactiles) | on | off
+var pad_active := false       # pavé tactile affiché : le curseur reste visible et suit le pavé
+var pad_top := -1.0           # y (vue) à partir duquel commence le pavé : les vrais doigts y sont ignorés
+var _last := 0
+
+func _ready() -> void:
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	z_index = 4000
+	var t := Timer.new(); t.wait_time = 0.5; t.autostart = true; t.timeout.connect(queue_redraw); add_child(t)
+
+func _wanted() -> bool:
+	if mode == "off": return false
+	return mode == "on" or pad_active or DisplayServer.is_touchscreen_available()
+
+func _input(ev: InputEvent) -> void:
+	if not _wanted() or not (ev is InputEventMouse): return
+	if pad_top >= 0.0 and ev.position.y >= pad_top: return        # doigt sur le pavé : c'est le pavé qui déplace le curseur
+	pos = ev.position
+	if ev is InputEventMouseButton: pressed = ev.pressed
+	_last = Time.get_ticks_msec(); queue_redraw()
+
+## Déplace le curseur (appelé par le pavé tactile).
+func move_to(p: Vector2) -> void:
+	pos = p; _last = Time.get_ticks_msec(); queue_redraw()
+
+func _draw() -> void:
+	if not _wanted(): return
+	if not pad_active and Time.get_ticks_msec() - _last > 3000: return
+	var k := 1.4
+	var pts := PackedVector2Array()
+	for q in [Vector2(0, 0), Vector2(0, 17), Vector2(4.5, 13), Vector2(8, 20.5), Vector2(11, 19), Vector2(7.6, 12), Vector2(13, 12)]: pts.append(pos + q * k)
+	if pressed: draw_circle(pos, 16, Color(0.35, 0.65, 1.0, 0.35))
+	draw_colored_polygon(pts, Color.WHITE)
+	var o := pts.duplicate(); o.append(pts[0])
+	draw_polyline(o, Color.BLACK, 1.8, true)

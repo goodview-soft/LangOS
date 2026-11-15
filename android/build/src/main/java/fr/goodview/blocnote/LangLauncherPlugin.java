@@ -19,17 +19,37 @@ import android.util.Base64;
 
 import org.godotengine.godot.Godot;
 import org.godotengine.godot.plugin.GodotPlugin;
+import org.godotengine.godot.plugin.SignalInfo;
 import org.godotengine.godot.plugin.UsedByGodot;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import androidx.core.util.Consumer;
+import androidx.window.java.layout.WindowInfoTrackerCallbackAdapter;
+import androidx.window.layout.DisplayFeature;
+import androidx.window.layout.FoldingFeature;
+import androidx.window.layout.WindowInfoTracker;
+import androidx.window.layout.WindowLayoutInfo;
+
 import java.io.ByteArrayOutputStream;
+import java.util.Set;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
 /** Lanceur : liste les applications installées (avec icônes), les lance, et ouvre le choix de l'écran d'accueil. */
 public class LangLauncherPlugin extends GodotPlugin {
+	private static final SignalInfo FOLD_CHANGED = new SignalInfo("fold_changed", String.class);
+	private String foldJson = "{\"state\":\"none\"}";
+	private String fState = "none";
+	private String fOrient = "";
+	private int fLeft, fTop, fRight, fBottom;
+	private int hingeAngle = -1;
+	private WindowInfoTrackerCallbackAdapter foldAdapter;
+	private Consumer<WindowLayoutInfo> foldListener;
+	private android.hardware.SensorManager sensors;
+	private android.hardware.SensorEventListener hingeListener;
+
 	public LangLauncherPlugin(Godot godot) {
 		super(godot);
 	}
@@ -39,10 +59,83 @@ public class LangLauncherPlugin extends GodotPlugin {
 		return "LangLauncher";
 	}
 
+	@Override
+	public Set<SignalInfo> getPluginSignals() {
+		return java.util.Collections.singleton(FOLD_CHANGED);
+	}
+
+	private synchronized void publishFold() {
+		String json = "{\"state\":\"" + fState + "\",\"orientation\":\"" + fOrient + "\",\"left\":" + fLeft + ",\"top\":" + fTop
+				+ ",\"right\":" + fRight + ",\"bottom\":" + fBottom + ",\"angle\":" + hingeAngle + "}";
+		android.util.Log.i("LangFold", json);
+		if (!json.equals(foldJson)) {
+			foldJson = json;
+			emitSignal(FOLD_CHANGED, json);
+		}
+	}
+
+	@Override
+	public android.view.View onMainCreate(Activity activity) {
+		try {
+			foldAdapter = new WindowInfoTrackerCallbackAdapter(WindowInfoTracker.Companion.getOrCreate(activity));
+			foldListener = info -> {
+				String st = "none";
+				String or = "";
+				for (DisplayFeature f : info.getDisplayFeatures()) {
+					if (f instanceof FoldingFeature) {
+						FoldingFeature ff = (FoldingFeature) f;
+						android.graphics.Rect r = ff.getBounds();
+						st = ff.getState() == FoldingFeature.State.HALF_OPENED ? "half" : "flat";
+						or = ff.getOrientation() == FoldingFeature.Orientation.HORIZONTAL ? "horizontal" : "vertical";
+						fLeft = r.left; fTop = r.top; fRight = r.right; fBottom = r.bottom;
+						break;
+					}
+				}
+				fState = st;
+				fOrient = or;
+				publishFold();
+			};
+			foldAdapter.addWindowLayoutInfoListener(activity, Runnable::run, foldListener);
+		} catch (Throwable t) {
+			// pas de détection de pli par la bibliothèque sur cet appareil
+		}
+		try {
+			// Capteur d'angle de la charnière (plus fiable que l'état seul sur certains appareils) : 0 = fermé, 180 = à plat
+			sensors = (android.hardware.SensorManager) activity.getSystemService(android.content.Context.SENSOR_SERVICE);
+			android.hardware.Sensor hs = sensors.getDefaultSensor(android.hardware.Sensor.TYPE_HINGE_ANGLE);
+			if (hs != null) {
+				hingeListener = new android.hardware.SensorEventListener() {
+					@Override
+					public void onSensorChanged(android.hardware.SensorEvent e) {
+						int a = Math.round(e.values[0]);
+						if (Math.abs(a - hingeAngle) >= 5 || hingeAngle < 0) {
+							hingeAngle = a;
+							publishFold();
+						}
+					}
+
+					@Override
+					public void onAccuracyChanged(android.hardware.Sensor s, int accuracy) {
+					}
+				};
+				sensors.registerListener(hingeListener, hs, android.hardware.SensorManager.SENSOR_DELAY_NORMAL);
+			}
+		} catch (Throwable t) {
+			// pas de capteur de charnière
+		}
+		return null;
+	}
+
+	/** État du pli : {"state":"none|flat|half","orientation":..,"left":..,"top":..,"right":..,"bottom":..,"angle":-1..180} (pixels écran). */
+	@UsedByGodot
+	public String foldState() {
+		return foldJson;
+	}
+
 	/** Niveau de la partie native de cette APK (comparé à version.json « native » pour proposer de réinstaller l'APK). */
 	@UsedByGodot
 	public int nativeLevel() {
-		return 6;
+		return 7;
 	}
 
 	/** JSON d'état système : {"battery":%, "charging":bool, "net":"wifi|cell|eth|none", "level":0..3} (barre des tâches). */

@@ -87,8 +87,14 @@ func _top_ids() -> Array:
 	var android := OS.get_name() == "Android"
 	return APPS.keys().filter(func(k): return not inside.has(k) and (k != "android_apps" or android))
 var active := ""
-var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "model": "", "engine": -1, "src": "spa", "tgt": "fra"}
+var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "cursor": "auto", "pad": false, "model": "", "engine": -1, "src": "spa", "tgt": "fra"}
 var kb: PanelContainer
+var ui_root: VBoxContainer
+var pointer: Control
+var flex: PanelContainer
+var fold_half := false
+var fold_top := 0.0
+var fold_bottom := 0.0
 var kb_btn: Button
 var upd_http: HTTPRequest
 var upd_btn: Button
@@ -106,6 +112,7 @@ func _ready() -> void:
 	var t := Timer.new(); t.wait_time = 1.0; t.autostart = true
 	t.timeout.connect(_tick); add_child(t); _tick()
 	_check_update()
+	if "--pad-test" in OS.get_cmdline_user_args(): set_cfg["pad"] = true; _update_flex.call_deferred()
 	if "--perf-test" in OS.get_cmdline_user_args():
 		_perf_test(); return
 	if "--ctl-test" in OS.get_cmdline_user_args():
@@ -389,6 +396,7 @@ func _build_desktop() -> void:
 	halo.stretch_mode = TextureRect.STRETCH_SCALE; halo.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	halo.set_anchors_preset(Control.PRESET_FULL_RECT); add_child(halo)
 	var root := VBoxContainer.new()
+	ui_root = root
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.add_theme_constant_override("separation", 0)
 	add_child(root)
@@ -418,6 +426,14 @@ func _build_desktop() -> void:
 	bar_h = 54.0
 	_build_keyboard()
 	get_tree().node_added.connect(_on_node_added)
+	pointer = Control.new(); pointer.set_script(load("res://apps/pointer.gd")); pointer.set("mode", set_cfg["cursor"]); add_child(pointer)
+	flex = PanelContainer.new(); flex.set_script(load("res://apps/flex_pad.gd")); flex.set("pointer", pointer); flex.visible = false; add_child(flex)
+	flex.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	if OS.get_name() == "Android" and Engine.has_singleton("LangLauncher") and int(Engine.get_singleton("LangLauncher").nativeLevel()) >= 7:
+		var ll := Engine.get_singleton("LangLauncher")
+		ll.connect("fold_changed", _on_fold); _on_fold(str(ll.foldState()))
+	resized.connect(_update_flex)
+	_update_flex.call_deferred()
 	_apply_kb.call_deferred()
 	_build_menu()
 
@@ -572,6 +588,35 @@ func _clip_action(a: String) -> void:
 			"end": f.caret_column = f.text.length()
 
 ## Clavier : « osk » = clavier visuel de LangOS (bouton de la barre), « system » = clavier normal du système, « none » = aucun (clavier physique ou secondaire).
+## Mode Flex : appareil plié à moitié (charnière horizontale) → écran du haut = bureau, écran du bas = pavé tactile.
+func _on_fold(json: String) -> void:
+	var d = JSON.parse_string(json)
+	# Mode Flex : charnière horizontale, soit état « mi-ouvert » de la bibliothèque, soit angle de charnière entre 25° et 160°
+	fold_half = false
+	if d is Dictionary and d.get("orientation", "") == "horizontal" and int(d.get("bottom", 0)) > 0:
+		var ang := int(d.get("angle", -1))
+		fold_half = d.get("state", "") == "half" or (ang >= 25 and ang <= 160)
+	if fold_half:
+		var inv := get_viewport().get_final_transform().affine_inverse()
+		fold_top = (inv * Vector2(0, float(d["top"]))).y; fold_bottom = (inv * Vector2(0, float(d["bottom"]))).y
+	_update_flex()
+
+func _update_flex() -> void:
+	if flex == null: return
+	var on: bool = fold_half or bool(set_cfg["pad"])
+	var top := fold_top if fold_half else size.y * 0.6
+	var bot := fold_bottom if fold_half else top
+	if on and (top < 200.0 or size.y - bot < 140.0): on = false   # zone trop petite : pas de pavé
+	flex.visible = on
+	pointer.set("pad_active", on); pointer.set("pad_top", bot if on else -1.0)
+	flex.set("top_h", top)
+	if on:
+		flex.offset_left = 0.0; flex.offset_right = 0.0; flex.offset_top = -(size.y - bot); flex.offset_bottom = 0.0
+		ui_root.offset_bottom = -(size.y - top)
+		if not (pointer.pos.y >= 0.0 and pointer.pos.y < top): pointer.move_to(Vector2(size.x * 0.5, top * 0.5))
+	else:
+		ui_root.offset_bottom = 0.0
+
 func _on_node_added(n: Node) -> void:
 	if n is LineEdit or n is TextEdit: n.virtual_keyboard_enabled = set_cfg["kb"] == "system"
 
@@ -801,6 +846,16 @@ func _app_settings() -> void:
 		v.add_child(_dlbl("Écran d'accueil"))
 		var hb := _mk_btn("Choisir l'écran d'accueil (LangOS ou l'ancien)", 460, 46); hb.pressed.connect(func(): Engine.get_singleton("LangLauncher").chooseHome()); v.add_child(hb)
 		v.add_child(_mlbl("Android affiche la liste des écrans d'accueil : choisis LangOS pour l'utiliser, ou ton ancien pour y revenir (Réglages Android > Applications > Applications par défaut > Application d'accueil)."))
+	v.add_child(_dlbl("Souris"))
+	var co := OptionButton.new(); co.focus_mode = Control.FOCUS_NONE
+	var cmodes := ["auto", "on", "off"]
+	for t in ["Curseur visible sur écran tactile (auto)", "Curseur toujours visible", "Pas de curseur"]: co.add_item(t)
+	co.select(maxi(0, cmodes.find(set_cfg["cursor"])))
+	co.item_selected.connect(func(i: int): set_cfg["cursor"] = cmodes[i]; _save_settings(); pointer.set("mode", cmodes[i]); pointer.queue_redraw())
+	v.add_child(co)
+	var pc := CheckButton.new(); pc.text = "Pavé tactile en bas de l'écran"; pc.focus_mode = Control.FOCUS_NONE; pc.button_pressed = bool(set_cfg["pad"])
+	pc.toggled.connect(func(on: bool): set_cfg["pad"] = on; _save_settings(); _update_flex()); v.add_child(pc)
+	v.add_child(_mlbl("Le pavé s'affiche aussi tout seul quand un téléphone pliable est plié à moitié (mode Flex)."))
 	v.add_child(_dlbl("Clavier"))
 	var ko := OptionButton.new(); ko.focus_mode = Control.FOCUS_NONE
 	var kmodes := ["osk", "system", "none"]
@@ -1343,13 +1398,13 @@ func _load_settings() -> void:
 		set_cfg["font"] = clampi(int(c.get_value("ui", "font", 22)), 14, 40)
 		set_cfg["ollama"] = str(c.get_value("translate", "server", set_cfg["ollama"]))
 		set_cfg["model"] = str(c.get_value("translate", "model", ""))
-		set_cfg["kb"] = str(c.get_value("ui", "kb", "osk"))
+		set_cfg["kb"] = str(c.get_value("ui", "kb", "osk")); set_cfg["cursor"] = str(c.get_value("ui", "cursor", "auto")); set_cfg["pad"] = bool(c.get_value("ui", "pad", false))
 		set_cfg["engine"] = int(c.get_value("translate", "engine", -1))
 		set_cfg["src"] = str(c.get_value("lang", "src", "spa")); set_cfg["tgt"] = str(c.get_value("lang", "tgt", "fra"))
 
 func _save_settings() -> void:
 	var c := ConfigFile.new()
-	c.set_value("ui", "bg", set_cfg["bg"]); c.set_value("ui", "font", set_cfg["font"]); c.set_value("ui", "kb", set_cfg["kb"])
+	c.set_value("ui", "bg", set_cfg["bg"]); c.set_value("ui", "font", set_cfg["font"]); c.set_value("ui", "kb", set_cfg["kb"]); c.set_value("ui", "cursor", set_cfg["cursor"]); c.set_value("ui", "pad", set_cfg["pad"])
 	c.set_value("translate", "server", set_cfg["ollama"]); c.set_value("translate", "model", set_cfg["model"]); c.set_value("translate", "engine", set_cfg["engine"])
 	c.set_value("lang", "src", set_cfg["src"]); c.set_value("lang", "tgt", set_cfg["tgt"])
 	c.save("user://settings.cfg")
