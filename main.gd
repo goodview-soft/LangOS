@@ -61,6 +61,7 @@ const APPS := {
 	"f_comm": ["Communication", "res://icons/app_f_comm.svg"],
 	"hika": ["Hikabrain", "res://icons/app_hika.svg"],
 	"chromium": ["Chromium", "res://icons/app_chromium.svg"],
+	"android_apps": ["Applis Android", "res://icons/app_android.svg"],
 	"f_soft": ["Logiciels", "res://icons/app_f_soft.svg"],
 	"f_tools": ["Outils", "res://icons/app_f_tools.svg"],
 	"calc": ["Calculatrice", "res://icons/app_calc.svg"],
@@ -82,7 +83,8 @@ const FOLDERS := {
 func _top_ids() -> Array:
 	var inside := []
 	for f in FOLDERS: inside += FOLDERS[f]
-	return APPS.keys().filter(func(k): return not inside.has(k))
+	var android := OS.get_name() == "Android"
+	return APPS.keys().filter(func(k): return not inside.has(k) and (k != "android_apps" or android))
 var active := ""
 var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "model": "", "engine": -1, "src": "spa", "tgt": "fra"}
 var kb: PanelContainer
@@ -603,6 +605,7 @@ func _open_app(id: String) -> void:
 	if FOLDERS.has(id): _app_folder(id); return
 	match id:
 		"chromium": _app_browser()
+		"android_apps": _app_android_apps()
 		"hika": _app_hika()
 		"chess": _app_chess()
 		"calc": _app_tool("calc", Vector2(620, 520))
@@ -788,6 +791,10 @@ func _app_settings() -> void:
 		if edit and is_instance_valid(edit): edit.add_theme_font_size_override("font_size", int(val))
 		_save_settings())
 	v.add_child(sl)
+	if OS.get_name() == "Android" and Engine.has_singleton("LangLauncher"):
+		v.add_child(_dlbl("Écran d'accueil"))
+		var hb := _mk_btn("Utiliser LangOS comme écran d'accueil", 420, 46); hb.pressed.connect(func(): Engine.get_singleton("LangLauncher").chooseHome()); v.add_child(hb)
+		v.add_child(_mlbl("Android demandera de choisir l'application d'accueil. Pour revenir à l'ancien écran : Réglages Android > Applications > Application d'accueil."))
 	v.add_child(_dlbl("Clavier"))
 	var ko := OptionButton.new(); ko.focus_mode = Control.FOCUS_NONE
 	var kmodes := ["osk", "system", "none"]
@@ -1160,6 +1167,13 @@ func _launch_browser() -> void:
 	if FileAccess.file_exists("/.flatpak-info"): cmd = "flatpak-spawn"; args = ["--host", "sh", "-c", sh]   # Godot lancé en Flatpak
 	if OS.create_process(cmd, args) < 0: status.text = "Impossible de lancer Chromium."
 	else: status.text = "Chromium lancé (s'il est installé : sudo apt install chromium)."
+
+func _app_android_apps() -> void:
+	var big := Vector2(minf(900.0, desk.size.x - 24.0), minf(640.0, desk.size.y - 16.0))
+	var wv := _make_window("android_apps", "", big, Vector2(30, 12))
+	var c := Control.new(); c.set_script(load("res://apps/android_apps.gd"))
+	c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c.custom_minimum_size = Vector2(500, 400); c.clip_contents = true; wv.add_child(c)
 
 func _app_browser() -> void:
 	var big := Vector2(minf(1100.0, desk.size.x - 24.0), minf(700.0, desk.size.y - 16.0))
