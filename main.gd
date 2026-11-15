@@ -449,7 +449,8 @@ func _clamp_windows() -> void:
 		var d: Dictionary = wins[id]
 		var w: PanelContainer = d["win"]
 		if d["maxed"]: w.position = Vector2.ZERO; w.size = desk.size; continue
-		w.size = Vector2(minf(w.size.x, desk.size.x - 8.0), minf(w.size.y, desk.size.y - 8.0))
+		var mn := w.get_combined_minimum_size()
+		w.size = Vector2(minf(maxf(w.size.x, mn.x), desk.size.x - 8.0), minf(maxf(w.size.y, mn.y), desk.size.y - 8.0))
 		w.position = Vector2(clampf(w.position.x, 0.0, maxf(0.0, desk.size.x - w.size.x)), clampf(w.position.y, 0.0, maxf(0.0, desk.size.y - w.size.y)))
 
 func _layout_icons() -> void:
@@ -768,6 +769,8 @@ func _make_window(id: String, _title: String, sz: Vector2, pos: Vector2) -> VBox
 	w.position = pos + Vector2(0, 18); w.modulate.a = 0.0
 	var tw := create_tween().set_parallel(true).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 	tw.tween_property(w, "position", end, 0.18); tw.tween_property(w, "modulate:a", 1.0, 0.18)
+	_clamp_windows.call_deferred()
+	get_tree().create_timer(0.3).timeout.connect(_clamp_windows)   # après l'animation d'ouverture et la mise en place du contenu
 	return wv
 
 func _title_input(ev: InputEvent, id: String) -> void:
@@ -837,76 +840,111 @@ func _app_notepad() -> void:
 	edit.grab_focus()
 	_update_status()
 
+## ---- Paramètres : sections en cartes, lignes « libellé | réglage » qui passent à la ligne sur petit écran, défilement vertical.
+func _s_card(parent: Control, title: String) -> VBoxContainer:
+	var pc := PanelContainer.new(); pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var sb := _box(Color("1c2131"), 14, Color(1, 1, 1, 0.07), 1); sb.content_margin_left = 16; sb.content_margin_right = 16; sb.content_margin_top = 14; sb.content_margin_bottom = 14
+	pc.add_theme_stylebox_override("panel", sb); parent.add_child(pc)
+	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 12); pc.add_child(v)
+	var h := Label.new(); h.text = title.to_upper(); h.add_theme_font_size_override("font_size", 13); h.add_theme_color_override("font_color", ACCENT); v.add_child(h)
+	return v
+
+## Une ligne de réglage : le libellé à gauche, le contrôle à droite ; s'il manque de place, le contrôle passe dessous.
+func _s_row(card: Control, text: String, ctl: Control, min_ctl := 160.0) -> void:
+	var f := HFlowContainer.new(); f.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	f.add_theme_constant_override("h_separation", 12); f.add_theme_constant_override("v_separation", 6); card.add_child(f)
+	var l := Label.new(); l.text = text; l.custom_minimum_size.x = 150; l.add_theme_font_size_override("font_size", 16); f.add_child(l)
+	ctl.custom_minimum_size.x = maxf(ctl.custom_minimum_size.x, min_ctl); ctl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	f.add_child(ctl)
+
+func _s_note(card: Control, text: String) -> void:
+	var l := _mlbl(text, 13); l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; l.custom_minimum_size.x = 10; l.size_flags_horizontal = Control.SIZE_EXPAND_FILL; card.add_child(l)
+
+func _s_opt(items: Array, current: int, cb: Callable) -> OptionButton:
+	var o := OptionButton.new(); o.focus_mode = Control.FOCUS_NONE; o.clip_text = true; o.fit_to_longest_item = false
+	for t in items: o.add_item(t)
+	o.select(maxi(0, current)); o.item_selected.connect(cb); return o
+
+func _s_slider(lo: float, hi: float, step: float, val: float, cb: Callable) -> HBoxContainer:
+	var hb := HBoxContainer.new(); hb.add_theme_constant_override("separation", 10)
+	var s := HSlider.new(); s.min_value = lo; s.max_value = hi; s.step = step; s.value = val; s.focus_mode = Control.FOCUS_NONE
+	s.custom_minimum_size = Vector2(110, 32); s.size_flags_horizontal = Control.SIZE_EXPAND_FILL; s.size_flags_vertical = Control.SIZE_SHRINK_CENTER; hb.add_child(s)
+	var v := Label.new(); v.custom_minimum_size.x = 56; v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT; v.add_theme_color_override("font_color", MUTED); hb.add_child(v)
+	s.value_changed.connect(func(x: float): cb.call(x, v)); cb.call(val, v)
+	return hb
+
 func _app_settings() -> void:
-	var wv := _make_window("settings", "⚙ Paramètres", Vector2(540, 520), Vector2(220, 40))
-	var m := MarginContainer.new(); m.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	for k in ["left", "right", "top", "bottom"]: m.add_theme_constant_override("margin_" + k, 18)
-	wv.add_child(m)
-	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 12); m.add_child(v)
-	v.add_child(_dlbl("Fond d'écran"))
-	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 8); v.add_child(row)
+	var wv := _make_window("settings", "", Vector2(600, 700), Vector2(200, 20))
+	var sc := ScrollContainer.new(); sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; wv.add_child(sc)
+	var mg := MarginContainer.new(); mg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for k in ["left", "right", "top", "bottom"]: mg.add_theme_constant_override("margin_" + k, 14)
+	sc.add_child(mg)
+	var page := VBoxContainer.new(); page.add_theme_constant_override("separation", 14); page.size_flags_horizontal = Control.SIZE_EXPAND_FILL; mg.add_child(page)
+	var ttl := Label.new(); ttl.text = "Paramètres"; ttl.add_theme_font_size_override("font_size", 26); page.add_child(ttl)
+
+	# --- Affichage
+	var c := _s_card(page, "Affichage")
+	var sw := HFlowContainer.new(); sw.add_theme_constant_override("h_separation", 8); sw.add_theme_constant_override("v_separation", 8)
 	for i in BG_GRADS.size():
-		var b := _mk_btn("", 64, 44)
-		var sw := StyleBoxTexture.new(); sw.texture = _grad_tex(i, 64, 44)
-		var swh := StyleBoxTexture.new(); swh.texture = sw.texture; swh.modulate_color = Color(1.25, 1.25, 1.25)
-		b.add_theme_stylebox_override("normal", sw); b.add_theme_stylebox_override("hover", swh); b.add_theme_stylebox_override("pressed", swh)
+		var b := _mk_btn("", 56, 40)
+		var st := StyleBoxTexture.new(); st.texture = _grad_tex(i, 64, 44)
+		var sth := StyleBoxTexture.new(); sth.texture = st.texture; sth.modulate_color = Color(1.25, 1.25, 1.25)
+		b.add_theme_stylebox_override("normal", st); b.add_theme_stylebox_override("hover", sth); b.add_theme_stylebox_override("pressed", sth)
 		b.pressed.connect(func(): set_cfg["bg"] = i; _apply_bg(); _save_settings())
-		row.add_child(b)
-	v.add_child(_dlbl("Langues (Traducteur, Dictionnaire, Music)"))
-	var lr := HBoxContainer.new(); lr.add_theme_constant_override("separation", 8); v.add_child(lr)
-	var so := OptionButton.new(); var to := OptionButton.new()
-	for o in [so, to]:
-		o.focus_mode = Control.FOCUS_NONE
-		for l in GL: o.add_item(l[0])
-	so.select(GL.find_custom(func(l): return l[1] == set_cfg["src"])); to.select(GL.find_custom(func(l): return l[1] == set_cfg["tgt"]))
-	so.item_selected.connect(func(i: int): set_cfg["src"] = GL[i][1]; _apply_langs())
-	to.item_selected.connect(func(i: int): set_cfg["tgt"] = GL[i][1]; _apply_langs())
-	var sw := _mk_btn("⇄", 48, 40)
-	sw.pressed.connect(func():
+		sw.add_child(b)
+	_s_row(c, "Fond d'écran", sw, 200)
+	_s_row(c, "Zoom de l'interface", _s_slider(0.5, 2.2, 0.05, float(set_cfg["zoom"]), func(x: float, l: Label): _set_zoom(x); l.text = "%d %%" % int(float(set_cfg["zoom"]) * 100)))
+	_s_row(c, "Texte du Bloc-notes", _s_slider(14, 40, 1, float(set_cfg["font"]), func(x: float, l: Label):
+		l.text = "%d" % int(x); set_cfg["font"] = int(x)
+		if edit and is_instance_valid(edit): edit.add_theme_font_size_override("font_size", int(x))
+		_save_settings()))
+
+	# --- Souris et pavé tactile
+	c = _s_card(page, "Souris et pavé tactile")
+	var cmodes := ["auto", "on", "off"]
+	_s_row(c, "Curseur", _s_opt(["Auto (écran tactile)", "Toujours visible", "Jamais"], cmodes.find(set_cfg["cursor"]),
+		func(i: int): set_cfg["cursor"] = cmodes[i]; _save_settings(); pointer.set("mode", cmodes[i]); pointer.queue_redraw()))
+	var pc := CheckButton.new(); pc.focus_mode = Control.FOCUS_NONE; pc.button_pressed = bool(set_cfg["pad"]); pc.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	pc.toggled.connect(func(on: bool): set_cfg["pad"] = on; _save_settings(); _update_flex())
+	_s_row(c, "Pavé tactile", pc, 60)
+	_s_row(c, "Vitesse du curseur", _s_slider(0.2, 2.5, 0.1, float(set_cfg["pad_speed"]), func(x: float, l: Label): set_cfg["pad_speed"] = x; l.text = "%.1f" % x; flex.set("gain", x); _save_settings()))
+	_s_note(c, "Le pavé s'affiche en bas de l'écran, et tout seul quand un téléphone pliable est plié à moitié. Deux doigts qui s'écartent ou se rapprochent dessus règlent le zoom.")
+
+	# --- Clavier
+	c = _s_card(page, "Clavier")
+	var kmodes := ["osk", "system", "none"]
+	_s_row(c, "Clavier", _s_opt(["Visuel LangOS", "Normal du système", "Aucun"], kmodes.find(set_cfg["kb"]), func(i: int): set_cfg["kb"] = kmodes[i]; _save_settings(); _apply_kb()))
+	_s_note(c, "Visuel : bouton dans la barre des tâches. Aucun : pour un clavier physique ou secondaire.")
+
+	# --- Langues
+	c = _s_card(page, "Langues (Traducteur, Dictionnaire, Music)")
+	var names: Array = GL.map(func(l): return l[0])
+	var so := _s_opt(names, GL.find_custom(func(l): return l[1] == set_cfg["src"]), func(i: int): set_cfg["src"] = GL[i][1]; _apply_langs())
+	var to := _s_opt(names, GL.find_custom(func(l): return l[1] == set_cfg["tgt"]), func(i: int): set_cfg["tgt"] = GL[i][1]; _apply_langs())
+	_s_row(c, "Langue d'origine", so); _s_row(c, "Traduire vers", to)
+	var swp := _mk_btn("⇄  Inverser les deux langues", 0, 42)
+	swp.pressed.connect(func():
 		var t: String = set_cfg["src"]; set_cfg["src"] = set_cfg["tgt"]; set_cfg["tgt"] = t
 		so.select(GL.find_custom(func(l): return l[1] == set_cfg["src"])); to.select(GL.find_custom(func(l): return l[1] == set_cfg["tgt"])); _apply_langs())
-	lr.add_child(_mlbl("Origine")); lr.add_child(so); lr.add_child(sw); lr.add_child(_mlbl("Traduction")); lr.add_child(to)
-	var fl := _mlbl("Taille du texte du Bloc-notes : %d" % set_cfg["font"]); v.add_child(fl)
-	var sl := HSlider.new(); sl.min_value = 14; sl.max_value = 40; sl.step = 1; sl.value = set_cfg["font"]
-	sl.custom_minimum_size.y = 28; sl.focus_mode = Control.FOCUS_NONE
-	sl.value_changed.connect(func(val: float):
-		set_cfg["font"] = int(val); fl.text = "Taille du texte du Bloc-notes : %d" % int(val)
-		if edit and is_instance_valid(edit): edit.add_theme_font_size_override("font_size", int(val))
-		_save_settings())
-	v.add_child(sl)
+	c.add_child(swp)
+
+	# --- Android : écran d'accueil
 	if OS.get_name() == "Android" and Engine.has_singleton("LangLauncher"):
-		v.add_child(_dlbl("Écran d'accueil"))
-		var hb := _mk_btn("Choisir l'écran d'accueil (LangOS ou l'ancien)", 460, 46); hb.pressed.connect(func(): Engine.get_singleton("LangLauncher").chooseHome()); v.add_child(hb)
-		v.add_child(_mlbl("Android affiche la liste des écrans d'accueil : choisis LangOS pour l'utiliser, ou ton ancien pour y revenir (Réglages Android > Applications > Applications par défaut > Application d'accueil)."))
-	v.add_child(_dlbl("Souris"))
-	var co := OptionButton.new(); co.focus_mode = Control.FOCUS_NONE
-	var cmodes := ["auto", "on", "off"]
-	for t in ["Curseur visible sur écran tactile (auto)", "Curseur toujours visible", "Pas de curseur"]: co.add_item(t)
-	co.select(maxi(0, cmodes.find(set_cfg["cursor"])))
-	co.item_selected.connect(func(i: int): set_cfg["cursor"] = cmodes[i]; _save_settings(); pointer.set("mode", cmodes[i]); pointer.queue_redraw())
-	v.add_child(co)
-	var pc := CheckButton.new(); pc.text = "Pavé tactile en bas de l'écran"; pc.focus_mode = Control.FOCUS_NONE; pc.button_pressed = bool(set_cfg["pad"])
-	pc.toggled.connect(func(on: bool): set_cfg["pad"] = on; _save_settings(); _update_flex()); v.add_child(pc)
-	var psl := Label.new(); psl.text = "Vitesse du curseur du pavé : %.1f" % set_cfg["pad_speed"]; v.add_child(psl)
-	var ps := HSlider.new(); ps.min_value = 0.2; ps.max_value = 2.5; ps.step = 0.1; ps.value = set_cfg["pad_speed"]; ps.custom_minimum_size.y = 28; ps.focus_mode = Control.FOCUS_NONE
-	ps.value_changed.connect(func(val: float): set_cfg["pad_speed"] = val; psl.text = "Vitesse du curseur du pavé : %.1f" % val; flex.set("gain", val); _save_settings()); v.add_child(ps)
-	var zl := Label.new(); zl.text = "Zoom de l'interface : %d %%" % int(float(set_cfg["zoom"]) * 100); v.add_child(zl)
-	var zs := HSlider.new(); zs.min_value = 0.5; zs.max_value = 2.2; zs.step = 0.05; zs.value = set_cfg["zoom"]; zs.custom_minimum_size.y = 28; zs.focus_mode = Control.FOCUS_NONE
-	zs.value_changed.connect(func(val: float): _set_zoom(val); zl.text = "Zoom de l'interface : %d %%" % int(float(set_cfg["zoom"]) * 100)); v.add_child(zs)
-	v.add_child(_mlbl("Sur le pavé, deux doigts qui s'écartent ou se rapprochent règlent aussi le zoom."))
-	v.add_child(_mlbl("Le pavé s'affiche aussi tout seul quand un téléphone pliable est plié à moitié (mode Flex)."))
-	v.add_child(_dlbl("Clavier"))
-	var ko := OptionButton.new(); ko.focus_mode = Control.FOCUS_NONE
-	var kmodes := ["osk", "system", "none"]
-	for t in ["Clavier visuel LangOS (bouton dans la barre)", "Clavier normal du système", "Aucun (clavier physique ou secondaire)"]: ko.add_item(t)
-	ko.select(maxi(0, kmodes.find(set_cfg["kb"])))
-	ko.item_selected.connect(func(i: int): set_cfg["kb"] = kmodes[i]; _save_settings(); _apply_kb())
-	v.add_child(ko)
-	v.add_child(_dlbl("Serveur de traduction (Ollama local)"))
-	var le := LineEdit.new(); le.text = set_cfg["ollama"]; le.virtual_keyboard_enabled = false
+		c = _s_card(page, "Écran d'accueil")
+		var hb := _mk_btn("Choisir l'écran d'accueil", 0, 46); hb.pressed.connect(func(): Engine.get_singleton("LangLauncher").chooseHome()); c.add_child(hb)
+		_s_note(c, "Android affiche la liste des écrans d'accueil : choisis LangOS pour l'utiliser, ou ton ancien pour y revenir.")
+
+	# --- Serveur de traduction
+	c = _s_card(page, "Serveur de traduction (Ollama)")
+	var le := LineEdit.new(); le.text = set_cfg["ollama"]; le.virtual_keyboard_enabled = false; le.placeholder_text = "http://127.0.0.1:11434"
 	le.text_changed.connect(func(t: String): set_cfg["ollama"] = t.strip_edges().rstrip("/"); _save_settings())
-	v.add_child(le)
-	v.add_child(_mlbl("Sur téléphone : adresse du PC, ex. http://192.168.1.20:11434"))
+	_s_row(c, "Adresse", le, 200)
+	_s_note(c, "Sur téléphone : adresse d'un PC qui fait tourner Ollama, par exemple http://192.168.1.20:11434. Sinon le Traducteur utilise le modèle sur l'appareil.")
+
+	# --- À propos
+	c = _s_card(page, "À propos")
+	_s_note(c, "LangOS version %s" % VERSION)
 
 func _app_system() -> void:
 	var wv := _make_window("system", "🖥 Système", Vector2(520, 360), Vector2(260, 80))
@@ -1181,7 +1219,7 @@ func _app_remote() -> void:
 	var rd := Control.new()
 	rd.set_script(load("res://apps/remotedesk.gd"))
 	rd.size_flags_vertical = Control.SIZE_EXPAND_FILL; rd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	rd.custom_minimum_size = Vector2(840, 480); rd.clip_contents = true
+	rd.custom_minimum_size = Vector2(320, 360); rd.clip_contents = true
 	wv.add_child(rd)
 
 # ---------------------------------------------------------------- Messenger (app intégrée)
@@ -1191,7 +1229,7 @@ func _app_messenger() -> void:
 	var ms := Control.new()
 	ms.set_script(load("res://apps/messenger.gd"))
 	ms.size_flags_vertical = Control.SIZE_EXPAND_FILL; ms.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ms.custom_minimum_size = Vector2(860, 500); ms.clip_contents = true
+	ms.custom_minimum_size = Vector2(320, 360); ms.clip_contents = true
 	wv.add_child(ms)
 
 # ---------------------------------------------------------------- Chat IA (app + overlay « - »)
@@ -1223,7 +1261,7 @@ func _app_chat() -> void:
 	c.set_script(load("res://apps/chat.gd"))
 	c.set("core", chat_core)
 	c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	c.custom_minimum_size = Vector2(700, 480); c.clip_contents = true
+	c.custom_minimum_size = Vector2(320, 360); c.clip_contents = true
 	wv.add_child(c)
 
 # ---------------------------------------------------------------- Music (app intégrée)
@@ -1235,7 +1273,7 @@ func _app_music() -> void:
 	mu.set_script(load("res://apps/music.gd"))
 	mu.set("ollama_url", set_cfg["ollama"]); mu.set("src", set_cfg["src"]); mu.set("tgt", set_cfg["tgt"]); music_node = mu
 	mu.size_flags_vertical = Control.SIZE_EXPAND_FILL; mu.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	mu.custom_minimum_size = Vector2(900, 520); mu.clip_contents = true
+	mu.custom_minimum_size = Vector2(320, 360); mu.clip_contents = true
 	wv.add_child(mu)
 
 # ---------------------------------------------------------------- Dossiers et Échecs
@@ -1273,21 +1311,21 @@ func _app_android_apps() -> void:
 	var wv := _make_window("android_apps", "", big, Vector2(30, 12))
 	var c := Control.new(); c.set_script(load("res://apps/android_apps.gd"))
 	c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	c.custom_minimum_size = Vector2(500, 400); c.clip_contents = true; wv.add_child(c)
+	c.custom_minimum_size = Vector2(320, 360); c.clip_contents = true; wv.add_child(c)
 
 func _app_browser() -> void:
 	var big := Vector2(minf(1100.0, desk.size.x - 24.0), minf(700.0, desk.size.y - 16.0))
 	var wv := _make_window("chromium", "", big, Vector2(20, 10))
 	var br := Control.new(); br.set_script(load("res://apps/browser.gd")); br.set("external", Callable(self, "_launch_browser"))
 	br.size_flags_vertical = Control.SIZE_EXPAND_FILL; br.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	br.custom_minimum_size = Vector2(700, 480); br.clip_contents = true; wv.add_child(br)
+	br.custom_minimum_size = Vector2(320, 360); br.clip_contents = true; wv.add_child(br)
 
 func _app_hika() -> void:
 	var big := Vector2(minf(1100.0, desk.size.x - 24.0), minf(700.0, desk.size.y - 16.0))
 	var wv := _make_window("hika", "", big, Vector2(12, 8))
 	var h := Control.new(); h.set_script(load("res://apps/hika_host.gd"))
 	h.size_flags_vertical = Control.SIZE_EXPAND_FILL; h.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	h.custom_minimum_size = Vector2(800, 520); wv.add_child(h)
+	h.custom_minimum_size = Vector2(320, 360); wv.add_child(h)
 
 ## Petits outils (dossier Outils) : un script apps/tool_<id>.gd par outil.
 func _app_tool(id: String, sz: Vector2) -> void:
@@ -1295,7 +1333,7 @@ func _app_tool(id: String, sz: Vector2) -> void:
 	var c := Control.new()
 	c.set_script(load("res://apps/tool_%s.gd" % id))
 	c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	c.custom_minimum_size = sz; c.clip_contents = true
+	c.custom_minimum_size = Vector2(minf(sz.x, maxf(280.0, desk.size.x - 16.0)), sz.y); c.clip_contents = true
 	wv.add_child(c)
 
 func _app_chess() -> void:
@@ -1303,7 +1341,7 @@ func _app_chess() -> void:
 	var ch := Control.new()
 	ch.set_script(load("res://apps/chess.gd"))
 	ch.size_flags_vertical = Control.SIZE_EXPAND_FILL; ch.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ch.custom_minimum_size = Vector2(760, 560); ch.clip_contents = true
+	ch.custom_minimum_size = Vector2(320, 360); ch.clip_contents = true
 	wv.add_child(ch)
 
 # ---------------------------------------------------------------- Sound Link (app intégrée)
@@ -1313,7 +1351,7 @@ func _app_soundlink() -> void:
 	var sl := Control.new()
 	sl.set_script(load("res://apps/soundlink.gd"))
 	sl.size_flags_vertical = Control.SIZE_EXPAND_FILL; sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sl.custom_minimum_size = Vector2(440, 560); sl.clip_contents = true
+	sl.custom_minimum_size = Vector2(320, 360); sl.clip_contents = true
 	wv.add_child(sl)
 
 # ---------------------------------------------------------------- Dictionnaire (hors ligne, données FreeDict)
