@@ -7,6 +7,7 @@ var mode := "auto"            # auto (écrans tactiles) | on | off
 var pad_active := false       # pavé tactile affiché : le curseur reste visible et suit le pavé
 var pad_top := -1.0           # y (vue) à partir duquel commence le pavé : les vrais doigts y sont ignorés
 var _last := 0
+var _gesture_t := 0
 var _gesture := false        # geste commencé sur le pavé : ignoré tant que le doigt n'est pas levé, même s'il dépasse le bord haut du pavé
 
 func _ready() -> void:
@@ -21,11 +22,11 @@ func _wanted() -> bool:
 
 func _input(ev: InputEvent) -> void:
 	if not _wanted() or not (ev is InputEventMouse): return
-	if pad_top < 0.0: _gesture = false
+	if pad_top < 0.0 or (_gesture and Time.get_ticks_msec() - _gesture_t > 1500): _gesture = false   # un relâchement perdu ne fige pas le curseur
 	if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT:
-		if ev.pressed: _gesture = pad_top >= 0.0 and ev.position.y >= pad_top
+		if ev.pressed: _gesture = pad_top >= 0.0 and ev.position.y >= pad_top; _gesture_t = Time.get_ticks_msec()
 		elif _gesture: _gesture = false; return
-	if _gesture: return
+	if _gesture: _gesture_t = Time.get_ticks_msec(); return
 	if pad_top >= 0.0 and ev.position.y >= pad_top: return        # doigt sur le pavé : c'est le pavé qui déplace le curseur
 	pos = ev.position
 	if ev is InputEventMouseButton: pressed = ev.pressed

@@ -98,6 +98,7 @@ var fold_bottom := 0.0
 var fold_px_top := 0.0       # charnière en pixels écran (indépendant du zoom)
 var fold_px_bottom := 0.0
 var zoom_save := false
+var fold_gen := 0
 var kb_btn: Button
 var upd_http: HTTPRequest
 var upd_btn: Button
@@ -605,13 +606,15 @@ func _clip_action(a: String) -> void:
 func _on_fold(json: String) -> void:
 	var d = JSON.parse_string(json)
 	# Mode Flex : charnière horizontale, soit état « mi-ouvert » de la bibliothèque, soit angle de charnière entre 25° et 160°
-	fold_half = false
-	if d is Dictionary and d.get("orientation", "") == "horizontal" and int(d.get("bottom", 0)) > 0:
-		var ang := int(d.get("angle", -1))
-		fold_half = d.get("state", "") == "half" or (ang >= 25 and ang <= 160)
-	if fold_half:
+	var want: bool = d is Dictionary and FlexLogic.is_half(d, fold_half)
+	if want:
 		fold_px_top = float(d["top"]); fold_px_bottom = float(d["bottom"])
-	_update_flex()
+	fold_gen += 1
+	var gen := fold_gen
+	if want == fold_half: _update_flex(); return
+	# le changement d'état ne s'applique qu'après 350 ms de stabilité (évite le clignotement du pavé quand la charnière vibre)
+	get_tree().create_timer(0.35).timeout.connect(func():
+		if gen == fold_gen: fold_half = want; _update_flex())
 
 func _get_zoom() -> float: return float(set_cfg["zoom"])
 
@@ -632,7 +635,8 @@ func _update_flex() -> void:
 		fold_top = (inv * Vector2(0, fold_px_top)).y; fold_bottom = (inv * Vector2(0, fold_px_bottom)).y
 	var top := fold_top if fold_half else size.y * 0.55
 	var bot := fold_bottom if fold_half else top
-	if on and (top < 200.0 or size.y - bot < 200.0): on = false   # zone trop petite : pas de pavé
+	var sc := get_viewport().get_final_transform().get_scale().y
+	if on and (top * sc < 200.0 or (size.y - bot) * sc < 200.0): on = false   # zone trop petite (en pixels réels, donc indépendante du zoom)
 	flex.visible = on
 	pointer.set("pad_active", on); pointer.set("pad_top", bot if on else -1.0)
 	flex.set("top_h", top)

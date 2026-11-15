@@ -21,6 +21,7 @@ var _wh: Wheel
 var touch_mode := false          # écran tactile : gestes lus via les événements tactiles (pas de capture de souris par le pavé)
 var _fing := {}                  # index -> {zone, last (px vue), t0, moved}
 var touches := {}              # index -> position fenêtre (pixels)
+var _click_busy := false
 var _pinching := false
 var _d0 := 1.0
 var _z0 := 1.0
@@ -35,6 +36,8 @@ class Wheel extends Control:
 	var _drag := false
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
+	func reset() -> void:
+		_acc = 0.0
 	func feed(d: float) -> void:
 		_acc += d; _off += d
 		while absf(_acc) >= pitch:
@@ -90,8 +93,9 @@ func _ready() -> void:
 		_wv.mouse_filter = Control.MOUSE_FILTER_IGNORE; _wh.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		for n in [l]: n.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
+var px_scale := -1.0           # tests : échelle fixe (la fenêtre headless est minuscule) ; sinon transformation réelle vue → pixels
 func _px(p: Vector2) -> Vector2:
-	return get_viewport().get_final_transform() * p
+	return p * px_scale if px_scale > 0.0 else get_viewport().get_final_transform() * p
 
 func _zone_at(pos: Vector2) -> String:
 	if _wv.get_global_rect().has_point(pos): return "wv"
@@ -102,34 +106,50 @@ func _zone_at(pos: Vector2) -> String:
 func _input(ev: InputEvent) -> void:
 	if not visible: return
 	if ev is InputEventScreenTouch:
-		if ev.pressed:
+		if ev.pressed and not ev.canceled:
 			var z := _zone_at(ev.position)
 			if z != "": touches[ev.index] = _px(ev.position)
-			if touch_mode and z != "": _fing[ev.index] = {"zone": z, "last": ev.position, "t0": Time.get_ticks_msec(), "moved": 0.0}
+			if z == "wv": _wv.reset()          # le reste d'un geste précédent ne fausse pas le premier cran
+			if z == "wh": _wh.reset()
+			if touch_mode and z != "": _fing[ev.index] = {"zone": z, "last": ev.position, "t0": Time.get_ticks_msec(), "moved": 0.0, "seen": Time.get_ticks_msec()}
 		else:
-			if touch_mode and _fing.has(ev.index): _touch_release(_fing[ev.index])
-			if touch_mode: _fing.erase(ev.index)
-			touches.erase(ev.index)
-		var pad_fingers := 0
-		for k in _fing: if _fing[k]["zone"] == "pad": pad_fingers += 1
-		if touches.size() == 2:
+			# relâchement ou annulation (geste système d'Android, fenêtre perdue…) : jamais de clic sur une annulation
+			if touch_mode and _fing.has(ev.index) and not ev.canceled: _touch_release(_fing[ev.index])
+			_fing.erase(ev.index); touches.erase(ev.index)
+		_pinching = touches.size() >= 2
+		if _pinching:
 			var k: Array = touches.keys()
 			_d0 = maxf(8.0, (touches[k[0]] - touches[k[1]]).length()); _z0 = float(get_zoom.call()) if get_zoom.is_valid() else 1.0
-			_pinching = true; _down = false
-		elif touches.size() < 2: _pinching = false
 	elif ev is InputEventScreenDrag:
 		if touches.has(ev.index): touches[ev.index] = _px(ev.position)
-		if touches.size() == 2 and on_zoom.is_valid():
-			var k: Array = touches.keys()
-			on_zoom.call(_z0 * (touches[k[0]] - touches[k[1]]).length() / _d0)
-		elif touch_mode and not _pinching and _fing.has(ev.index):
-			var f: Dictionary = _fing[ev.index]
-			var delta: Vector2 = ev.position - f["last"]
-			f["last"] = ev.position
+		var f = _fing.get(ev.index)
+		var delta := Vector2.ZERO
+		if f != null:
+			delta = ev.position - f["last"]; f["last"] = ev.position; f["seen"] = Time.get_ticks_msec()   # toujours mis à jour (pas de saut à la fin d'un pincement)
+		if _pinching:
+			if touches.size() == 2 and on_zoom.is_valid():
+				var k: Array = touches.keys()
+				on_zoom.call(_z0 * (touches[k[0]] - touches[k[1]]).length() / _d0)
+		elif touch_mode and f != null:
 			match f["zone"]:
 				"pad": f["moved"] += delta.length(); _move_pointer(delta * gain)
 				"wv": _wv.feed(delta.y)
 				"wh": _wh.feed(delta.x)
+
+## Oublie tous les doigts (fenêtre masquée, perte de focus, doigt perdu).
+func reset_touches() -> void:
+	_fing.clear(); touches.clear(); _pinching = false; _down = false
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_VISIBILITY_CHANGED or what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT: reset_touches()
+
+func _process(_d: float) -> void:
+	# un « relâchement » perdu ne doit pas bloquer le pavé : un doigt muet depuis plus de 20 s est oublié
+	if _fing.is_empty(): return
+	var now := Time.get_ticks_msec()
+	for k in _fing.keys():
+		if now - int(_fing[k]["seen"]) > 20000: _fing.erase(k); touches.erase(k)
+	_pinching = touches.size() >= 2
 
 func _touch_release(f: Dictionary) -> void:
 	if f["zone"] != "pad" or _pinching: return
@@ -177,7 +197,10 @@ func _btn(idx: int, down: bool) -> void:
 	Input.call_deferred("parse_input_event", e)
 
 func _click(idx: int) -> void:
+	while _click_busy: await get_tree().process_frame     # deux appuis rapprochés ne se mélangent pas
+	_click_busy = true
 	var mv := InputEventMouseMotion.new(); mv.position = pointer.pos; mv.global_position = pointer.pos; Input.call_deferred("parse_input_event", mv)
 	_btn(idx, true)
 	await get_tree().create_timer(0.05).timeout
 	_btn(idx, false)
+	_click_busy = false

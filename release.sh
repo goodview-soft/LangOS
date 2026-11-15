@@ -10,6 +10,8 @@ GODOT="flatpak run org.godotengine.Godot"
 ENGINE="$($GODOT --version | cut -d. -f1-3)"
 OUT=build/release; rm -rf "$OUT"; mkdir -p "$OUT" build/linux
 
+# Garde-fou : les tests logiques du pavé / du mode Flex doivent passer
+$GODOT --headless --path . --script res://tests/pad_test.gd 2>&1 | grep -q "PAD-TEST OK" || { echo "Tests du pavé en échec : publication annulée (lancer tests/pad_test.gd)"; exit 1; }
 sed -i "s/^const VERSION := .*/const VERSION := \"$V\"/" version.gd
 $GODOT --headless --path . --export-pack "Linux" "$OUT/blocnote-$V.pck"
 $GODOT --headless --path . --export-release "Linux" build/linux/BlocNote.x86_64
