@@ -72,6 +72,10 @@ func _build_install() -> void:
 		info.text = "Le navigateur intégré (Chromium) n'est pas encore installé.\nTéléchargement unique d'environ 1 Go, puis il s'ouvre dans cette fenêtre."
 		inst_btn = Button.new(); inst_btn.text = "Télécharger et installer"; inst_btn.custom_minimum_size.y = 50; inst_btn.pressed.connect(_download); box.add_child(inst_btn)
 		bar = ProgressBar.new(); bar.visible = false; bar.custom_minimum_size.y = 18; box.add_child(bar)
+	elif OS.get_name() == "Android":
+		info.text = "Le plugin WebView est absent de cette APK (la mise à jour légère ne met pas à jour la partie native).\nInstalle l'APK la plus récente puis rouvre ce navigateur."
+		var ap := Button.new(); ap.text = "Télécharger l'APK récente"; ap.custom_minimum_size.y = 50
+		ap.pressed.connect(func(): OS.shell_open("https://github.com/goodview-soft/LangOS/releases/latest/download/BlocNote.apk")); box.add_child(ap)
 	else:
 		info.text = "Le navigateur intégré n'est disponible que sur Linux (x86_64)."
 	if external.is_valid():
