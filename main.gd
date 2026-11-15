@@ -38,6 +38,7 @@ var catcher: Control
 var bg: TextureRect
 var upd_text := ""
 var upd_avail := false
+var apk_prompted := false
 var upd_lbl: Label
 const BG_GRADS := [["16213e","2f5fa8","7a4fb0"], ["0f1c26","1f4e5f","2e8b7a"], ["16161f","3a2a5c","b0507a"], ["12141a","2a2f3d","56607a"], ["1c120d","6b3a1f","e0873a"]]
 const ACCENT := Color("5aa2ff")
@@ -1409,6 +1410,26 @@ func _check_update() -> void:
 	upd_http.request_completed.connect(_on_version_json, CONNECT_ONE_SHOT)
 	upd_http.request(UPDATE_URL)
 
+const APK_URL := "https://github.com/goodview-soft/LangOS/releases/latest/download/BlocNote.apk"
+
+## Niveau de la partie native de l'APK installée (99 hors Android). 0 = très ancienne, 1 = WebView, 2+ = lanceur…
+func _native_level() -> int:
+	if OS.get_name() != "Android": return 99
+	if Engine.has_singleton("LangLauncher"): return int(Engine.get_singleton("LangLauncher").nativeLevel())
+	return 1 if Engine.has_singleton("LangWebView") else 0
+
+func _apk_prompt() -> void:
+	if apk_prompted: return
+	apk_prompted = true
+	var cc := CenterContainer.new(); cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); add_child(cc)
+	var pc := PanelContainer.new(); pc.add_theme_stylebox_override("panel", _box(Color(0.11, 0.13, 0.18, 0.99), 16, Color(1, 1, 1, 0.15), 1, 30, 18)); cc.add_child(pc)
+	var v := VBoxContainer.new(); v.custom_minimum_size.x = 420; v.add_theme_constant_override("separation", 12); pc.add_child(v)
+	v.add_child(_dlbl("Nouvelle APK à installer", 22))
+	var l := _mlbl("Cette version de LangOS apporte des fonctions Android (navigateur, applis, écran d'accueil) qui demandent de réinstaller l'APK. La mise à jour légère ne suffit pas.", 15)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; v.add_child(l)
+	var b1 := _mk_btn("Télécharger l'APK", 380, 50); b1.theme_type_variation = "Accent"; b1.pressed.connect(func(): OS.shell_open(APK_URL); cc.queue_free()); v.add_child(b1)
+	var b2 := _mk_btn("Plus tard", 380, 44); b2.pressed.connect(func(): cc.queue_free()); v.add_child(b2)
+
 func _on_version_json(result: int, code: int, _h: PackedStringArray, body: PackedByteArray) -> void:
 	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
 		_set_upd("✓ v%s (aucune version publiée)" % VERSION if code == 404 else "Vérification impossible (hors ligne ?).", "Vérifier")
@@ -1416,6 +1437,9 @@ func _on_version_json(result: int, code: int, _h: PackedStringArray, body: Packe
 	var info = JSON.parse_string(body.get_string_from_utf8())
 	if not (info is Dictionary) or not info.has("version"):
 		_set_upd("Réponse invalide.", "Vérifier"); return
+	if int(info.get("native", 0)) > _native_level():
+		_set_upd("Nouvelle APK requise : la partie Android de cette version (niveau %d, installé %d) doit être réinstallée." % [int(info["native"]), _native_level()], "Télécharger l'APK")
+		_apk_prompt(); return
 	if not preload("res://boot.gd").newer(str(info["version"]), VERSION):
 		_set_upd("✓ À jour (v%s)" % VERSION, "Vérifier"); return
 	upd_info = info
@@ -1429,6 +1453,7 @@ func _on_version_json(result: int, code: int, _h: PackedStringArray, body: Packe
 func _do_update() -> void:
 	match upd_btn_text:
 		"Télécharger": OS.shell_open(RELEASES_URL)
+		"Télécharger l'APK": OS.shell_open(APK_URL)
 		"Redémarrer": OS.set_restart_on_exit(true); get_tree().quit()
 		"Mettre à jour", "Réessayer":
 			_set_upd("Téléchargement…", "Mettre à jour", true)

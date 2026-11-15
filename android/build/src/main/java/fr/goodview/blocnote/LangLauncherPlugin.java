@@ -32,6 +32,12 @@ public class LangLauncherPlugin extends GodotPlugin {
 		return "LangLauncher";
 	}
 
+	/** Niveau de la partie native de cette APK (comparé à version.json « native » pour proposer de réinstaller l'APK). */
+	@UsedByGodot
+	public int nativeLevel() {
+		return 2;
+	}
+
 	/** JSON : [{"label":..., "pkg":..., "icon":"<png base64>"}], trié par nom, sans LangOS lui-même. */
 	@UsedByGodot
 	public String listApps(int iconSize) {

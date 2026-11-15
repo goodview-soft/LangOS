@@ -25,8 +25,9 @@ cp install.sh "$OUT/install.sh"
 rm -f "$OUT"/*.idsig
 
 SHA="$(sha256sum "$OUT/blocnote-$V.pck" | cut -d' ' -f1)"
+NAT="$(grep -o 'NATIVE := [0-9]*' version.gd | grep -o '[0-9]*$')"
 cat > "$OUT/version.json" <<J
-{"version": "$V", "godot": "$ENGINE", "sha256": "$SHA",
+{"version": "$V", "godot": "$ENGINE", "sha256": "$SHA", "native": ${NAT:-0},
  "pck": "https://github.com/$REPO/releases/download/v$V/blocnote-$V.pck"}
 J
 
