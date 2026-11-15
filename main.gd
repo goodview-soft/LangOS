@@ -639,7 +639,9 @@ func _update_flex() -> void:
 	if on:
 		flex.offset_left = 0.0; flex.offset_right = 0.0; flex.offset_top = -(size.y - bot); flex.offset_bottom = 0.0
 		ui_root.offset_bottom = -(size.y - top)
-		if not (pointer.pos.y >= 0.0 and pointer.pos.y < top and pointer.pos.x < size.x): pointer.move_to(Vector2(size.x * 0.5, top * 0.5))
+		var cp: Vector2 = pointer.pos
+		if cp.y < 0.0: cp = Vector2(size.x * 0.5, top * 0.5)              # première apparition : au centre de la moitié haute
+		pointer.move_to(cp.clamp(Vector2.ZERO, Vector2(size.x - 1.0, maxf(1.0, top - 1.0))))   # sinon on garde la place (pas de saut quand la charnière bouge)
 	else:
 		ui_root.offset_bottom = 0.0
 
