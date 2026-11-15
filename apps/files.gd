@@ -23,6 +23,13 @@ var prev_img: TextureRect
 var panes_box: HBoxContainer
 var ico := {}
 var sys_btn: Button
+var split: HBoxContainer
+var sbar: PanelContainer
+var place_btns: Array = []     # [Button, chemin]
+var b_dual: Button
+var b_prev: Button
+var b_find: Button
+var prev_panel: PanelContainer
 
 class P:
 	var tabs: Array = ["user://"]
@@ -31,6 +38,7 @@ class P:
 	var items: Array = []
 	var list: ItemList
 	var tabbar: HBoxContainer
+	var tabwrap: Control
 	var root: VBoxContainer
 
 # ------------------------------------------------------------------ opérations (sans interface)
@@ -146,65 +154,97 @@ func fs_paste(dst_dir: String) -> int:
 # ------------------------------------------------------------------ interface
 func _col(k: String, fb: Color) -> Color: return main._p(k) if main else fb
 
-func _icon(svg: String) -> ImageTexture:
-	var im := Image.new(); im.load_svg_from_string('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">%s</svg>' % svg)
-	return ImageTexture.create_from_image(im)
-
 func _btn(t: String, w: float, f: Callable) -> Button:
-	var b := Button.new(); b.text = t; b.custom_minimum_size = Vector2(w, 40); b.focus_mode = Control.FOCUS_NONE; b.pressed.connect(f); return b
+	var b := Button.new(); b.text = t; b.custom_minimum_size = Vector2(w, UI.BTN); b.focus_mode = Control.FOCUS_NONE; b.pressed.connect(f); return b
 
+func _toggle_btn(b: Button, on: bool) -> void:
+	b.theme_type_variation = "FlatOn" if on else "Flat"
+
+## Disposition : barre d'en-tête (navigation, barre de chemin, actions), barre de recherche repliable,
+## barre latérale des lieux + liste(s) de fichiers + aperçu (gabarits de apps/ui.gd).
 func _ready() -> void:
-	ico = {"d": _icon('<path d="M3 9a2 2 0 0 1 2-2h8l3 3h11a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="#f5b83d"/>'),
-		"f": _icon('<path d="M8 3h11l6 6v20H8z" fill="#cbd5e1"/><path d="M19 3v6h6z" fill="#94a3b8"/>'),
-		"i": _icon('<rect x="4" y="6" width="24" height="20" rx="3" fill="#34d399"/><circle cx="11" cy="13" r="3" fill="#fff"/><path d="M5 25l8-8 5 5 4-4 6 6z" fill="#047857"/>'),
-		"z": _icon('<path d="M8 3h16v26H8z" fill="#a78bfa"/><path d="M15 3h2v3h-2v3h2v3h-2v3h2v3h-2" stroke="#fff" stroke-width="1.5" fill="none"/>')}
-	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_FULL_RECT); vb.add_theme_constant_override("separation", 6); add_child(vb)
-	var top := UI.toolbar(); vb.add_child(top)
-	top.add_child(_btn("↑", 44, func(): _go(_parent(_cur()))))
-	pathe = LineEdit.new(); pathe.custom_minimum_size = Vector2(200, 40); pathe.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	pathe.text_submitted.connect(func(t): _go(t.strip_edges())); top.add_child(pathe)
-	top.add_child(_btn("+ Onglet", 80, func(): _new_tab()))
-	top.add_child(_btn("2 volets", 84, func(): dual = not dual; panes[1].root.visible = dual))
-	sys_btn = _btn("Système", 76, open_in_system); sys_btn.tooltip_text = "Ouvrir dans le gestionnaire du système"; top.add_child(sys_btn)
-	top.add_child(_btn("Aperçu", 70, func(): prev_on = not prev_on; prev_box.visible = prev_on; _preview()))
-	var pl := ScrollContainer.new(); pl.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; pl.custom_minimum_size.y = 46; vb.add_child(pl)
-	var pr := HBoxContainer.new(); pr.add_theme_constant_override("separation", 4); pl.add_child(pr)
-	var places := [["Accueil", "user://"], ["Corbeille", TRASH]]
-	var home := "/storage/emulated/0" if OS.get_name() == "Android" else OS.get_environment("HOME")
-	if home != "" and is_dir(home): places.insert(1, ["Dossier perso", home])
-	for p in ["/media", "/run/media/" + OS.get_environment("USER")]:
-		if OS.get_name() == "Linux" and is_dir(p): places.append([p.get_file() if p == "/media" else "Média", p])
-	for pp in places: pr.add_child(_btn(pp[0], 90, func(): _go(pp[1])))
-	bar2 = HBoxContainer.new(); bar2.visible = false; bar2.add_theme_constant_override("separation", 4); vb.add_child(bar2)
-	pr_lbl = Label.new(); bar2.add_child(pr_lbl)
-	pr_in = LineEdit.new(); pr_in.size_flags_horizontal = Control.SIZE_EXPAND_FILL; pr_in.custom_minimum_size.y = 40
+	ico = {"d": UI.icon("folder"), "f": UI.icon("file-text"), "i": UI.icon("image"), "z": UI.icon("file-archive")}
+	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_FULL_RECT); vb.add_theme_constant_override("separation", 0); add_child(vb)
+	# --- barre d'en-tête
+	var hbar := UI.header_bar(); vb.add_child(hbar)
+	var st := UI.bar_start(hbar); var en := UI.bar_end(hbar)
+	st.add_child(UI.icon_btn("panel-left", "Afficher ou masquer les emplacements", func(): UI.split_toggle(split)))
+	st.add_child(UI.icon_btn("arrow-up", "Dossier parent", func(): _go(_parent(_cur()))))
+	pathe = LineEdit.new(); pathe.custom_minimum_size = Vector2(100, UI.BTN); pathe.tooltip_text = "Chemin du dossier (Entrée pour y aller)"
+	pathe.text_submitted.connect(func(t): _go(t.strip_edges())); UI.bar_center(hbar, pathe)
+	en.add_child(UI.icon_btn("plus", "Nouvel onglet", func(): _new_tab()))
+	b_dual = UI.icon_btn("columns-2", "Deux volets", func(): dual = not dual; panes[1].root.visible = dual; _toggle_btn(b_dual, dual)); en.add_child(b_dual)
+	b_prev = UI.icon_btn("eye", "Aperçu", func(): prev_on = not prev_on; prev_panel.visible = prev_on; _toggle_btn(b_prev, prev_on); _preview()); en.add_child(b_prev)
+	sys_btn = UI.icon_btn("external-link", "Ouvrir dans le gestionnaire du système", open_in_system); en.add_child(sys_btn)
+	b_find = UI.icon_btn("search", "Rechercher par nom", func(): _toggle_search()); en.add_child(b_find)
+	en.add_child(UI.icon_btn("ellipsis-vertical", "Menu", func(): _menu(get_global_mouse_position() + Vector2(-200, 24), true)))
+	# --- barre de recherche (repliée par défaut)
+	sbar = UI.search_bar("Rechercher par nom dans ce dossier et ses sous-dossiers…"); sbar.visible = false; vb.add_child(sbar)
+	var se := UI.search_entry(sbar)
+	se.text_submitted.connect(func(t): search(t))
+	se.text_changed.connect(func(t): if t == "": _clear_search())
+	# --- barre de saisie (renommer, nouveau dossier)
+	bar2 = HBoxContainer.new(); bar2.add_theme_constant_override("separation", UI.S2)
+	var b2p := PanelContainer.new(); UI.style(b2p, "panel", UI.bar_box); b2p.add_child(bar2); vb.add_child(b2p)
+	b2p.visible = false
+	pr_lbl = UI.label(""); bar2.add_child(pr_lbl)
+	pr_in = LineEdit.new(); pr_in.size_flags_horizontal = Control.SIZE_EXPAND_FILL; pr_in.custom_minimum_size.y = UI.BTN
 	pr_in.text_submitted.connect(func(_t): _prompt_ok()); bar2.add_child(pr_in)
-	bar2.add_child(_btn("OK", 50, _prompt_ok)); bar2.add_child(_btn("✕", 44, func(): bar2.visible = false))
-	var mid := HBoxContainer.new(); mid.size_flags_vertical = Control.SIZE_EXPAND_FILL; mid.add_theme_constant_override("separation", 6); vb.add_child(mid)
-	panes_box = HBoxContainer.new(); panes_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL; panes_box.add_theme_constant_override("separation", 6); mid.add_child(panes_box)
+	var okb := _btn("Valider", 0, _prompt_ok); okb.theme_type_variation = "Accent"; bar2.add_child(okb)
+	bar2.add_child(UI.icon_btn("x", "Annuler", func(): b2p.visible = false))
+	# --- barre latérale des lieux
+	var side := VBoxContainer.new(); side.add_theme_constant_override("separation", 2)
+	var places := [["Accueil", "user://", "house"], ["Corbeille", TRASH, "trash-2"]]
+	var home := "/storage/emulated/0" if OS.get_name() == "Android" else OS.get_environment("HOME")
+	if home != "" and is_dir(home): places.insert(1, ["Dossier personnel", home, "user"])
+	for p in ["/media", "/run/media/" + OS.get_environment("USER")]:
+		if OS.get_name() == "Linux" and is_dir(p): places.append([p.get_file() if p == "/media" else "Média", p, "hard-drive"])
+	for pp in places:
+		var pb := UI.nav_row(pp[0], pp[2], func(): _go(pp[1]); _mark_places(); UI.split_content(split))
+		pb.toggle_mode = true; pb.tooltip_text = pp[1]; side.add_child(pb); place_btns.append([pb, pp[1]])
+	# --- contenu : volets + aperçu
+	var mid := HBoxContainer.new(); mid.size_flags_vertical = Control.SIZE_EXPAND_FILL; mid.add_theme_constant_override("separation", 0)
+	panes_box = HBoxContainer.new(); panes_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL; panes_box.add_theme_constant_override("separation", 0); mid.add_child(panes_box)
 	for k in 2: panes.append(_mk_pane(k))
 	panes[1].root.visible = false
-	prev_box = ScrollContainer.new(); prev_box.custom_minimum_size.x = 200; prev_box.visible = false; mid.add_child(prev_box)
-	var pv := VBoxContainer.new(); pv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; prev_box.add_child(pv)
-	prev_img = TextureRect.new(); prev_img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; prev_img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT; prev_img.custom_minimum_size = Vector2(190, 160); pv.add_child(prev_img)
-	prev_txt = Label.new(); prev_txt.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY; prev_txt.custom_minimum_size.x = 190; pv.add_child(prev_txt)
-	var sb := HBoxContainer.new(); sb.add_theme_constant_override("separation", 4); vb.add_child(sb)
-	var se := LineEdit.new(); se.placeholder_text = "Rechercher par nom (sous-dossiers)…"; se.custom_minimum_size.y = 40; se.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	se.text_submitted.connect(func(t): search(t)); sb.add_child(se)
-	sb.add_child(_btn("Chercher", 80, func(): search(se.text)))
-	sb.add_child(_btn("Menu", 60, func(): _menu(get_global_mouse_position() - Vector2(0, 10), true)))
+	prev_panel = UI.sidebar_panel(true); prev_panel.custom_minimum_size.x = 220; prev_panel.visible = false; mid.add_child(prev_panel)
+	prev_box = ScrollContainer.new(); prev_box.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; prev_panel.add_child(prev_box)
+	var pv := VBoxContainer.new(); pv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; pv.add_theme_constant_override("separation", UI.S2); prev_box.add_child(pv)
+	prev_img = TextureRect.new(); prev_img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; prev_img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED; prev_img.custom_minimum_size = Vector2(190, 160); pv.add_child(prev_img)
+	prev_txt = UI.label("", UI.T_SMALL); prev_txt.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY; prev_txt.custom_minimum_size.x = 190; pv.add_child(prev_txt)
+	split = UI.split(side, mid, 200); vb.add_child(split)
 	_go("user://")
+
+func _toggle_search() -> void:
+	sbar.visible = not sbar.visible; _toggle_btn(b_find, sbar.visible)
+	var se := UI.search_entry(sbar)
+	if sbar.visible: se.grab_focus()
+	else: se.text = ""; _clear_search()
+
+func _clear_search() -> void:
+	for p: P in panes: p.q = ""
+	refresh()
+
+## Surligne le lieu courant dans la barre latérale.
+func _mark_places() -> void:
+	var cur := _cur()
+	for e in place_btns: (e[0] as Button).set_pressed_no_signal(cur == e[1])
 
 func _mk_pane(k: int) -> P:
 	var p := P.new()
-	p.root = VBoxContainer.new(); p.root.size_flags_horizontal = Control.SIZE_EXPAND_FILL; p.root.add_theme_constant_override("separation", 2); panes_box.add_child(p.root)
-	var sc := ScrollContainer.new(); sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.custom_minimum_size.y = 38; p.root.add_child(sc)
+	p.root = VBoxContainer.new(); p.root.size_flags_horizontal = Control.SIZE_EXPAND_FILL; p.root.add_theme_constant_override("separation", 0); panes_box.add_child(p.root)
+	var tw := MarginContainer.new(); tw.add_theme_constant_override("margin_left", UI.S2); tw.add_theme_constant_override("margin_top", UI.S1); tw.add_theme_constant_override("margin_bottom", UI.S1)
+	p.tabwrap = tw; p.root.add_child(tw)
+	var sc := ScrollContainer.new(); sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.custom_minimum_size.y = UI.BTN; tw.add_child(sc)
 	p.tabbar = HBoxContainer.new(); p.tabbar.add_theme_constant_override("separation", 2); sc.add_child(p.tabbar)
 	p.list = ItemList.new(); p.list.size_flags_vertical = Control.SIZE_EXPAND_FILL; p.list.select_mode = ItemList.SELECT_MULTI
-	p.list.icon_mode = ItemList.ICON_MODE_LEFT; p.list.add_theme_font_size_override("font_size", 17); p.list.fixed_icon_size = Vector2i(26, 26)
+	p.list.icon_mode = ItemList.ICON_MODE_LEFT; p.list.fixed_icon_size = Vector2i(20, 20)
 	UI.on_theme(p.list, func():
-		p.list.add_theme_stylebox_override("panel", UI.box(_col("field", Color("171b25")), UI.rad(-4)))
-		p.list.add_theme_color_override("font_color", _col("text", Color("e5e9f0"))))
+		var sb := UI.box(_col("field", Color("1d1d20")), 0, _col("edge", Color(1, 1, 1, 0.15)), 0, UI.S2)
+		sb.corner_radius_bottom_right = UI.rad(-1); sb.corner_radius_bottom_left = UI.rad(-1)
+		if k == 1: sb.border_width_left = 1
+		p.list.add_theme_stylebox_override("panel", sb)
+		p.list.add_theme_color_override("font_color", _col("text", Color("ffffff"))))
 	p.list.item_activated.connect(func(i): act = k; _open_item(p, i))
 	p.list.item_selected.connect(func(_i): act = k; _preview())
 	p.list.item_clicked.connect(func(i, at, b): act = k; if b == MOUSE_BUTTON_RIGHT: _menu(p.list.get_global_transform() * at, false, i))
@@ -236,25 +276,27 @@ func refresh() -> void:
 		p.items = ls(p.tabs[p.i]) if p.q == "" else p.items
 		_fill(p)
 		for c in p.tabbar.get_children(): c.queue_free()
+		p.tabwrap.visible = p.tabs.size() > 1
 		for t in p.tabs.size():
 			var b := Button.new(); b.text = p.tabs[t].get_file() if p.tabs[t].get_file() != "" else p.tabs[t]; b.focus_mode = Control.FOCUS_NONE
-			b.custom_minimum_size.y = 34; b.toggle_mode = true; b.button_pressed = t == p.i
+			b.custom_minimum_size.y = UI.BTN; b.theme_type_variation = "FlatOn" if t == p.i else "Flat"; b.tooltip_text = p.tabs[t]
 			b.pressed.connect(func(): act = panes.find(p); p.i = t; p.q = ""; refresh())
 			b.set_drag_forwarding(Callable(), func(_at, d): return d is Dictionary and d.has("fx"), func(_at, d): _do_drop(d, p.tabs[t]))
 			p.tabbar.add_child(b)
 			if p.tabs.size() > 1:
-				var x := Button.new(); x.text = "×"; x.flat = true; x.focus_mode = Control.FOCUS_NONE
-				x.pressed.connect(func(): p.tabs.remove_at(t); p.i = clampi(p.i, 0, p.tabs.size() - 1); refresh()); p.tabbar.add_child(x)
-	pathe.text = _cur(); _preview()
+				var x := UI.icon_btn("x", "Fermer l'onglet", func(): p.tabs.remove_at(t); p.i = clampi(p.i, 0, p.tabs.size() - 1); refresh(), "Flat", 28)
+				x.size_flags_vertical = Control.SIZE_SHRINK_CENTER; p.tabbar.add_child(x)
+	pathe.text = _cur(); _mark_places(); _preview()
 
 func _fill(p: P) -> void:
 	p.list.clear()
 	for f in p.items:
 		var e := str(f).get_extension().to_lower(); var d := is_dir(f)
 		var t: String = str(f).get_file() if p.q == "" else str(f).trim_prefix(p.tabs[p.i])
-		if not d: t += "   —   %s · %s" % [String.humanize_size(_size(f)), Time.get_datetime_string_from_unix_time(FileAccess.get_modified_time(f)).replace("T", " ").substr(0, 16)]
-		p.list.add_item(t, ico["d"] if d else ico["i"] if e in IMG else ico["z"] if e == "zip" else ico["f"])
-	if p.items.is_empty(): p.list.add_item("(vide)", null, false); p.list.set_item_disabled(0, true)
+		if not d: t += "      %s  ·  %s" % [String.humanize_size(_size(f)), Time.get_datetime_string_from_unix_time(FileAccess.get_modified_time(f)).replace("T", " ").substr(0, 16)]
+		var n := p.list.add_item(t, ico["d"] if d else ico["i"] if e in IMG else ico["z"] if e == "zip" else ico["f"])
+		p.list.set_item_icon_modulate(n, UI.accent_text() if d else UI.p("muted"))
+	if p.items.is_empty(): p.list.add_item("Dossier vide" if p.q == "" else "Aucun résultat", null, false); p.list.set_item_disabled(0, true)
 
 func _size(f: String) -> int:
 	var h := FileAccess.open(f, FileAccess.READ)
@@ -343,10 +385,10 @@ func open_in_system() -> void:
 	if OS.create_process(cmd, args) < 0: _n("Fichiers", "Impossible d'ouvrir : " + cur)
 
 func _ask(lbl: String, init: String, cbk: Callable) -> void:
-	pr_lbl.text = lbl; pr_in.text = init; pr_cb = cbk; bar2.visible = true; pr_in.grab_focus()
+	pr_lbl.text = lbl; pr_in.text = init; pr_cb = cbk; bar2.get_parent().visible = true; pr_in.grab_focus()
 
 func _prompt_ok() -> void:
-	bar2.visible = false
+	bar2.get_parent().visible = false
 	var t := pr_in.text.strip_edges()
 	if t != "" and pr_cb.is_valid() and not t.contains("/"): pr_cb.call(t)
 

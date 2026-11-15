@@ -1,4 +1,6 @@
 extends Node
+const UI = preload("res://apps/ui.gd")
+const ICONS := {"App": "layout-grid", "Application": "layout-grid", "Profil": "users", "Paramètre": "settings", "Paramètres": "settings", "Commande": "terminal", "Note": "file-text", "Fichier": "file"}
 ## Recherche globale (Ctrl+Espace) : apps, profils, paramètres, commandes, notes, fichiers (index paresseux en thread, cache user://search_index.json).
 var m
 var panel: PanelContainer
@@ -124,11 +126,11 @@ func toggle() -> void:
 	catcher = Control.new(); catcher.set_anchors_preset(Control.PRESET_FULL_RECT)
 	catcher.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed: close())
 	m.add_child(catcher)
-	panel = PanelContainer.new(); panel.add_theme_stylebox_override("panel", m._box(m._p("menu"), m._rad() + 4, m._p("edge"), 1, 28, 14))
+	panel = PanelContainer.new(); panel.add_theme_stylebox_override("panel", m._menu_box())
 	m.add_child(panel)
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 6); panel.add_child(v)
-	field = LineEdit.new(); field.placeholder_text = "Rechercher apps, fichiers, notes, commandes…"; field.custom_minimum_size = Vector2(minf(560.0, m.size.x - 40.0), 46)
-	field.add_theme_font_size_override("font_size", 20); field.text_changed.connect(_changed); field.gui_input.connect(_key); v.add_child(field)
+	field = UI.search_field("Rechercher apps, fichiers, notes, commandes…"); field.custom_minimum_size = Vector2(minf(560.0, m.size.x - 40.0), 42)
+	field.text_changed.connect(_changed); field.gui_input.connect(_key); v.add_child(field)
 	box = VBoxContainer.new(); box.add_theme_constant_override("separation", 0); v.add_child(box)
 	deb = Timer.new(); deb.one_shot = true; deb.wait_time = 0.15; deb.timeout.connect(func(): _show_results(query(field.text, true))); panel.add_child(deb)
 	_show_results(query("", false)); m.fx.popup_in(panel, false)
@@ -163,11 +165,20 @@ func _show_results(r: Array) -> void:
 	res = r.slice(0, 9); sel = clampi(sel, 0, maxi(0, res.size() - 1))
 	for c in box.get_children(): box.remove_child(c); c.queue_free()
 	for i in res.size():
-		var b: Button = m._mk_btn("%s   ·  %s   %s" % [res[i][0], res[i][1], res[i][2]], 0, 40); b.theme_type_variation = "Flat"; b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		b.add_theme_font_size_override("font_size", 16); b.clip_text = true; b.pressed.connect(run.bind(i)); b.focus_mode = Control.FOCUS_NONE; box.add_child(b)
+		# ligne de résultat : icône du type, titre, détail atténué, type en légende à droite
+		var b: Button = m._mk_btn("", 0, 42); b.theme_type_variation = "Nav"; b.pressed.connect(run.bind(i)); b.focus_mode = Control.FOCUS_NONE; box.add_child(b)
+		var mg := MarginContainer.new(); mg.set_anchors_preset(Control.PRESET_FULL_RECT); mg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		mg.add_theme_constant_override("margin_left", 9); mg.add_theme_constant_override("margin_right", 9); b.add_child(mg)
+		var h := HBoxContainer.new(); h.add_theme_constant_override("separation", UI.S3); h.mouse_filter = Control.MOUSE_FILTER_IGNORE; mg.add_child(h)
+		h.add_child(UI.icon_rect(ICONS.get(str(res[i][0]), "search"), 16, true))
+		var t := UI.label(str(res[i][1])); t.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS; t.custom_minimum_size.x = 10
+		t.size_flags_horizontal = Control.SIZE_EXPAND_FILL; t.mouse_filter = Control.MOUSE_FILTER_IGNORE; h.add_child(t)
+		var d := UI.small(str(res[i][2])); d.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS; d.custom_minimum_size.x = 10
+		d.size_flags_horizontal = Control.SIZE_EXPAND_FILL; d.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT; d.mouse_filter = Control.MOUSE_FILTER_IGNORE; h.add_child(d)
+		var ty := UI.small(str(res[i][0])); ty.mouse_filter = Control.MOUSE_FILTER_IGNORE; h.add_child(ty)
 	_paint()
 	panel.size = panel.get_combined_minimum_size()
 	panel.position = Vector2((m.size.x - panel.size.x) / 2.0, minf(m.size.y * 0.16, 120.0))
 
 func _paint() -> void:
-	for i in box.get_child_count(): box.get_child(i).modulate = m.ACCENT.lightened(0.45) if i == sel else Color.WHITE
+	for i in box.get_child_count(): box.get_child(i).theme_type_variation = "FlatOn" if i == sel else "Nav"

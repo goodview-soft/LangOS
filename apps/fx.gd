@@ -146,19 +146,18 @@ func set_opt(key: String, v) -> void:
 
 func appearance_card(page: Control) -> void:
 	var c: VBoxContainer = m._s_card(page, "Apparence")
-	var sw := HFlowContainer.new(); sw.add_theme_constant_override("h_separation", 8); sw.add_theme_constant_override("v_separation", 8)
+	var sw: HFlowContainer = m._s_flow()
 	for h in ACCENTS:
-		var b: Button = m._mk_btn("", 36, 40)
-		for s in ["normal", "hover", "pressed"]: b.add_theme_stylebox_override(s, m._box(Color(h), 18, Color(1, 1, 1, 0.5 if s != "normal" else 0.0), 2))
+		var b: Button = m._mk_btn("", 28, 28); b.size_flags_vertical = Control.SIZE_SHRINK_CENTER; b.tooltip_text = "#" + h
+		for s in ["normal", "hover", "pressed"]: b.add_theme_stylebox_override(s, m._box(Color(h), 14, Color(1, 1, 1, 0.6 if s != "normal" else 0.0), 2))
 		b.pressed.connect(func(): set_accent(Color(h)))
 		sw.add_child(b)
-	var cp := ColorPickerButton.new(); cp.custom_minimum_size = Vector2(56, 36); cp.color = m.ACCENT; cp.edit_alpha = false; cp.focus_mode = Control.FOCUS_NONE
+	var cp := ColorPickerButton.new(); cp.custom_minimum_size = Vector2(44, 28); cp.color = m.ACCENT; cp.edit_alpha = false; cp.focus_mode = Control.FOCUS_NONE
+	cp.size_flags_vertical = Control.SIZE_SHRINK_CENTER; cp.tooltip_text = "Autre couleur"
 	cp.color_changed.connect(set_accent); sw.add_child(cp)
-	m._s_row(c, "Couleur d'accent", sw, 200)
-	m._s_row(c, "Transparence fenêtres", m._s_slider(0.6, 1.0, 0.02, float(m.set_cfg.get("wtrans", 1.0)), func(x: float, l: Label): l.text = "%d %%" % int(x * 100); set_opt("wtrans", x)))
+	m._s_row(c, "Couleur d'accent", sw, 190)
+	m._s_row(c, "Transparence des fenêtres", m._s_slider(0.6, 1.0, 0.02, float(m.set_cfg.get("wtrans", 1.0)), func(x: float, l: Label): l.text = "%d %%" % int(x * 100); set_opt("wtrans", x)))
 	m._s_row(c, "Taille des icônes", m._s_slider(40, 80, 2, float(m.set_cfg.get("isize", 56)), func(x: float, l: Label): l.text = "%d" % int(x); set_opt("isize", int(x))))
 	m._s_row(c, "Rayon des coins", m._s_slider(0, 24, 1, float(m.set_cfg.get("radius", 12)), func(x: float, l: Label): l.text = "%d" % int(x); set_opt("radius", int(x))))
-	var an := CheckButton.new(); an.focus_mode = Control.FOCUS_NONE; an.button_pressed = on(); an.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	an.toggled.connect(set_anim); m._s_row(c, "Animations", an, 60)
-	var dh := CheckButton.new(); dh.focus_mode = Control.FOCUS_NONE; dh.button_pressed = bool(m.set_cfg.get("dock_hide", false)); dh.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	dh.toggled.connect(func(b: bool): set_opt("dock_hide", b)); m._s_row(c, "Masquer le dock auto", dh, 60)
+	m._s_row(c, "Animations", m._s_switch(on(), set_anim), 0)
+	m._s_row(c, "Masquer le dock automatiquement", m._s_switch(bool(m.set_cfg.get("dock_hide", false)), func(b: bool): set_opt("dock_hide", b)), 0)

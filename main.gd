@@ -53,8 +53,16 @@ var keysc         # apps/shortcuts.gd (raccourcis clavier / manette)
 var tray_node: Control
 var menu_hi: TextureRect
 var cc_btn: Button
-const PAL_D := {"win": Color("232834"), "tb_on": Color("1f2432"), "tb_off": Color("171a23"), "field": Color("171b25"), "popup": Color("1b1f2a"), "bar": Color(0.07, 0.08, 0.11, 0.9), "menu": Color(0.11, 0.13, 0.18, 0.97), "text": Color("e5e9f0"), "ov": Color(1, 1, 1), "edge": Color(1, 1, 1, 0.1), "card": Color("1c2131"), "muted": Color("9aa6bf"), "ok": Color("4ade80"), "warn": Color("fbbf24"), "err": Color("f87171"), "bub_me": Color("2b5fb8"), "bub_you": Color("2a3040"), "pop": Color(0.12, 0.14, 0.2, 0.98), "kb": Color(0.09, 0.1, 0.14, 0.97)}
-const PAL_L := {"win": Color("f3f5f9"), "tb_on": Color("e2e7f0"), "tb_off": Color("edf0f6"), "field": Color("ffffff"), "popup": Color("ffffff"), "bar": Color(0.93, 0.94, 0.97, 0.94), "menu": Color(0.97, 0.98, 1.0, 0.97), "text": Color("1b2230"), "ov": Color(0, 0, 0), "edge": Color(0, 0, 0, 0.14), "card": Color("ffffff"), "muted": Color("586277"), "ok": Color("15803d"), "warn": Color("b45309"), "err": Color("b91c1c"), "bub_me": Color("2563eb"), "bub_you": Color("e3e8f1"), "pop": Color(0.98, 0.99, 1.0, 0.98), "kb": Color(0.93, 0.94, 0.97, 0.97)}
+## Jetons de couleur libadwaita : win = window_bg, field/view = view_bg, card = card_bg, tb_on/header = headerbar_bg, tb_off = headerbar backdrop,
+## sidebar = sidebar_bg, popup/menu/pop = popover_bg, edge = bordure (15 %), muted = texte atténué, destructive = rouge.
+const PAL_D := {"win": Color("222226"), "tb_on": Color("2e2e32"), "tb_off": Color("222226"), "field": Color("1d1d20"), "view": Color("1d1d20"), "header": Color("2e2e32"), "sidebar": Color("2e2e32"),
+	"popup": Color("36363a"), "bar": Color(0.075, 0.075, 0.085, 0.92), "menu": Color(0.212, 0.212, 0.227, 0.98), "text": Color("ffffff"), "ov": Color(1, 1, 1), "edge": Color(1, 1, 1, 0.15),
+	"card": Color("343438"), "muted": Color("a5a5a9"), "ok": Color("8ff0a4"), "warn": Color("f8e45c"), "err": Color("ff7b63"), "destructive": Color("c01c28"),
+	"bub_me": Color("2b5fb8"), "bub_you": Color("3a3a3e"), "pop": Color(0.212, 0.212, 0.227, 0.98), "kb": Color(0.114, 0.114, 0.125, 0.97)}
+const PAL_L := {"win": Color("fafafb"), "tb_on": Color("ffffff"), "tb_off": Color("fafafb"), "field": Color("ffffff"), "view": Color("ffffff"), "header": Color("ffffff"), "sidebar": Color("ebebed"),
+	"popup": Color("ffffff"), "bar": Color(0.92, 0.92, 0.93, 0.94), "menu": Color(1, 1, 1, 0.98), "text": Color("333338"), "ov": Color(0, 0, 0.02), "edge": Color(0, 0, 0.02, 0.15),
+	"card": Color("ffffff"), "muted": Color("626267"), "ok": Color("1b8553"), "warn": Color("9c6e03"), "err": Color("c01c28"), "destructive": Color("c01c28"),
+	"bub_me": Color("2563eb"), "bub_you": Color("e6e6e9"), "pop": Color(1, 1, 1, 0.98), "kb": Color(0.92, 0.92, 0.93, 0.97)}
 func _p(k: String):
 	return (PAL_L if set_cfg.get("light", false) else PAL_D)[k]
 const TEXT := Color("e5e9f0")
@@ -244,7 +252,7 @@ func _show_ctx(t: Control, at: Vector2) -> void:
 	ctx_catcher.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed: _hide_ctx())
 	add_child(ctx_catcher)
 	ctx_menu = PanelContainer.new()
-	ctx_menu.add_theme_stylebox_override("panel", _box(_p("pop"), _rad(), _p("edge"), 1, 18, 6))
+	ctx_menu.add_theme_stylebox_override("panel", _box(_p("pop"), UI.rad(), _p("edge"), 1, 18, 6))
 	add_child(ctx_menu)
 	var h := HBoxContainer.new(); h.add_theme_constant_override("separation", 2); ctx_menu.add_child(h)
 	var items := []
@@ -253,7 +261,7 @@ func _show_ctx(t: Control, at: Vector2) -> void:
 	if editable: items.append(["Coller", "paste"])
 	items.append(["Tout sélectionner", "all"])
 	for e in items:
-		var b := _mk_btn(e[0], 0, 48); b.theme_type_variation = "Flat"; b.add_theme_font_size_override("font_size", 18)
+		var b := _mk_btn(e[0], 0, 40); b.theme_type_variation = "Nav"
 		b.pressed.connect(func(): _ctx_do(e[1]))
 		h.add_child(b)
 	ctx_menu.size = ctx_menu.get_combined_minimum_size()
@@ -342,7 +350,8 @@ func _rad() -> int:
 ## Style d'une fenêtre : ombre plus large quand elle est active, encore plus pendant le déplacement.
 func _winbox(on: bool, drag := false) -> StyleBoxFlat:
 	var c: Color = _p("win"); c.a = float(set_cfg.get("wtrans", 1.0))
-	var s := _box(c, _rad(), Color(ACCENT, 0.4) if on else _p("edge"), 1)
+	var s := _box(c, _rad(), _p("edge"), 1)
+	s.set_content_margin_all(1)   # le contenu ne recouvre pas le filet de la fenêtre
 	s.shadow_size = 52 if drag else (34 if on else 12)
 	s.shadow_color = Color(0, 0, 0, 0.6 if drag else (0.45 if on else 0.2)); s.shadow_offset = Vector2(0, s.shadow_size * 0.3)
 	return s
@@ -368,85 +377,124 @@ func _grad_tex(i: int, w := 512, h := 288) -> GradientTexture2D:
 func _build_theme() -> void:
 	UI.m = self; MUTED = _p("muted")
 	var th := Theme.new()
-	var f := SystemFont.new()
-	f.font_names = PackedStringArray(["Inter", "Noto Sans", "Ubuntu", "Cantarell", "Roboto", "DejaVu Sans"])
-	th.default_font = f; th.default_font_size = 17
-	var ovc: Color = _p("ov")
-	var tx: Color = _p("text")
-	var w := func(a: float) -> Color: return Color(ovc, a)
-	# Boutons (touches) : remplis
-	for st in [["normal", w.call(0.08)], ["hover", w.call(0.16)], ["pressed", ACCENT], ["disabled", w.call(0.04)]]:
-		var sb := _box(st[1], 10); sb.content_margin_left = 12; sb.content_margin_right = 12
-		sb.content_margin_top = 9; sb.content_margin_bottom = 9
-		th.set_stylebox(st[0], "Button", sb)
-	th.set_stylebox("focus", "Button", StyleBoxEmpty.new())
-	th.set_color("font_color", "Button", tx); th.set_color("font_hover_color", "Button", tx)
-	th.set_color("font_pressed_color", "Button", UI.on(ACCENT))
-	th.set_color("icon_normal_color", "Button", tx); th.set_color("icon_hover_color", "Button", tx)
-	th.set_color("icon_pressed_color", "Button", UI.on(ACCENT))
-	th.set_font_size("font_size", "Button", 19)
-	th.set_constant("icon_max_width", "Button", 22); th.set_constant("h_separation", "Button", 10)
-	for st in ["normal", "hover", "pressed", "disabled"]:
-		th.set_stylebox(st, "OptionButton", th.get_stylebox(st, "Button"))
-	th.set_stylebox("focus", "OptionButton", StyleBoxEmpty.new())
-	th.set_color("font_color", "OptionButton", tx); th.set_color("font_hover_color", "OptionButton", tx)
-	th.set_font_size("font_size", "OptionButton", 17)
-	th.set_stylebox("panel", "PopupMenu", _box(_p("popup"), 10, w.call(0.12), 1, 12, 6))
-	th.set_stylebox("hover", "PopupMenu", _box(Color(ACCENT, 0.35), 6))
-	th.set_color("font_color", "PopupMenu", tx); th.set_font_size("font_size", "PopupMenu", 17)
-	th.set_constant("v_separation", "PopupMenu", 8)
-	th.set_stylebox("panel", "ItemList", _box(_p("field"), 10, w.call(0.07), 1, 0, 6))
-	th.set_stylebox("selected", "ItemList", _box(Color(ACCENT, 0.35), 6)); th.set_stylebox("selected_focus", "ItemList", _box(Color(ACCENT, 0.35), 6))
-	th.set_stylebox("hovered", "ItemList", _box(w.call(0.06), 6)); th.set_stylebox("focus", "ItemList", StyleBoxEmpty.new())
-	th.set_color("font_color", "ItemList", tx); th.set_color("font_selected_color", "ItemList", tx)
-	th.set_stylebox("panel", "Tree", _box(_p("field"), 10, w.call(0.07), 1, 0, 6)); th.set_stylebox("focus", "Tree", StyleBoxEmpty.new())
-	for st in ["selected", "selected_focus"]: th.set_stylebox(st, "Tree", _box(Color(ACCENT, 0.35), 6))
-	th.set_stylebox("hovered", "Tree", _box(w.call(0.06), 6)); th.set_stylebox("cursor", "Tree", _box(Color(ACCENT, 0.2), 6)); th.set_stylebox("cursor_unfocused", "Tree", _box(Color(ACCENT, 0.2), 6))
-	for k in ["font_color", "font_selected_color", "font_hovered_color"]: th.set_color(k, "Tree", tx)
-	th.set_color("guide_color", "Tree", w.call(0.1)); th.set_color("relationship_line_color", "Tree", w.call(0.1))
-	th.set_font_size("font_size", "ItemList", 19); th.set_constant("v_separation", "ItemList", 6)
-	th.set_color("default_color", "RichTextLabel", tx)
-	# Variante transparente
+	th.default_font = UI.font(); th.default_font_size = UI.T_BODY
+	var tx: Color = _p("text"); var mu: Color = _p("muted"); var dis := Color(tx, 0.5)
+	var rb := UI.rad_btn(); var ri := mini(6, rb)
+	var none := Color(0, 0, 0, 0)
+	var w := func(a: float) -> Color: return UI.veil(a)
+	var mk := func(c: Color, r: int, mh: int, mv: int) -> StyleBoxFlat:
+		var sb := _box(c, r); sb.content_margin_left = mh; sb.content_margin_right = mh; sb.content_margin_top = mv; sb.content_margin_bottom = mv
+		return sb
+	# États d'un type de bouton : [état, voile (float) ou couleur]
+	var states := func(type: String, vals: Array, r: int, mh: int, mv: int) -> void:
+		for st in vals: th.set_stylebox(st[0], type, mk.call(st[1] if st[1] is Color else UI.veil(st[1]), r, mh, mv))
+		th.set_stylebox("focus", type, StyleBoxEmpty.new())
+	var colors := func(type: String, c: Color) -> void:
+		for k in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color",
+				"icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_hover_pressed_color", "icon_focus_color"]: th.set_color(k, type, c)
+		th.set_color("font_disabled_color", type, Color(c, 0.5)); th.set_color("icon_disabled_color", type, Color(c, 0.5))
+	# Boutons (libadwaita : voile 10 %, 15 % au survol, 30 % enfoncé ; rayon 9)
+	states.call("Button", [["normal", 0.1], ["hover", 0.15], ["pressed", 0.3], ["hover_pressed", 0.35], ["disabled", 0.05]], rb, 12, 7)
+	colors.call("Button", tx)
+	th.set_font("font", "Button", UI.font(600)); th.set_font_size("font_size", "Button", UI.T_BODY)
+	th.set_constant("icon_max_width", "Button", 18); th.set_constant("h_separation", "Button", 6)
+	for ty in ["OptionButton", "MenuButton"]:
+		for st in ["normal", "hover", "pressed", "disabled"]: th.set_stylebox(st, ty, th.get_stylebox(st, "Button"))
+		th.set_stylebox("focus", ty, StyleBoxEmpty.new()); colors.call(ty, tx)
+		th.set_font("font", ty, UI.font()); th.set_font_size("font_size", ty, UI.T_BODY)
+	th.set_icon("arrow", "OptionButton", UI.glyph("chevron-down", Color.WHITE)); th.set_constant("modulate_arrow", "OptionButton", 1); th.set_constant("arrow_margin", "OptionButton", 10)
+	# Boutons plats (barres d'en-tête), plats cochés, lignes de navigation, ronds (contrôles de fenêtre)
 	th.set_type_variation("Flat", "Button")
-	for st in [["normal", 0.0], ["hover", 0.09], ["pressed", 0.16]]:
-		var sb := _box(w.call(st[1]), 8); sb.content_margin_left = 12; sb.content_margin_right = 12
-		sb.content_margin_top = 9; sb.content_margin_bottom = 9
-		th.set_stylebox(st[0], "Flat", sb)
+	states.call("Flat", [["normal", none], ["hover", 0.07], ["pressed", 0.16], ["hover_pressed", 0.19], ["disabled", none]], rb, 12, 7)
+	th.set_type_variation("FlatOn", "Button")
+	states.call("FlatOn", [["normal", 0.1], ["hover", 0.13], ["pressed", 0.19], ["hover_pressed", 0.19], ["disabled", 0.05]], rb, 12, 7)
+	th.set_type_variation("Nav", "Button")
+	states.call("Nav", [["normal", none], ["hover", 0.07], ["pressed", 0.1], ["hover_pressed", 0.13], ["disabled", none]], ri, 9, 7)
+	th.set_font("font", "Nav", UI.font()); th.set_constant("h_separation", "Nav", 12)
+	th.set_type_variation("Circular", "Button")
+	states.call("Circular", [["normal", 0.1], ["hover", 0.15], ["pressed", 0.3], ["hover_pressed", 0.3], ["disabled", 0.05]], 99, 4, 4)
 	th.set_type_variation("Close", "Button")
-	for st in [["normal", Color(0, 0, 0, 0)], ["hover", Color("e5484d")], ["pressed", Color("c0363b")]]:
-		var sb := _box(st[1], 6); sb.content_margin_left = 8; sb.content_margin_right = 8; sb.content_margin_top = 4; sb.content_margin_bottom = 4
-		th.set_stylebox(st[0], "Close", sb)
-	th.set_type_variation("Accent", "Button")
-	for st in [["normal", ACCENT], ["hover", ACCENT.lightened(0.15)], ["pressed", ACCENT.darkened(0.2)], ["disabled", ACCENT.darkened(0.5)]]:
-		var sb := _box(st[1], 10); sb.content_margin_left = 16; sb.content_margin_right = 16
-		sb.content_margin_top = 9; sb.content_margin_bottom = 9
-		th.set_stylebox(st[0], "Accent", sb)
+	states.call("Close", [["normal", none], ["hover", Color("e5484d")], ["pressed", Color("c0363b")]], ri, 8, 4)
+	# « suggested » = accent, « destructive » = rouge
 	var onacc: Color = UI.on(ACCENT)
-	th.set_color("font_color", "Accent", onacc); th.set_color("font_hover_color", "Accent", onacc.lerp(ACCENT.lightened(0.15), 0.0))
-	th.set_color("font_pressed_color", "Accent", UI.on(ACCENT.darkened(0.2))); th.set_color("font_disabled_color", "Accent", Color(onacc, 0.6))
-	th.set_color("icon_normal_color", "Accent", onacc); th.set_color("icon_hover_color", "Accent", onacc); th.set_color("icon_pressed_color", "Accent", UI.on(ACCENT.darkened(0.2)))
-	for ty in ["CheckBox", "CheckButton", "LinkButton"]:
-		th.set_color("font_color", ty, tx); th.set_color("font_hover_color", ty, tx); th.set_color("font_pressed_color", ty, tx)
-		th.set_color("font_hover_pressed_color", ty, tx); th.set_color("font_focus_color", ty, tx)
-	th.set_color("font_color", "ProgressBar", tx)
+	th.set_type_variation("Accent", "Button")
+	states.call("Accent", [["normal", ACCENT], ["hover", ACCENT.lightened(0.1)], ["pressed", ACCENT.darkened(0.15)], ["hover_pressed", ACCENT.darkened(0.1)], ["disabled", Color(ACCENT, 0.5)]], rb, 16, 7)
+	colors.call("Accent", onacc)
+	var red: Color = _p("destructive")
+	th.set_type_variation("Destructive", "Button")
+	states.call("Destructive", [["normal", red], ["hover", red.lightened(0.1)], ["pressed", red.darkened(0.15)], ["hover_pressed", red.darkened(0.1)], ["disabled", Color(red, 0.5)]], rb, 16, 7)
+	colors.call("Destructive", Color.WHITE)
+	# Cases, interrupteurs, liens : pas de fond de bouton
+	for ty in ["CheckBox", "CheckButton"]:
+		for st in ["normal", "hover", "pressed", "hover_pressed", "disabled", "hover_disabled"]: th.set_stylebox(st, ty, mk.call(none, 0, 2, 4))
+		th.set_stylebox("focus", ty, StyleBoxEmpty.new())
+		colors.call(ty, tx); th.set_font("font", ty, UI.font()); th.set_constant("h_separation", ty, 8)
+	colors.call("LinkButton", UI.accent_text())
+	for pr in [["checked", true, false], ["unchecked", false, false], ["checked_disabled", true, true], ["unchecked_disabled", false, true]]:
+		th.set_icon(pr[0], "CheckButton", UI.switch_tex(pr[1], pr[2])); th.set_icon(pr[0] + "_mirrored", "CheckButton", UI.switch_tex(pr[1], pr[2]))
+		th.set_icon(pr[0], "CheckBox", UI.check_tex(pr[1], false, pr[2])); th.set_icon("radio_" + pr[0], "CheckBox", UI.check_tex(pr[1], true, pr[2]))
+	# Menus (popover)
+	th.set_stylebox("panel", "PopupMenu", _box(_p("popup"), UI.rad(), _p("edge"), 1, 12, 6))
+	th.set_stylebox("hover", "PopupMenu", _box(w.call(0.1), ri))
+	for k in ["font_color", "font_hover_color", "font_accelerator_color"]: th.set_color(k, "PopupMenu", tx)
+	th.set_color("font_disabled_color", "PopupMenu", dis); th.set_color("font_separator_color", "PopupMenu", mu)
+	th.set_font_size("font_size", "PopupMenu", UI.T_BODY)
+	th.set_constant("v_separation", "PopupMenu", 12); th.set_constant("h_separation", "PopupMenu", 8)
+	th.set_constant("item_start_padding", "PopupMenu", 9); th.set_constant("item_end_padding", "PopupMenu", 9)
+	var sl := StyleBoxLine.new(); sl.color = _p("edge"); sl.thickness = 1
+	th.set_stylebox("separator", "PopupMenu", sl)
+	th.set_icon("checked", "PopupMenu", UI.glyph("check", tx)); th.set_icon("unchecked", "PopupMenu", UI.blank())
+	th.set_icon("radio_checked", "PopupMenu", UI.glyph("check", tx)); th.set_icon("radio_unchecked", "PopupMenu", UI.blank())
+	th.set_icon("submenu", "PopupMenu", UI.glyph("chevron-right", tx))
+	# Listes et arbres (vue : sélection teintée d'accent à 25 %)
+	for ty in ["ItemList", "Tree"]:
+		th.set_stylebox("panel", ty, _box(_p("field"), rb, _p("edge"), 1, 0, 6)); th.set_stylebox("focus", ty, StyleBoxEmpty.new())
+		for st in ["selected", "selected_focus"]: th.set_stylebox(st, ty, _box(Color(ACCENT, 0.25), ri))
+		for st in ["hovered_selected", "hovered_selected_focus"]: th.set_stylebox(st, ty, _box(Color(ACCENT, 0.32), ri))
+		th.set_stylebox("hovered", ty, _box(w.call(0.07), ri))
+		for st in ["cursor", "cursor_unfocused"]: th.set_stylebox(st, ty, StyleBoxEmpty.new())
+		for k in ["font_color", "font_selected_color", "font_hovered_color", "font_hovered_selected_color"]: th.set_color(k, ty, tx)
+		th.set_color("guide_color", ty, none); th.set_font_size("font_size", ty, UI.T_BODY)
+	th.set_constant("v_separation", "ItemList", 10); th.set_constant("h_separation", "ItemList", 8)
+	th.set_constant("v_separation", "Tree", 10); th.set_constant("draw_relationship_lines", "Tree", 0); th.set_constant("draw_guides", "Tree", 0)
+	th.set_constant("inner_item_margin_left", "Tree", 6); th.set_constant("inner_item_margin_right", "Tree", 6)
+	th.set_color("relationship_line_color", "Tree", none); th.set_color("font_disabled_color", "Tree", mu)
+	th.set_icon("arrow", "Tree", UI.glyph("chevron-down", mu)); th.set_icon("arrow_collapsed", "Tree", UI.glyph("chevron-right", mu))
 	# Texte
-	th.set_color("font_color", "Label", tx)
-	th.set_font_size("font_size", "Label", 16)
-	var te := _box(_p("field"), 10, w.call(0.07), 1, 0, 14)
-	th.set_stylebox("normal", "TextEdit", te); th.set_stylebox("focus", "TextEdit", _box(_p("field"), 10, ACCENT.darkened(0.3), 1, 0, 14))
-	th.set_color("font_color", "TextEdit", tx); th.set_color("caret_color", "TextEdit", ACCENT)
-	th.set_color("font_placeholder_color", "TextEdit", Color(_p("muted"), 0.75)); th.set_color("font_placeholder_color", "LineEdit", Color(_p("muted"), 0.75))
+	th.set_color("font_color", "Label", tx); th.set_font_size("font_size", "Label", UI.T_BODY)
+	th.set_color("default_color", "RichTextLabel", tx)
+	th.set_font("bold_font", "RichTextLabel", UI.font(700)); th.set_font("italics_font", "RichTextLabel", UI.font(400, true))
+	th.set_font("bold_italics_font", "RichTextLabel", UI.font(700, true)); th.set_font("mono_font", "RichTextLabel", UI.mono())
+	th.set_color("font_color", "ProgressBar", tx)
+	th.set_stylebox("background", "ProgressBar", mk.call(w.call(0.15), 99, 0, 0)); th.set_stylebox("fill", "ProgressBar", mk.call(ACCENT, 99, 0, 0))
+	# Zones de texte (vue) et champs (voile 10 %, rayon 9, contour d'accent au focus)
+	th.set_stylebox("normal", "TextEdit", _box(_p("field"), rb, _p("edge"), 1, 0, 12)); th.set_stylebox("read_only", "TextEdit", _box(_p("field"), rb, _p("edge"), 1, 0, 12))
+	th.set_stylebox("focus", "TextEdit", _box(none, rb, Color(ACCENT, 0.6), 1))
+	th.set_color("font_color", "TextEdit", tx); th.set_color("font_readonly_color", "TextEdit", tx); th.set_color("caret_color", "TextEdit", tx)
+	th.set_color("font_placeholder_color", "TextEdit", Color(mu, 0.9)); th.set_color("font_placeholder_color", "LineEdit", Color(mu, 0.9))
 	th.set_color("selection_color", "TextEdit", Color(ACCENT, 0.35)); th.set_color("current_line_color", "TextEdit", w.call(0.03))
-	th.set_font_size("font_size", "TextEdit", 22)
-	th.set_stylebox("normal", "LineEdit", _box(_p("field"), 8, w.call(0.07), 1, 0, 10))
-	th.set_stylebox("focus", "LineEdit", _box(_p("field"), 8, ACCENT.darkened(0.3), 1, 0, 10))
-	th.set_color("font_color", "LineEdit", tx); th.set_color("caret_color", "LineEdit", ACCENT)
-	# Curseur
-	th.set_stylebox("slider", "HSlider", _box(w.call(0.12), 4, Color(0, 0, 0, 0), 0, 0, 0))
-	th.get_stylebox("slider", "HSlider").content_margin_top = 3; th.get_stylebox("slider", "HSlider").content_margin_bottom = 3
-	th.set_stylebox("grabber_area", "HSlider", _box(ACCENT, 4)); th.set_stylebox("grabber_area_highlight", "HSlider", _box(ACCENT.lightened(0.2), 4))
-	var sl := StyleBoxLine.new(); sl.color = w.call(0.1); sl.thickness = 1
-	th.set_stylebox("separator", "HSeparator", sl)
+	th.set_font_size("font_size", "TextEdit", UI.T_BODY + 1)
+	th.set_stylebox("normal", "LineEdit", UI.entry_box()); th.set_stylebox("focus", "LineEdit", UI.entry_box(true))
+	var ro := UI.entry_box(); ro.bg_color = w.call(0.05); th.set_stylebox("read_only", "LineEdit", ro)
+	th.set_color("font_color", "LineEdit", tx); th.set_color("caret_color", "LineEdit", tx); th.set_color("font_uneditable_color", "LineEdit", Color(tx, 0.6))
+	th.set_color("selection_color", "LineEdit", Color(ACCENT, 0.35)); th.set_font_size("font_size", "LineEdit", UI.T_BODY)
+	th.set_icon("clear", "LineEdit", UI.glyph("x", Color.WHITE)); th.set_color("clear_button_color", "LineEdit", mu); th.set_color("clear_button_color_pressed", "LineEdit", tx)
+	# Curseurs : piste fine, partie remplie d'accent, bouton rond
+	for ty in ["HSlider", "VSlider"]:
+		var hz: bool = ty == "HSlider"
+		th.set_stylebox("slider", ty, mk.call(w.call(0.15), 99, 0 if hz else 3, 3 if hz else 0))
+		th.set_stylebox("grabber_area", ty, mk.call(ACCENT, 99, 0 if hz else 3, 3 if hz else 0)); th.set_stylebox("grabber_area_highlight", ty, mk.call(ACCENT, 99, 0 if hz else 3, 3 if hz else 0))
+		th.set_icon("grabber", ty, UI.knob_tex()); th.set_icon("grabber_highlight", ty, UI.knob_tex(true)); th.set_icon("grabber_disabled", ty, UI.knob_tex())
+	# Barres de défilement fines
+	for ty in ["VScrollBar", "HScrollBar"]:
+		th.set_stylebox("scroll", ty, mk.call(none, 4, 4, 4)); th.set_stylebox("scroll_focus", ty, mk.call(none, 4, 4, 4))
+		th.set_stylebox("grabber", ty, mk.call(w.call(0.2), 4, 4, 4)); th.set_stylebox("grabber_highlight", ty, mk.call(w.call(0.35), 4, 4, 4)); th.set_stylebox("grabber_pressed", ty, mk.call(w.call(0.5), 4, 4, 4))
+	# Filets, infobulles
+	th.set_stylebox("separator", "HSeparator", sl); th.set_constant("separation", "HSeparator", 1)
+	var vl := StyleBoxLine.new(); vl.color = _p("edge"); vl.thickness = 1; vl.vertical = true
+	th.set_stylebox("separator", "VSeparator", vl)
+	th.set_stylebox("panel", "TooltipPanel", mk.call(Color(0.08, 0.08, 0.09, 0.92), rb, 10, 6))
+	th.set_color("font_color", "TooltipLabel", Color.WHITE); th.set_font_size("font_size", "TooltipLabel", UI.T_SMALL)
 	UI.extend_theme(th)
 	theme = th
 
@@ -490,24 +538,24 @@ func _build_desktop() -> void:
 	bar.add_theme_stylebox_override("panel", bs)
 	root.add_child(bar)
 	var bh := HBoxContainer.new(); bh.add_theme_constant_override("separation", 6); bar.add_child(bh)
-	start_btn = _mk_btn("LangOS", 130, 42); start_btn.theme_type_variation = "Flat"
-	start_btn.icon = _ico("start"); start_btn.add_theme_constant_override("icon_max_width", 20)
+	start_btn = _mk_btn("LangOS", 112, 42); start_btn.theme_type_variation = "Flat"
+	start_btn.icon = _ico("start"); start_btn.add_theme_constant_override("icon_max_width", 18); start_btn.add_theme_constant_override("h_separation", 8)
 	start_btn.add_theme_color_override("icon_normal_color", ACCENT); start_btn.add_theme_color_override("icon_hover_color", ACCENT)
-	start_btn.add_theme_font_size_override("font_size", 18)
+	start_btn.add_theme_font_override("font", UI.font(700))
 	start_btn.pressed.connect(_toggle_menu); bh.add_child(start_btn)
-	var vs := VSeparator.new(); vs.modulate = Color(_p("ov"), 0.4); bh.add_child(vs)
+	var vs := VSeparator.new(); bh.add_child(vs)
 	task_box = HBoxContainer.new(); task_box.add_theme_constant_override("separation", 4); bh.add_child(task_box)
 	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; bh.add_child(sp)
-	var sb_ := _icon_btn("search", "Flat", 48, 42, 22); sb_.tooltip_text = "Recherche (Ctrl+Espace)"; sb_.pressed.connect(func(): srch.toggle()); bh.add_child(sb_)
-	vd_btn = _mk_btn("1/%d" % n_vd, 64, 42); vd_btn.theme_type_variation = "Flat"; vd_btn.add_theme_font_size_override("font_size", 16)
-	vd_btn.tooltip_text = "Bureaux virtuels (Ctrl+Alt+←/→)"; vd_btn.pressed.connect(_vd_menu); bh.add_child(vd_btn)
-	bell_btn = _icon_btn("bell", "Flat", 56, 42, 22); bell_btn.tooltip_text = "Notifications"; bell_btn.pressed.connect(_toggle_notifs); bh.add_child(bell_btn)
-	pad_btn = _icon_btn("pad", "Flat", 48, 42, 24); pad_btn.tooltip_text = "Mode pavé tactile (Flex)"; pad_btn.pressed.connect(_toggle_pad); bh.add_child(pad_btn)
-	kb_btn = _icon_btn("keyboard", "Flat", 48, 42, 24); kb_btn.pressed.connect(_toggle_kb); bh.add_child(kb_btn)
-	cc_btn = _icon_btn("ctrl", "Flat", 48, 42, 22); cc_btn.tooltip_text = "Centre de contrôle"; cc_btn.pressed.connect(func(): ccenter.toggle(cc_btn)); bh.add_child(cc_btn)
+	var sb_ := _icon_btn("search", "Flat", 42, 42, 18); sb_.tooltip_text = "Recherche (Ctrl+Espace)"; sb_.pressed.connect(func(): srch.toggle()); bh.add_child(sb_)
+	vd_btn = _mk_btn("1/%d" % n_vd, 56, 42); vd_btn.theme_type_variation = "Flat"
+	vd_btn.tooltip_text = "Bureaux virtuels (Ctrl+Alt+Gauche/Droite)"; vd_btn.pressed.connect(_vd_menu); bh.add_child(vd_btn)
+	bell_btn = _icon_btn("bell", "Flat", 42, 42, 18); bell_btn.tooltip_text = "Notifications"; bell_btn.pressed.connect(_toggle_notifs); bh.add_child(bell_btn)
+	pad_btn = _icon_btn("pad", "Flat", 42, 42, 18); pad_btn.tooltip_text = "Mode pavé tactile (Flex)"; pad_btn.pressed.connect(_toggle_pad); bh.add_child(pad_btn)
+	kb_btn = _icon_btn("keyboard", "Flat", 42, 42, 18); kb_btn.tooltip_text = "Clavier visuel"; kb_btn.pressed.connect(_toggle_kb); bh.add_child(kb_btn)
+	cc_btn = _icon_btn("ctrl", "Flat", 42, 42, 18); cc_btn.tooltip_text = "Centre de contrôle"; cc_btn.pressed.connect(func(): ccenter.toggle(cc_btn)); bh.add_child(cc_btn)
 	var tray := Control.new(); tray.set_script(load("res://apps/systray.gd")); bh.add_child(tray); tray_node = tray
 	clock = Label.new(); clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	clock.add_theme_font_size_override("font_size", 14); bh.add_child(clock)
+	clock.add_theme_font_size_override("font_size", UI.T_SMALL); clock.add_theme_constant_override("line_spacing", 0); bh.add_child(clock)
 	bar_h = 54.0
 	_build_keyboard()
 	get_tree().node_added.connect(_on_node_added)
@@ -587,36 +635,38 @@ func _restyle_icons() -> void:
 
 # ---------------------------------------------------------------- Menu Démarrer
 
+func _menu_box() -> StyleBoxFlat:
+	return _box(_p("menu"), UI.rad(3), _p("edge"), 1, 28, 9)
+
 func _build_menu() -> void:
 	catcher = Control.new(); catcher.set_anchors_preset(Control.PRESET_FULL_RECT)
 	catcher.visible = false
 	catcher.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed: _toggle_menu())
 	add_child(catcher)
 	menu = PanelContainer.new(); menu.visible = false
-	menu.add_theme_stylebox_override("panel", _box(_p("menu"), _rad() + 4, _p("edge"), 1, 28, 12))
+	menu.add_theme_stylebox_override("panel", _menu_box())
 	add_child(menu)
-	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 4); menu.add_child(v)
-	var head := HBoxContainer.new(); v.add_child(head)
-	var hi := TextureRect.new(); hi.texture = _ico("start"); hi.modulate = ACCENT; hi.custom_minimum_size = Vector2(22, 22); menu_hi = hi
+	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 2); menu.add_child(v)
+	var hm := MarginContainer.new(); v.add_child(hm)
+	for k in ["left", "right"]: hm.add_theme_constant_override("margin_" + k, 9)
+	hm.add_theme_constant_override("margin_top", 6); hm.add_theme_constant_override("margin_bottom", 9)
+	var head := HBoxContainer.new(); head.add_theme_constant_override("separation", 9); hm.add_child(head)
+	var hi := TextureRect.new(); hi.texture = _ico("start"); hi.modulate = ACCENT; hi.custom_minimum_size = Vector2(18, 18); menu_hi = hi
 	hi.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; hi.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED; head.add_child(hi)
-	var ht := Label.new(); ht.text = " LangOS"; ht.add_theme_font_size_override("font_size", 20); ht.size_flags_horizontal = Control.SIZE_EXPAND_FILL; head.add_child(ht)
-	var hv := Label.new(); hv.text = "v" + VERSION; hv.theme_type_variation = "Muted"; hv.add_theme_font_size_override("font_size", 14); head.add_child(hv)
-	var sp := Control.new(); sp.custom_minimum_size.y = 6; v.add_child(sp)
+	var ht := UI.head("LangOS"); ht.size_flags_horizontal = Control.SIZE_EXPAND_FILL; head.add_child(ht)
+	head.add_child(UI.small("v" + VERSION))
 	for id in _top_ids():
-		var b := _mk_btn(APPS[id][0], 300, 50); b.theme_type_variation = "Flat"; b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		b.icon = load(APPS[id][1]); b.add_theme_constant_override("icon_max_width", 34)
-		b.add_theme_color_override("icon_normal_color", Color.WHITE); b.add_theme_color_override("icon_hover_color", Color.WHITE)
-		b.add_theme_constant_override("h_separation", 14)
+		var b := _mk_btn(APPS[id][0], 300, 46); b.theme_type_variation = "Nav"; b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.icon = load(APPS[id][1]); b.add_theme_constant_override("icon_max_width", 30)
+		for k in ["icon_normal_color", "icon_hover_color", "icon_pressed_color"]: b.add_theme_color_override(k, Color.WHITE)
 		b.pressed.connect(func(): _toggle_menu(); _open_app(id))
 		v.add_child(b)
-	var sp2 := Control.new(); sp2.custom_minimum_size.y = 4; v.add_child(sp2)
-	v.add_child(HSeparator.new())
-	var pb := _mk_btn("Profils d'environnement…", 300, 46); pb.theme_type_variation = "Flat"; pb.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	pb.icon = load(APPS["profiles"][1]); pb.add_theme_constant_override("icon_max_width", 28); pb.add_theme_constant_override("h_separation", 14)
+	var sep := HSeparator.new(); sep.add_theme_constant_override("separation", 13); v.add_child(sep)
+	var pb := _mk_btn("Profils d'environnement…", 300, 38); pb.theme_type_variation = "Nav"; pb.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	UI.set_icon(pb, "users"); pb.add_theme_constant_override("h_separation", 19)
 	pb.pressed.connect(func(): _toggle_menu(); _profiles_menu()); v.add_child(pb)
-	var q := _mk_btn("Quitter", 300, 46); q.theme_type_variation = "Flat"; q.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	q.icon = _ico("power"); q.add_theme_constant_override("icon_max_width", 22)
-	q.add_theme_constant_override("h_separation", 14)
+	var q := _mk_btn("Quitter", 300, 38); q.theme_type_variation = "Nav"; q.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	UI.set_icon(q, "power"); q.add_theme_constant_override("h_separation", 19)
 	q.pressed.connect(_quit); v.add_child(q)
 
 func _toggle_menu() -> void:
@@ -645,27 +695,28 @@ func _build_keyboard() -> void:
 	kv.add_theme_constant_override("separation", 6); kb.add_child(kv)
 	var act := HBoxContainer.new(); act.alignment = BoxContainer.ALIGNMENT_CENTER
 	act.add_theme_constant_override("separation", 6); kv.add_child(act)
-	for e in [["Tout", "all"], ["Copier", "copy"], ["Couper", "cut"], ["Coller", "paste"], ["↑", "up"], ["↓", "down"], ["⇤", "home"], ["⇥", "end"]]:
-		var ab := _mk_btn(e[0], 92 if e[0].length() > 1 else 56, 44); ab.pressed.connect(_clip_action.bind(e[1])); act.add_child(ab)
+	for e in [["Tout", "all"], ["Copier", "copy"], ["Couper", "cut"], ["Coller", "paste"], ["arrow-up", "up", "Haut"], ["arrow-down", "down", "Bas"], ["arrow-left-to-line", "home", "Début de ligne"], ["arrow-right-to-line", "end", "Fin de ligne"]]:
+		var ab := _mk_btn(e[0] if e.size() == 2 else "", 92 if e.size() == 2 else 56, 44); ab.pressed.connect(_clip_action.bind(e[1])); act.add_child(ab)
+		if e.size() > 2: UI.set_icon(ab, e[0], 20); ab.tooltip_text = e[2]
 	for r in ROWS_LOWER.size():
 		var row := HBoxContainer.new(); row.alignment = BoxContainer.ALIGNMENT_CENTER
 		row.add_theme_constant_override("separation", 6); kv.add_child(row)
 		if r == 3:
-			var sh := _mk_btn("⇧", 80); sh.pressed.connect(_toggle_shift); row.add_child(sh); shift_btns.append(sh)
+			var sh := _mk_btn("", 80); UI.set_icon(sh, "arrow-big-up", 22); sh.tooltip_text = "Majuscule"; sh.pressed.connect(_toggle_shift); row.add_child(sh); shift_btns.append(sh)
 		for c in ROWS_LOWER[r].size():
-			var k := _mk_btn(ROWS_LOWER[r][c], 50, 50)
+			var k := _mk_btn(ROWS_LOWER[r][c], 50, 50); k.add_theme_font_size_override("font_size", 19); k.add_theme_font_override("font", UI.font())
 			k.pressed.connect(_type_key.bind(r, c))
 			row.add_child(k); char_btns.append([k, r, c])
 		if r == 0:
-			var bs := _mk_btn("⌫", 80, 50); bs.pressed.connect(func(): _bs()); row.add_child(bs)
+			var bs := _mk_btn("", 80, 50); UI.set_icon(bs, "delete", 22); bs.tooltip_text = "Effacer"; bs.pressed.connect(func(): _bs()); row.add_child(bs)
 		if r == 1:
-			var en := _mk_btn("⏎", 80, 50); en.pressed.connect(func(): _ins("\n")); row.add_child(en)
+			var en := _mk_btn("", 80, 50); UI.set_icon(en, "corner-down-left", 22); en.tooltip_text = "Entrée"; en.pressed.connect(func(): _ins("\n")); row.add_child(en)
 		if r == 2:
 			var cp := _mk_btn("Maj", 80, 50); cp.pressed.connect(_toggle_caps); row.add_child(cp); shift_btns.append(cp)
 	var last := HBoxContainer.new(); last.alignment = BoxContainer.ALIGNMENT_CENTER
 	last.add_theme_constant_override("separation", 6); kv.add_child(last)
-	for p in [["←", -1], ["→", 1]]:
-		var a := _mk_btn(p[0], 70, 50); a.pressed.connect(_move.bind(p[1])); last.add_child(a)
+	for p in [["arrow-left", -1], ["arrow-right", 1]]:
+		var a := _mk_btn("", 70, 50); UI.set_icon(a, p[0], 20); a.pressed.connect(_move.bind(p[1])); last.add_child(a)
 	var space := _mk_btn("Espace", 420, 50); space.pressed.connect(func(): _ins(" "))
 	last.add_child(space)
 	var tab := _mk_btn("Tab", 70, 50); tab.pressed.connect(func(): _ins("\t")); last.add_child(tab)
@@ -864,16 +915,15 @@ func _set_active(id: String) -> void:
 		var on: bool = k == id
 		var tb: PanelContainer = wins[k]["tb"]
 		wins[k]["win"].add_theme_stylebox_override("panel", _winbox(on))
-		var st := _box(_p("tb_on") if on else _p("tb_off"), _rad())
+		var st := _box(_p("tb_on") if on else _p("tb_off"), maxi(0, _rad() - 1))
 		st.corner_radius_bottom_left = 0; st.corner_radius_bottom_right = 0
-		st.content_margin_left = 12; st.content_margin_right = 6; st.content_margin_top = 4; st.content_margin_bottom = 4
+		st.content_margin_left = 10; st.content_margin_right = 9; st.content_margin_top = 8; st.content_margin_bottom = 8
 		tb.add_theme_stylebox_override("panel", st)
 		wins[k]["title"].modulate = Color.WHITE if on else Color(1, 1, 1, 0.55)
-		if set_cfg.get("light", false): wins[k]["title"].modulate = Color.WHITE if on else Color(1, 1, 1, 0.6)
 		var t: Button = wins[k]["task"]
 		if on:
-			var sb := _box(Color(_p("ov"), 0.12), 8); sb.border_width_bottom = 3; sb.border_color = ACCENT
-			sb.content_margin_left = 12; sb.content_margin_right = 12; sb.content_margin_top = 5; sb.content_margin_bottom = 5
+			var sb := _box(Color(_p("ov"), 0.1), UI.rad_btn()); sb.border_width_bottom = 2; sb.border_color = ACCENT
+			sb.content_margin_left = 12; sb.content_margin_right = 12; sb.content_margin_top = 7; sb.content_margin_bottom = 5
 			t.add_theme_stylebox_override("normal", sb)
 		else:
 			t.remove_theme_stylebox_override("normal")
@@ -897,19 +947,23 @@ func _make_window(id: String, _title: String, sz: Vector2, pos: Vector2) -> VBox
 	var tb := PanelContainer.new()
 	tb.gui_input.connect(_title_input.bind(id))
 	wv.add_child(tb)
-	var tbh := HBoxContainer.new(); tbh.add_theme_constant_override("separation", 2); tb.add_child(tbh)
+	# Barre de titre façon headerbar : icône à gauche, titre gras centré, contrôles ronds à droite
+	var tbh := HBoxContainer.new(); tbh.add_theme_constant_override("separation", 6); tb.add_child(tbh)
+	var lead := HBoxContainer.new(); lead.custom_minimum_size.x = 26 * 3 + 8 * 2; tbh.add_child(lead)
 	var ti := TextureRect.new(); ti.texture = load(APPS[id][1]); ti.custom_minimum_size = Vector2(20, 20)
 	ti.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; ti.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	ti.mouse_filter = Control.MOUSE_FILTER_PASS; tbh.add_child(ti)
-	var tl := Label.new(); tl.text = "  " + title
-	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL; tl.add_theme_font_size_override("font_size", 15)
+	ti.size_flags_vertical = Control.SIZE_SHRINK_CENTER; ti.mouse_filter = Control.MOUSE_FILTER_PASS; lead.add_child(ti)
+	var tl := UI.heading(title); tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL; tl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS; tl.custom_minimum_size.x = 10
 	tl.mouse_filter = Control.MOUSE_FILTER_PASS
 	tbh.add_child(tl)
-	var mn := _icon_btn("minimize", "Flat", 40, 30, 14); mn.pressed.connect(_toggle_win.bind(id)); tbh.add_child(mn)
-	var mx := _icon_btn("maximize", "Flat", 40, 30, 14); mx.pressed.connect(_toggle_max.bind(id)); tbh.add_child(mx)
-	var cl := _icon_btn("close", "Close", 40, 30, 14); cl.pressed.connect(_close_win.bind(id)); tbh.add_child(cl)
-	var tk := _mk_btn(title, 150, 42); tk.theme_type_variation = "Flat"
-	tk.icon = load(APPS[id][1]); tk.add_theme_constant_override("icon_max_width", 24)
+	var ctl := HBoxContainer.new(); ctl.add_theme_constant_override("separation", 8); tbh.add_child(ctl)
+	var mn := _icon_btn("minimize", "Circular", 26, 26, 12); mn.tooltip_text = "Réduire"; mn.pressed.connect(_toggle_win.bind(id)); ctl.add_child(mn)
+	var mx := _icon_btn("maximize", "Circular", 26, 26, 12); mx.tooltip_text = "Agrandir"; mx.pressed.connect(_toggle_max.bind(id)); ctl.add_child(mx)
+	var cl := _icon_btn("close", "Circular", 26, 26, 12); cl.tooltip_text = "Fermer"; cl.pressed.connect(_close_win.bind(id)); ctl.add_child(cl)
+	for cb in [mn, mx, cl]: cb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var tk := _mk_btn(title, 140, 42); tk.theme_type_variation = "Flat"; tk.add_theme_font_override("font", UI.font(500))
+	tk.icon = load(APPS[id][1]); tk.add_theme_constant_override("icon_max_width", 22); tk.add_theme_constant_override("h_separation", 8)
 	tk.add_theme_color_override("icon_normal_color", Color.WHITE); tk.add_theme_color_override("icon_hover_color", Color.WHITE)
 	tk.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	tk.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_RIGHT: _win_menu(id, Vector2(tk.global_position.x, tk.global_position.y - 6.0), true))
@@ -984,16 +1038,12 @@ func _close_win(id: String) -> void:
 # ---------------------------------------------------------------- Applications
 
 func _app_notepad() -> void:
-	var wv := _make_window("notepad", "📝 Bloc-notes", Vector2(900, 560), Vector2(150, 20))
+	var wv := _make_window("notepad", "", Vector2(900, 560), Vector2(150, 20))
 	title_lbl = wins["notepad"]["title"]
-	var mm := MarginContainer.new()
-	for k in ["left", "right", "top"]: mm.add_theme_constant_override("margin_" + k, 8)
-	wv.add_child(mm)
-	var mb := HBoxContainer.new(); mm.add_child(mb)
-	for e in [["Nouveau", "new", _new], ["Enregistrer", "save", _save]]:
-		var bn := _mk_btn(e[0], 100, 40); bn.theme_type_variation = "Flat"; bn.icon = _ico(e[1])
-		bn.add_theme_constant_override("icon_max_width", 18); bn.add_theme_font_size_override("font_size", 16)
-		bn.pressed.connect(e[2]); mb.add_child(bn)
+	var hbar := UI.header_bar(); wv.add_child(hbar)
+	for e in [["Nouveau", "file-plus", _new], ["Enregistrer", "save", _save]]:
+		var bn := _mk_btn(e[0], 0, UI.BTN); bn.theme_type_variation = "Flat"; UI.set_icon(bn, e[1])
+		bn.pressed.connect(e[2]); UI.bar_start(hbar).add_child(bn)
 	edit = TextEdit.new(); edit.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	edit.virtual_keyboard_enabled = false
 	edit.placeholder_text = "Écrivez ici…"
@@ -1001,13 +1051,12 @@ func _app_notepad() -> void:
 	edit.text_changed.connect(func(): dirty = true; _update_status())
 	edit.caret_changed.connect(_update_status)
 	var em := MarginContainer.new(); em.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	for k in ["left", "right", "top"]: em.add_theme_constant_override("margin_" + k, 10)
+	for k in ["left", "right", "top"]: em.add_theme_constant_override("margin_" + k, 12)
 	em.add_child(edit); wv.add_child(em)
-	status = Label.new(); status.add_theme_font_size_override("font_size", 13)
-	status.theme_type_variation = "Muted"
+	status = UI.small("")
 	var sm := MarginContainer.new()
-	for k in ["left", "right"]: sm.add_theme_constant_override("margin_" + k, 14)
-	for k in ["top", "bottom"]: sm.add_theme_constant_override("margin_" + k, 7)
+	for k in ["left", "right"]: sm.add_theme_constant_override("margin_" + k, 18)
+	for k in ["top", "bottom"]: sm.add_theme_constant_override("margin_" + k, 6)
 	sm.add_child(status); wv.add_child(sm)
 	if FileAccess.file_exists(SAVE_PATH):
 		edit.text = FileAccess.get_file_as_string(SAVE_PATH)
@@ -1015,23 +1064,17 @@ func _app_notepad() -> void:
 	edit.grab_focus()
 	_update_status()
 
-## ---- Paramètres : sections en cartes, lignes « libellé | réglage » qui passent à la ligne sur petit écran, défilement vertical.
+## ---- Paramètres : page de préférences (groupes titrés de lignes « libellé | réglage »), gabarits de apps/ui.gd.
 func _s_card(parent: Control, title: String) -> VBoxContainer:
-	var v := UI.card(parent, 14)
-	v.add_theme_constant_override("separation", 12)
-	var h := UI.label(title.to_upper(), UI.T_TINY, "Section"); v.add_child(h)
-	return v
+	return UI.prefs_group(parent, title)
 
-## Une ligne de réglage : le libellé à gauche, le contrôle à droite ; s'il manque de place, le contrôle passe dessous.
-func _s_row(card: Control, text: String, ctl: Control, min_ctl := 160.0) -> void:
-	var f := HFlowContainer.new(); f.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	f.add_theme_constant_override("h_separation", 12); f.add_theme_constant_override("v_separation", 6); card.add_child(f)
-	var l := Label.new(); l.text = text; l.custom_minimum_size.x = 150; l.add_theme_font_size_override("font_size", 16); f.add_child(l)
-	ctl.custom_minimum_size.x = maxf(ctl.custom_minimum_size.x, min_ctl); ctl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	f.add_child(ctl)
+## Une ligne de réglage : le libellé à gauche, le contrôle à droite.
+func _s_row(card: Control, text: String, ctl: Control, min_ctl := 200.0, sub := "") -> void:
+	ctl.custom_minimum_size.x = maxf(ctl.custom_minimum_size.x, min_ctl)
+	UI.add_row(card, UI.row(text, sub, "", ctl))
 
 func _s_note(card: Control, text: String) -> void:
-	var l := _mlbl(text, 13); l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; l.custom_minimum_size.x = 10; l.size_flags_horizontal = Control.SIZE_EXPAND_FILL; card.add_child(l)
+	UI.group_note(card, text)
 
 func _s_opt(items: Array, current: int, cb: Callable) -> OptionButton:
 	var o := OptionButton.new(); o.focus_mode = Control.FOCUS_NONE; o.clip_text = true; o.fit_to_longest_item = false
@@ -1039,35 +1082,39 @@ func _s_opt(items: Array, current: int, cb: Callable) -> OptionButton:
 	o.select(maxi(0, current)); o.item_selected.connect(cb); return o
 
 func _s_slider(lo: float, hi: float, step: float, val: float, cb: Callable) -> HBoxContainer:
-	var hb := HBoxContainer.new(); hb.add_theme_constant_override("separation", 10)
+	var hb := HBoxContainer.new(); hb.add_theme_constant_override("separation", 6)
 	var s := HSlider.new(); s.min_value = lo; s.max_value = hi; s.step = step; s.value = val; s.focus_mode = Control.FOCUS_NONE
 	s.custom_minimum_size = Vector2(110, 32); s.size_flags_horizontal = Control.SIZE_EXPAND_FILL; s.size_flags_vertical = Control.SIZE_SHRINK_CENTER; hb.add_child(s)
-	var v := Label.new(); v.custom_minimum_size.x = 56; v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT; v.theme_type_variation = "Muted"; hb.add_child(v)
+	var v := UI.small(""); v.custom_minimum_size.x = 48; v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT; hb.add_child(v)
 	s.value_changed.connect(func(x: float): cb.call(x, v)); cb.call(val, v)
 	return hb
 
+## Rangée de pastilles (fonds, couleurs) placée en suffixe d'une ligne : alignée à droite, passe à la ligne si besoin.
+func _s_flow() -> HFlowContainer:
+	var sw := HFlowContainer.new(); sw.add_theme_constant_override("h_separation", 6); sw.add_theme_constant_override("v_separation", 6)
+	sw.alignment = FlowContainer.ALIGNMENT_END; sw.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sw.size_flags_stretch_ratio = 1.5
+	return sw
+
+func _s_switch(on: bool, cb: Callable) -> CheckButton:
+	var c := CheckButton.new(); c.focus_mode = Control.FOCUS_NONE; c.button_pressed = on; c.toggled.connect(cb); return c
+
 func _app_settings() -> void:
 	var wv := _make_window("settings", "", Vector2(600, 700), Vector2(200, 20))
-	var sc := ScrollContainer.new(); sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; wv.add_child(sc)
-	var mg := MarginContainer.new(); mg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	for k in ["left", "right", "top", "bottom"]: mg.add_theme_constant_override("margin_" + k, 14)
-	sc.add_child(mg)
-	var page := VBoxContainer.new(); page.add_theme_constant_override("separation", 14); page.size_flags_horizontal = Control.SIZE_EXPAND_FILL; mg.add_child(page)
-	var ttl := Label.new(); ttl.text = "Paramètres"; ttl.add_theme_font_size_override("font_size", 26); page.add_child(ttl)
+	var page := UI.prefs_page(wv)
 
 	# --- Affichage
 	var c := _s_card(page, "Affichage")
-	var sw := HFlowContainer.new(); sw.add_theme_constant_override("h_separation", 8); sw.add_theme_constant_override("v_separation", 8)
+	var sw := _s_flow()
 	for i in BG_GRADS.size():
-		var b := _mk_btn("", 56, 40)
+		var b := _mk_btn("", 40, 28); b.tooltip_text = "Fond %d" % (i + 1)
 		var st := StyleBoxTexture.new(); st.texture = _grad_tex(i, 64, 44)
 		var sth := StyleBoxTexture.new(); sth.texture = st.texture; sth.modulate_color = Color(1.25, 1.25, 1.25)
 		b.add_theme_stylebox_override("normal", st); b.add_theme_stylebox_override("hover", sth); b.add_theme_stylebox_override("pressed", sth)
 		b.pressed.connect(func(): _set_gradient(i))
 		sw.add_child(b)
-	var pick := _mk_btn("Image…", 0, 40); pick.pressed.connect(_pick_wallpaper); sw.add_child(pick)
-	_s_row(c, "Fond d'écran", sw, 200)
+	_s_row(c, "Fond d'écran", sw, 190)
+	var pick := _mk_btn("Choisir…", 0, UI.BTN); UI.set_icon(pick, "image"); pick.pressed.connect(_pick_wallpaper)
+	_s_row(c, "Image de fond", pick, 0, "Une image de l'appareil à la place du dégradé")
 	_s_row(c, "Thème", _s_opt(["Sombre", "Clair"], 1 if set_cfg.get("light", false) else 0, func(i: int): _set_light(i == 1)))
 	_s_row(c, "Zoom de l'interface", _s_slider(0.5, 2.2, 0.05, float(set_cfg["zoom"]), func(x: float, l: Label): _set_zoom(x); l.text = "%d %%" % int(float(set_cfg["zoom"]) * 100)))
 	_s_row(c, "Texte du Bloc-notes", _s_slider(14, 40, 1, float(set_cfg["font"]), func(x: float, l: Label):
@@ -1082,9 +1129,7 @@ func _app_settings() -> void:
 	var cmodes := ["auto", "on", "off"]
 	_s_row(c, "Curseur", _s_opt(["Auto (écran tactile)", "Toujours visible", "Jamais"], cmodes.find(set_cfg["cursor"]),
 		func(i: int): set_cfg["cursor"] = cmodes[i]; _save_settings(); pointer.set("mode", cmodes[i]); pointer.queue_redraw()))
-	var pc := CheckButton.new(); pc.focus_mode = Control.FOCUS_NONE; pc.button_pressed = bool(set_cfg["pad"]); pc.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	pc.toggled.connect(func(on: bool): set_cfg["pad"] = on; _save_settings(); _update_flex())
-	_s_row(c, "Pavé tactile", pc, 60)
+	_s_row(c, "Pavé tactile", _s_switch(bool(set_cfg["pad"]), func(on: bool): set_cfg["pad"] = on; _save_settings(); _update_flex()), 0)
 	_s_row(c, "Vitesse du curseur", _s_slider(0.2, 2.5, 0.1, float(set_cfg["pad_speed"]), func(x: float, l: Label): set_cfg["pad_speed"] = x; l.text = "%.1f" % x; flex.set("gain", x); _save_settings()))
 	_s_note(c, "Le pavé s'affiche en bas de l'écran, et tout seul quand un téléphone pliable est plié à moitié. Deux doigts qui s'écartent ou se rapprochent dessus règlent le zoom.")
 
@@ -1095,60 +1140,55 @@ func _app_settings() -> void:
 	_s_note(c, "Visuel : bouton dans la barre des tâches. Aucun : pour un clavier physique ou secondaire.")
 
 	# --- Langues
-	c = _s_card(page, "Langues (Traducteur, Dictionnaire, Music)")
+	c = _s_card(page, "Langues")
+	_s_note(c, "Utilisées par le Traducteur, le Dictionnaire et Music.")
 	var names: Array = GL.map(func(l): return l[0])
 	var so := _s_opt(names, GL.find_custom(func(l): return l[1] == set_cfg["src"]), func(i: int): set_cfg["src"] = GL[i][1]; _apply_langs())
 	var to := _s_opt(names, GL.find_custom(func(l): return l[1] == set_cfg["tgt"]), func(i: int): set_cfg["tgt"] = GL[i][1]; _apply_langs())
 	_s_row(c, "Langue d'origine", so); _s_row(c, "Traduire vers", to)
-	var swp := _mk_btn("⇄  Inverser les deux langues", 0, 42)
-	swp.pressed.connect(func():
+	var swp := UI.icon_btn("arrow-left-right", "Inverser les deux langues", func():
 		var t: String = set_cfg["src"]; set_cfg["src"] = set_cfg["tgt"]; set_cfg["tgt"] = t
-		so.select(GL.find_custom(func(l): return l[1] == set_cfg["src"])); to.select(GL.find_custom(func(l): return l[1] == set_cfg["tgt"])); _apply_langs())
-	c.add_child(swp)
+		so.select(GL.find_custom(func(l): return l[1] == set_cfg["src"])); to.select(GL.find_custom(func(l): return l[1] == set_cfg["tgt"])); _apply_langs(), "")
+	_s_row(c, "Inverser les deux langues", swp, 0)
 
 	# --- Android : écran d'accueil
 	if OS.get_name() == "Android" and Engine.has_singleton("LangLauncher"):
 		c = _s_card(page, "Écran d'accueil")
-		var hb := _mk_btn("Choisir l'écran d'accueil", 0, 46); hb.pressed.connect(func(): Engine.get_singleton("LangLauncher").chooseHome()); c.add_child(hb)
-		_s_note(c, "Android affiche la liste des écrans d'accueil : choisis LangOS pour l'utiliser, ou ton ancien pour y revenir.")
+		var hb := _mk_btn("Choisir", 0, UI.BTN); hb.pressed.connect(func(): Engine.get_singleton("LangLauncher").chooseHome())
+		_s_row(c, "Écran d'accueil", hb, 0, "Android affiche la liste des écrans d'accueil : choisis LangOS pour l'utiliser, ou ton ancien pour y revenir.")
 
 	# --- Serveur de traduction
 	c = _s_card(page, "Serveur de traduction (Ollama)")
 	var le := LineEdit.new(); le.text = set_cfg["ollama"]; le.virtual_keyboard_enabled = false; le.placeholder_text = "http://127.0.0.1:11434"
 	le.text_changed.connect(func(t: String): set_cfg["ollama"] = t.strip_edges().rstrip("/"); _save_settings())
-	_s_row(c, "Adresse", le, 200)
+	_s_row(c, "Adresse", le, 240)
 	_s_note(c, "Sur téléphone : adresse d'un PC qui fait tourner Ollama, par exemple http://192.168.1.20:11434. Sinon le Traducteur utilise le modèle sur l'appareil.")
 
 	# --- À propos
 	c = _s_card(page, "À propos")
-	_s_note(c, "LangOS version %s" % VERSION)
+	UI.add_row(c, UI.row("LangOS", "", "", UI.muted(UI.label("Version %s" % VERSION))))
+	UI.add_row(c, UI.row("Police et icônes", "Inter (licence OFL) et Lucide (licence ISC)"))
 
 func _app_system() -> void:
-	var wv := _make_window("system", "🖥 Système", Vector2(520, 360), Vector2(260, 80))
-	var m := MarginContainer.new(); m.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	for k in ["left", "right", "top", "bottom"]: m.add_theme_constant_override("margin_" + k, 18)
-	wv.add_child(m)
-	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 8); m.add_child(v)
+	var wv := _make_window("system", "", Vector2(520, 520), Vector2(260, 80))
+	var page := UI.prefs_page(wv)
 	var gv := Engine.get_version_info()
 	var mem := OS.get_memory_info()
 	var rows := [
-		["Application", "Bloc-notes v" + VERSION],
-		["Système", "%s %s" % [OS.get_name(), OS.get_version()]],
-		["Moteur", "Godot %s" % gv["string"]],
-		["Processeur", "%s (%d cœurs)" % [OS.get_processor_name(), OS.get_processor_count()]],
-		["Carte graphique", RenderingServer.get_video_adapter_name()],
-		["Mémoire", "%d Mo" % (int(mem.get("physical", 0)) / 1048576) if int(mem.get("physical", 0)) > 0 else "inconnue"],
-		["Écran", "%dx%d" % [DisplayServer.window_get_size().x, DisplayServer.window_get_size().y]],
-		["Données", ProjectSettings.globalize_path("user://")],
+		["Application", "Bloc-notes v" + VERSION, "app-window"],
+		["Système", "%s %s" % [OS.get_name(), OS.get_version()], "monitor"],
+		["Moteur", "Godot %s" % gv["string"], "package"],
+		["Processeur", "%s (%d cœurs)" % [OS.get_processor_name(), OS.get_processor_count()], "server"],
+		["Carte graphique", RenderingServer.get_video_adapter_name(), "image"],
+		["Mémoire", "%d Mo" % (int(mem.get("physical", 0)) / 1048576) if int(mem.get("physical", 0)) > 0 else "inconnue", "hard-drive"],
+		["Écran", "%dx%d" % [DisplayServer.window_get_size().x, DisplayServer.window_get_size().y], "maximize-2"],
+		["Données", ProjectSettings.globalize_path("user://"), "folder"],
 	]
-	for r in rows:
-		var h := HBoxContainer.new(); v.add_child(h)
-		var k := _dlbl(r[0], 16); k.custom_minimum_size.x = 140; h.add_child(k)
-		var val := _dlbl(str(r[1]), 16); val.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		val.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY; h.add_child(val)
+	var c := UI.prefs_group(page, "Cet appareil")
+	for r in rows: UI.add_row(c, UI.row(r[0], str(r[1]), r[2]))
 
 func _app_update() -> void:
-	var wv := _make_window("update", "⬆ Mise à jour", Vector2(480, 240), Vector2(280, 100))
+	var wv := _make_window("update", "", Vector2(480, 240), Vector2(280, 100))
 	var m := MarginContainer.new(); m.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	for k in ["left", "right", "top", "bottom"]: m.add_theme_constant_override("margin_" + k, 18)
 	wv.add_child(m)
@@ -1211,7 +1251,7 @@ func _app_translate() -> void:
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 10); m.add_child(v)
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 8); v.add_child(row)
 	tr_pair = _dlbl(_pair_text(), 18)
-	var sw := _mk_btn("⇄", 48, 40); sw.pressed.connect(_tr_swap)
+	var sw := UI.icon_btn("arrow-left-right", "Inverser les langues", _tr_swap, "", 40)
 	row.add_child(tr_pair); row.add_child(sw)
 	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(sp)
 	tr_engine = OptionButton.new(); tr_engine.focus_mode = Control.FOCUS_NONE
@@ -1636,10 +1676,10 @@ func _app_dict() -> void:
 	dic_list = ItemList.new(); dic_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	dic_list.item_selected.connect(_dic_show); left.add_child(dic_list)
 	var pg := HBoxContainer.new(); pg.add_theme_constant_override("separation", 6); left.add_child(pg)
-	var pv := _mk_btn("◀", 48, 40); pv.pressed.connect(_dic_page.bind(-1)); pg.add_child(pv)
+	var pv := UI.icon_btn("chevron-left", "Page précédente", _dic_page.bind(-1), "", 40); pg.add_child(pv)
 	dic_info = _mlbl("", 13); dic_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	dic_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; pg.add_child(dic_info)
-	var nx := _mk_btn("▶", 48, 40); nx.pressed.connect(_dic_page.bind(1)); pg.add_child(nx)
+	var nx := UI.icon_btn("chevron-right", "Page suivante", _dic_page.bind(1), "", 40); pg.add_child(nx)
 	var pc := PanelContainer.new(); pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pc.add_theme_stylebox_override("panel", _box(_p("field"), _rad(), _p("edge"), 1, 0, 16)); hb.add_child(pc)
 	dic_def = RichTextLabel.new(); dic_def.bbcode_enabled = true; dic_def.selection_enabled = true; dic_def.context_menu_enabled = true
@@ -1782,7 +1822,7 @@ func _update_status() -> void:
 	status.text = "  Ligne %d, Col %d   •   %d caractères   •   %s" % [
 		edit.get_caret_line() + 1, edit.get_caret_column() + 1, edit.text.length(),
 		"modifié" if dirty else "enregistré"]
-	if title_lbl and is_instance_valid(title_lbl): title_lbl.text = "  Bloc-notes" + (" •" if dirty else "")
+	if title_lbl and is_instance_valid(title_lbl): title_lbl.text = "Bloc-notes" + (" •" if dirty else "")
 
 
 # ---------------------------------------------------------------- Mise à jour
@@ -1895,7 +1935,8 @@ func _real() -> bool:
 func _restyle() -> void:
 	_build_theme()
 	(bar_panel.get_theme_stylebox("panel") as StyleBoxFlat).bg_color = _p("bar")
-	menu.add_theme_stylebox_override("panel", _box(_p("menu"), _rad() + 4, _p("edge"), 1, 28, 12))
+	(bar_panel.get_theme_stylebox("panel") as StyleBoxFlat).border_color = _p("edge")
+	menu.add_theme_stylebox_override("panel", _menu_box())
 	for k in ["icon_normal_color", "icon_hover_color"]: start_btn.add_theme_color_override(k, ACCENT)
 	if menu_hi: menu_hi.modulate = ACCENT
 	if kb != null: var ks := _box(_p("kb"), _rad() + 4, _p("edge"), 1, 24, 12); ks.corner_radius_bottom_left = 0; ks.corner_radius_bottom_right = 0; kb.add_theme_stylebox_override("panel", ks)
@@ -1948,13 +1989,16 @@ func _popup_menu(items: Array, at: Vector2, up := false) -> void:
 	ctx_catcher = Control.new(); ctx_catcher.set_anchors_preset(Control.PRESET_FULL_RECT)
 	ctx_catcher.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed: _hide_ctx())
 	add_child(ctx_catcher)
-	ctx_menu = PanelContainer.new(); ctx_menu.add_theme_stylebox_override("panel", _box(_p("menu"), 12, _p("edge"), 1, 18, 6))
+	ctx_menu = PanelContainer.new(); ctx_menu.add_theme_stylebox_override("panel", _box(_p("menu"), UI.rad(), _p("edge"), 1, 18, 6))
 	add_child(ctx_menu)
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 0); ctx_menu.add_child(v)
 	for it in items:
-		if it == null: v.add_child(HSeparator.new()); continue
-		var b := _mk_btn(it[0], 230, 42); b.theme_type_variation = "Flat"; b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		b.add_theme_font_size_override("font_size", 17)
+		if it == null:
+			var sep := HSeparator.new(); sep.add_theme_constant_override("separation", 7); v.add_child(sep); continue
+		# un libellé préfixé « ✓ » est un élément coché : la coche devient une icône à droite
+		var t := str(it[0]); var chk := t.begins_with("✓ ")
+		var b := _mk_btn(t.trim_prefix("✓ "), 220, 36); b.theme_type_variation = "Nav"; b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		if chk: UI.set_icon(b, "check"); b.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		b.pressed.connect(func(): _hide_ctx(); it[1].call())
 		v.add_child(b)
 	ctx_menu.size = ctx_menu.get_combined_minimum_size()
@@ -1971,7 +2015,7 @@ func _context_at(pos: Vector2) -> bool:
 		if not Rect2(c.position, c.size).has_point(p): continue
 		if desk_icons.has(c): _icon_menu(str(c.get_meta("id")), pos); return true
 		for id in wins:
-			if wins[id]["win"] == c and p.y < c.position.y + 42.0: _win_menu(id, pos); return true
+			if wins[id]["win"] == c and p.y < c.position.y + 44.0: _win_menu(id, pos); return true
 		return false
 	_desk_menu(pos); return true
 
@@ -2167,13 +2211,7 @@ func notify(title: String, text := "") -> void:
 	if notifs.size() > 30: notifs.resize(30)
 	unread += 1; _upd_bell()
 	if is_instance_valid(toast): toast.queue_free()
-	toast = PanelContainer.new(); toast.add_theme_stylebox_override("panel", _box(_p("menu"), 12, ACCENT, 1, 20, 12))
-	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 2); toast.add_child(v)
-	var l1 := Label.new(); l1.text = title; l1.add_theme_font_size_override("font_size", 17); v.add_child(l1)
-	if text != "":
-		var l2 := _mlbl(text, 15); l2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		l2.custom_minimum_size.x = minf(300.0, size.x - 50.0); v.add_child(l2)
-	toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	toast = UI.toast(title, text, "bell", minf(280.0, size.x - 90.0))
 	add_child(toast); toast.size = toast.get_combined_minimum_size()
 	var end := Vector2(size.x - toast.size.x - 12.0, 12.0)
 	toast.position = end + Vector2(toast.size.x + 20.0, 0)
@@ -2194,22 +2232,23 @@ func _toggle_notifs() -> void:
 	np_catcher = Control.new(); np_catcher.set_anchors_preset(Control.PRESET_FULL_RECT)
 	np_catcher.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed: _close_notifs())
 	add_child(np_catcher)
-	np_panel = PanelContainer.new(); np_panel.add_theme_stylebox_override("panel", _box(_p("menu"), _rad() + 4, _p("edge"), 1, 28, 14)); add_child(np_panel)
-	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 8); np_panel.add_child(v)
+	var nb := _menu_box(); nb.set_content_margin_all(12)
+	np_panel = PanelContainer.new(); np_panel.add_theme_stylebox_override("panel", nb); add_child(np_panel)
+	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 6); np_panel.add_child(v)
 	var h := HBoxContainer.new(); v.add_child(h)
-	var t := Label.new(); t.text = "Notifications"; t.add_theme_font_size_override("font_size", 19); t.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h.add_child(t)
-	var clr := _mk_btn("Tout effacer", 0, 40); clr.theme_type_variation = "Flat"; clr.add_theme_font_size_override("font_size", 15)
+	var t := UI.heading("Notifications"); t.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h.add_child(t)
+	var clr := _mk_btn("Tout effacer", 0, UI.BTN); clr.theme_type_variation = "Flat"; clr.visible = not notifs.is_empty()
 	clr.pressed.connect(func(): notifs.clear(); _close_notifs()); h.add_child(clr)
 	var sc := ScrollContainer.new(); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	var lw := minf(330.0, size.x - 40.0)
 	sc.custom_minimum_size = Vector2(lw, minf(380.0, size.y - bar_h - 130.0)); v.add_child(sc)
-	var list := VBoxContainer.new(); list.add_theme_constant_override("separation", 8); list.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.add_child(list)
-	if notifs.is_empty(): list.add_child(_mlbl("Aucune notification", 15))
+	var list := VBoxContainer.new(); list.add_theme_constant_override("separation", 6); list.size_flags_horizontal = Control.SIZE_EXPAND_FILL; list.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.add_child(list)
+	if notifs.is_empty(): list.add_child(UI.status_page("bell", "Aucune notification", "", null, true))
 	for n in notifs:
-		var c := VBoxContainer.new(); c.add_theme_constant_override("separation", 0); list.add_child(c)
-		var l1 := Label.new(); l1.text = "%s  ·  %s" % [n["t"], n["time"]]; l1.add_theme_font_size_override("font_size", 16); l1.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; c.add_child(l1)
-		if n["x"] != "":
-			var l2 := _mlbl(n["x"], 14); l2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; c.add_child(l2)
-		list.add_child(HSeparator.new())
+		var c := UI.card(list, 9); c.add_theme_constant_override("separation", 2)
+		var hh := HBoxContainer.new(); hh.add_theme_constant_override("separation", 6); c.add_child(hh)
+		var l1 := UI.heading(str(n["t"])); l1.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; l1.custom_minimum_size.x = 10; l1.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hh.add_child(l1)
+		var lt := UI.small(str(n["time"])); lt.size_flags_vertical = Control.SIZE_SHRINK_BEGIN; hh.add_child(lt)
+		if n["x"] != "": c.add_child(UI.note(str(n["x"])))
 	np_panel.size = np_panel.get_combined_minimum_size()
 	np_panel.position = Vector2(size.x - np_panel.size.x - 10.0, size.y - bar_h - 10.0 - np_panel.size.y)

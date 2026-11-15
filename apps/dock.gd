@@ -34,14 +34,14 @@ func refresh() -> void:
 	visible = on; m.task_box.visible = not on
 	set_process(on and bool(m.set_cfg.get("dock_hide", false)))
 	if not on: return
-	add_theme_stylebox_override("panel", m._box(Color(m._p("menu"), 0.88), m._rad() + 6, m._p("edge"), 1, 18, 8))
+	add_theme_stylebox_override("panel", m._box(Color(m._p("menu"), 0.9), m._rad() + 9, m._p("edge"), 1, 18, 6))
 	for c in box.get_children():
 		box.remove_child(c); c.queue_free()
 	items.clear()
 	var s := int(float(m.set_cfg.get("isize", 56)) * 0.8)
 	for id in ids():
-		var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 2)
-		var b: Button = m._mk_btn("", s + 10, s + 10); b.theme_type_variation = "Flat"
+		var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 1)
+		var b: Button = m._mk_btn("", s + 10, s + 10); b.theme_type_variation = "Nav"
 		b.icon = load(m.APPS[id][1]); b.add_theme_constant_override("icon_max_width", s)
 		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		for k in ["icon_normal_color", "icon_hover_color", "icon_pressed_color"]: b.add_theme_color_override(k, Color.WHITE)
@@ -50,9 +50,9 @@ func refresh() -> void:
 		b.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_RIGHT: _menu(id, b))
 		b.mouse_entered.connect(func(): m.fx.hover(b, true, 1.15)); b.mouse_exited.connect(func(): m.fx.hover(b, false))
 		v.add_child(b)
-		var cc := CenterContainer.new(); cc.custom_minimum_size.y = 7; v.add_child(cc)
-		var dot := Panel.new(); dot.custom_minimum_size = Vector2(6, 6); dot.visible = m.wins.has(id)
-		dot.add_theme_stylebox_override("panel", m._box(m.ACCENT if m.active == id else Color(m._p("text"), 0.6), 3))
+		var cc := CenterContainer.new(); cc.custom_minimum_size.y = 5; v.add_child(cc)
+		var dot := Panel.new(); dot.custom_minimum_size = Vector2(14 if m.active == id else 5, 4); dot.visible = m.wins.has(id)
+		dot.add_theme_stylebox_override("panel", m._box(m.ACCENT if m.active == id else Color(m._p("text"), 0.6), 2))
 		cc.add_child(dot)
 		box.add_child(v); items[id] = b
 	place(true)

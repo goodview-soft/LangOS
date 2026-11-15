@@ -111,7 +111,7 @@ class MdHL extends SyntaxHighlighter:
 
 # ------------------------------------------------------------------ construction
 func _btn(t: String, cb: Callable, tip := "", primary := false, w := 0) -> Button:
-	var b := UI.button(t, primary, w); b.pressed.connect(cb); b.tooltip_text = tip; b.clip_text = true; return b
+	var b := UI.button(t, primary, w); b.pressed.connect(cb); b.tooltip_text = tip; b.clip_text = w > 0; return b
 
 func build() -> void:
 	vault = m.notes_vault() if m != null and m.has_method("notes_vault") else Vault.new()
@@ -123,9 +123,9 @@ func build() -> void:
 	var root_v := VBoxContainer.new(); root_v.set_anchors_preset(Control.PRESET_FULL_RECT); root_v.add_theme_constant_override("separation", UI.S1); add_child(root_v)
 	# barre d'outils
 	var tb := UI.toolbar(); root_v.add_child(tb)
-	b_left = _btn("☰", func(): _toggle_left(), "Dossiers et étiquettes", false, 40); tb.add_child(b_left)
-	b_back = _btn("◀", func(): _nav(-1), "Retour", false, 40); tb.add_child(b_back)
-	b_fwd = _btn("▶", func(): _nav(1), "Avant", false, 40); tb.add_child(b_fwd)
+	b_left = UI.icon_btn("panel-left", "Dossiers et étiquettes", func(): _toggle_left()); tb.add_child(b_left)
+	b_back = UI.icon_btn("chevron-left", "Retour", func(): _nav(-1)); tb.add_child(b_back)
+	b_fwd = UI.icon_btn("chevron-right", "Avant", func(): _nav(1)); tb.add_child(b_fwd)
 	tb.add_child(_btn("+ Note", func(): _new_flow(), "Nouvelle note (Ctrl+N)", true, 0))
 	tb.add_child(_btn("Aujourd'hui", func(): open_daily(), "Note du jour (Ctrl+D)"))
 	mode_opt = OptionButton.new(); mode_opt.custom_minimum_size = Vector2(110, UI.TOUCH)
@@ -172,8 +172,8 @@ func _build_left() -> void:
 	tree.custom_minimum_size = Vector2(120, 120); tree.item_selected.connect(_tree_selected); tree.item_collapsed.connect(_tree_collapsed)
 	tree.set_drag_forwarding(_tree_drag, _tree_can_drop, _tree_drop); v.add_child(tree)
 	var ft := UI.toolbar(); v.add_child(ft)
-	for e in [["+ Dossier", func(): _new_dir()], ["Renommer", func(): _rename_target()], ["★", func(): _fav_target()], ["Supprimer", func(): _delete_target()]]:
-		var b := _btn(e[0], e[1], "", false, 0); b.custom_minimum_size.x = 40; ft.add_child(b)
+	for e in [["folder-plus", "Nouveau dossier", func(): _new_dir()], ["pencil", "Renommer", func(): _rename_target()], ["star", "Favori", func(): _fav_target()], ["trash-2", "Supprimer", func(): _delete_target()]]:
+		ft.add_child(UI.icon_btn(e[0], e[1], e[2]))
 
 func _side_btns() -> void:
 	b_side0.theme_type_variation = "Accent" if side_mode == 0 else "Flat"
@@ -261,8 +261,8 @@ func _layout() -> void:
 	empty.visible = not has and not show_graph
 	tabs_sc.visible = not tabs.is_empty()
 	b_back.disabled = hpos <= 0; b_fwd.disabled = hpos >= hist.size() - 1
-	b_left.theme_type_variation = "Accent" if left_on else "Flat"; b_right.theme_type_variation = "Accent" if right_on else "Flat"
-	b_graph.theme_type_variation = "Accent" if show_graph else "Flat"
+	b_left.theme_type_variation = "FlatOn" if left_on else "Flat"; b_right.theme_type_variation = "FlatOn" if right_on else "Flat"
+	b_graph.theme_type_variation = "FlatOn" if show_graph else "Flat"
 	mode_opt.select(mode)
 	if prev_box.visible: prev_t.start()
 
@@ -324,7 +324,7 @@ func _fill_tabs() -> void:
 	for k in tabs:
 		var hb := HBoxContainer.new(); hb.add_theme_constant_override("separation", 0); tabs_box.add_child(hb)
 		var b := _btn(vault.name_of(k).left(22), func(): open_note(k), k, k == cur and not show_graph); hb.add_child(b)
-		hb.add_child(_btn("×", func(): _close_tab(k), "Fermer", false, 32))
+		hb.add_child(UI.icon_btn("x", "Fermer", func(): _close_tab(k), "Flat", 30))
 
 func _close_tab(k: String) -> void:
 	if k == cur: _save_now()
@@ -480,7 +480,7 @@ func _ac_accept(i: int) -> void:
 # ------------------------------------------------------------------ arborescence
 func _note_item(parent: TreeItem, p: String, label := "") -> TreeItem:
 	var it := tree.create_item(parent); it.set_text(0, label if label != "" else vault.name_of(p)); it.set_metadata(0, {"k": "note", "p": p}); it.set_tooltip_text(0, p)
-	if vault.is_fav(p): it.set_text(0, "★ " + it.get_text(0))
+	if vault.is_fav(p): it.set_icon(0, UI.icon("star")); it.set_icon_max_width(0, 14); it.set_icon_modulate(0, UI.p("warn"))
 	items[p] = it; return it
 
 func _add_dir(parent: TreeItem, rel: String, depth: int) -> void:
@@ -489,7 +489,7 @@ func _add_dir(parent: TreeItem, rel: String, depth: int) -> void:
 	dirs.sort_custom(func(a, b): return a.naturalnocasecmp_to(b) < 0)
 	for d in dirs:
 		var p: String = rel.path_join(d) if rel != "" else d
-		var it := tree.create_item(parent); it.set_text(0, "📁 " + d); it.set_metadata(0, {"k": "dir", "p": p})
+		var it := tree.create_item(parent); it.set_text(0, d); it.set_icon(0, UI.icon("folder")); it.set_icon_max_width(0, 16); it.set_icon_modulate(0, UI.p("muted")); it.set_metadata(0, {"k": "dir", "p": p})
 		it.collapsed = not open_dirs.has(p) and not cur.begins_with(p + "/")
 		items[p] = it
 		if depth < 10: _add_dir(it, p, depth + 1)
@@ -521,7 +521,7 @@ func _fill_tree() -> void:
 	else:
 		var fv: Array = vault.favs().filter(func(p): return vault.notes.has(p))
 		if not fv.is_empty():
-			var h := tree.create_item(rt); h.set_text(0, "★ Favoris"); h.set_selectable(0, false)
+			var h := tree.create_item(rt); h.set_text(0, "Favoris"); h.set_icon(0, UI.icon("star")); h.set_icon_max_width(0, 14); h.set_icon_modulate(0, UI.p("muted")); h.set_selectable(0, false)
 			for p in fv: _note_item(h, p)
 			var saved := items.duplicate(); items = {}
 			_add_dir(rt, "", 0)
