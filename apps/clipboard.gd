@@ -153,7 +153,7 @@ func build_ui(host: Control, floating := false) -> void:
 			var p: Button = m._mk_btn("Fixé" if items[i]["pin"] else "Fixer", 56, 40); p.pressed.connect(toggle_pin.bind(i))
 			if items[i]["pin"]: p.modulate = m.ACCENT.lightened(0.3)
 			row.add_child(p)
-			var d: Button = m._mk_btn("×", 36, 40); d.pressed.connect(remove.bind(i)); row.add_child(d)
+			var d: Button = UI.icon_btn("x", "Supprimer"); d.pressed.connect(remove.bind(i)); row.add_child(d)
 	q.text_changed.connect(func(_t): fill.call())
 	changed.connect(fill); host.tree_exiting.connect(func(): if changed.is_connected(fill): changed.disconnect(fill))
 	fill.call()

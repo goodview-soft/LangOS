@@ -34,7 +34,7 @@ func _ready() -> void:
 	var head := HBoxContainer.new(); v.add_child(head)
 	var t := Label.new(); t.text = "💬 IA locale"; t.add_theme_font_size_override("font_size", 14); t.add_theme_color_override("font_color", UI.accent_text()); t.size_flags_horizontal = Control.SIZE_EXPAND_FILL; head.add_child(t)
 	status = Label.new(); status.add_theme_font_size_override("font_size", 12); status.theme_type_variation = "Muted"; head.add_child(status)
-	var x := Button.new(); x.text = "✕"; x.flat = true; x.focus_mode = Control.FOCUS_NONE; x.pressed.connect(hide_chat); head.add_child(x)
+	var x := preload("res://apps/ui.gd").icon_btn("x", "Fermer"); x.pressed.connect(hide_chat); head.add_child(x)
 	scroll = ScrollContainer.new(); scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL; scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; v.add_child(scroll)
 	msgs_box = VBoxContainer.new(); msgs_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL; msgs_box.add_theme_constant_override("separation", 6); scroll.add_child(msgs_box)
 	input = LineEdit.new(); input.placeholder_text = "Demande quelque chose… (Entrée, Échap pour fermer)"

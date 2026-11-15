@@ -34,7 +34,7 @@ var _paused := false
 var _pause_pos := 0.0
 var _vsync_t := 0.0
 var url_edit: LineEdit
-var clip_chk: CheckBox
+var clip_chk: Button
 var status: Label
 var list: ItemList
 var now_lbl: Label
@@ -142,12 +142,13 @@ func _build_ui() -> void:
 	for k in ["left", "right", "top", "bottom"]: m.add_theme_constant_override("margin_" + k, 12)
 	add_child(m)
 	var root := VBoxContainer.new(); root.add_theme_constant_override("separation", 10); m.add_child(root)
-	var top := UI.toolbar(); root.add_child(top)
-	url_edit = LineEdit.new(); url_edit.custom_minimum_size = Vector2(200, UI.TOUCH); url_edit.placeholder_text = "Colle un lien YouTube / YouTube Music (vidéo ou playlist)…"
-	url_edit.size_flags_horizontal = SIZE_EXPAND_FILL; url_edit.virtual_keyboard_enabled = false
-	url_edit.text_submitted.connect(func(_t): _download()); top.add_child(url_edit)
-	clip_chk = CheckBox.new(); clip_chk.text = "avec le clip"; clip_chk.focus_mode = Control.FOCUS_NONE; top.add_child(clip_chk)
-	dl_btn = _btn("Télécharger", _download, "Accent"); top.add_child(dl_btn)
+	var hbar := UI.header_bar("Musique", false); root.add_child(hbar)
+	var en := UI.bar_end(hbar)
+	url_edit = LineEdit.new(); url_edit.custom_minimum_size = Vector2(100, UI.BTN); url_edit.placeholder_text = "Colle un lien YouTube / YouTube Music (vidéo ou playlist)…"
+	url_edit.virtual_keyboard_enabled = false; url_edit.text_submitted.connect(func(_t): _download()); UI.bar_center(hbar, url_edit)
+	clip_chk = UI.bar_act(hbar, en, "monitor", "Télécharger avec le clip vidéo", func(): clip_chk.theme_type_variation = "FlatOn" if clip_chk.button_pressed else "Flat")
+	clip_chk.toggle_mode = true
+	dl_btn = UI.bar_act(hbar, en, "download", "Télécharger", _download)
 	status = Label.new(); status.add_theme_font_size_override("font_size", 13)
 	status.theme_type_variation = "Muted"; status.clip_text = true; root.add_child(status)
 	var hb := HBoxContainer.new(); hb.size_flags_vertical = SIZE_EXPAND_FILL
@@ -213,8 +214,8 @@ func _build_ui() -> void:
 	tp.add_child(seek)
 	var trb := CheckButton.new(); trb.text = "Traduction"; trb.button_pressed = true; trb.focus_mode = Control.FOCUS_NONE
 	trb.toggled.connect(func(on: bool): kv.show_tr = on; kv.queue_redraw()); tp.add_child(trb)
-	vocab_btn = _btn("★ 0", _toggle_vocab, "Flat"); tp.add_child(vocab_btn); _update_vocab_btn()
-	tp.add_child(_btn("Plein cadre", func(): left.visible = not left.visible, "Flat"))
+	vocab_btn = UI.icon_btn("star", "Mes mots à apprendre", _toggle_vocab); tp.add_child(vocab_btn); _update_vocab_btn()
+	tp.add_child(UI.icon_btn("panel-left", "Afficher ou masquer la bibliothèque", func(): left.visible = not left.visible))
 	if _overlay_ok():
 		ov_opt = OptionButton.new(); ov_opt.focus_mode = Control.FOCUS_NONE
 		for it in ["Overlay : auto", "Overlay : toujours", "Overlay : non"]: ov_opt.add_item(it)
@@ -223,7 +224,7 @@ func _build_ui() -> void:
 		ov_opt.select(ov_mode); ov_opt.item_selected.connect(func(i: int): ov_mode = i; var c2 := ConfigFile.new(); c2.load("user://music.cfg"); c2.set_value("ui", "overlay", i); c2.save("user://music.cfg"))
 		tp.add_child(ov_opt)
 		cw_mode = int(c.get_value("ui", "center", 1)); cw_op = int(c.get_value("ui", "c_op", 0)); cw_size = int(c.get_value("ui", "c_size", 1)); cw_pos = int(c.get_value("ui", "c_pos", 0))
-		cw_menu = MenuButton.new(); cw_menu.text = "Mot centre ▾"; cw_menu.focus_mode = Control.FOCUS_NONE; cw_menu.flat = false
+		cw_menu = MenuButton.new(); cw_menu.icon = UI.icon("type"); cw_menu.custom_minimum_size = Vector2(UI.BTN, UI.BTN); cw_menu.focus_mode = Control.FOCUS_NONE; cw_menu.flat = false
 		cw_menu.tooltip_text = "Affiche le mot chanté, seul, au centre de l'écran (par-dessus un jeu)."
 		var pm := cw_menu.get_popup()
 		pm.add_separator("Affichage")
@@ -237,9 +238,9 @@ func _build_ui() -> void:
 		pm.id_pressed.connect(_cw_menu_pick); _cw_menu_sync()
 		tp.add_child(cw_menu)
 		_build_overlay(); _build_center()
-	tp.add_child(_btn("−", func(): _nudge(-0.5), "Flat", 36))
+	tp.add_child(UI.icon_btn("minus", "Retarder les paroles", func(): _nudge(-0.5)))
 	off_lbl = Label.new(); off_lbl.text = "sync 0.0 s"; off_lbl.custom_minimum_size.x = 76; tp.add_child(off_lbl)
-	tp.add_child(_btn("+", func(): _nudge(0.5), "Flat", 36))
+	tp.add_child(UI.icon_btn("plus", "Avancer les paroles", func(): _nudge(0.5)))
 	if OS.has_feature("android"):
 		dl_btn.disabled = true; clip_chk.disabled = true
 		status.text = "Le téléchargement YouTube (yt-dlp) n'est disponible que sur PC."
@@ -937,7 +938,7 @@ func _save_vocab() -> void:
 
 
 func _update_vocab_btn() -> void:
-	vocab_btn.text = "★ %d" % vocab.size()
+	vocab_btn.text = str(vocab.size()); vocab_btn.tooltip_text = "Mes mots à apprendre (%d)" % vocab.size()
 
 
 func _toggle_vocab() -> void:

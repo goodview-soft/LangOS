@@ -15,15 +15,15 @@ func _ready() -> void:
 		if d is Dictionary and not d.is_empty(): data = d
 	cur = data.keys()[0]
 	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_FULL_RECT); vb.add_theme_constant_override("separation", 8); add_child(vb)
-	var top := HBoxContainer.new(); top.add_theme_constant_override("separation", 6); vb.add_child(top)
-	opt = OptionButton.new(); opt.custom_minimum_size.y = 48; opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	opt.item_selected.connect(func(i): cur = opt.get_item_text(i); _rebuild()); top.add_child(opt)
-	var nl := Button.new(); nl.text = "+ Liste"; nl.custom_minimum_size = Vector2(90, 48); nl.pressed.connect(_new_list); top.add_child(nl)
-	var dl := Button.new(); dl.text = "Suppr."; dl.custom_minimum_size = Vector2(80, 48); dl.pressed.connect(_del_list); top.add_child(dl)
+	var hbar := UI.header_bar(); vb.add_child(hbar)
+	opt = OptionButton.new(); opt.custom_minimum_size = Vector2(100, UI.BTN)
+	opt.item_selected.connect(func(i): cur = opt.get_item_text(i); _rebuild()); UI.bar_center(hbar, opt)
+	UI.bar_act(hbar, UI.bar_end(hbar), "plus", "Nouvelle liste", _new_list)
+	UI.bar_act(hbar, UI.bar_end(hbar), "trash-2", "Supprimer la liste", _del_list)
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 6); vb.add_child(row)
 	inp = LineEdit.new(); inp.placeholder_text = "Nouvel élément…"; inp.custom_minimum_size.y = 48; inp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	inp.text_submitted.connect(func(_t): _add()); row.add_child(inp)
-	var ab := Button.new(); ab.text = "Ajouter"; ab.custom_minimum_size = Vector2(90, 48); ab.pressed.connect(_add); row.add_child(ab)
+	row.add_child(UI.icon_btn("plus", "Ajouter", _add, "Accent"))
 	var sc := ScrollContainer.new(); sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; vb.add_child(sc)
 	box = VBoxContainer.new(); box.size_flags_horizontal = Control.SIZE_EXPAND_FILL; box.add_theme_constant_override("separation", 4); sc.add_child(box)
 	var cb := Button.new(); cb.text = "Retirer les éléments cochés"; cb.custom_minimum_size.y = 48; cb.pressed.connect(_clear_done); vb.add_child(cb)
@@ -40,7 +40,7 @@ func _add() -> void:
 
 func _new_list() -> void:
 	var n := inp.text.strip_edges()
-	if n == "" or data.has(n): inp.placeholder_text = "Écris le nom de la liste ici, puis « + Liste »"; return
+	if n == "" or data.has(n): inp.placeholder_text = "Écris le nom de la liste ici, puis « Nouvelle liste »"; return
 	data[n] = []; cur = n; inp.text = ""; _save(); _rebuild()
 
 func _del_list() -> void:
@@ -62,7 +62,7 @@ func _rebuild() -> void:
 		cb.add_theme_font_size_override("font_size", 20); cb.focus_mode = Control.FOCUS_NONE
 		if e.d: cb.modulate = Color(1, 1, 1, 0.5)
 		cb.toggled.connect(func(on): e.d = on; _save(); cb.modulate = Color(1, 1, 1, 0.45 if on else 1.0)); r.add_child(cb)
-		var x := Button.new(); x.text = "✕"; x.custom_minimum_size = Vector2(48, 48); x.focus_mode = Control.FOCUS_NONE
+		var x := UI.icon_btn("x", "Retirer")
 		x.pressed.connect(func(): items.erase(e); _save(); _rebuild()); r.add_child(x)
 	if items.is_empty():
 		box.add_child(UI.empty_state("Liste vide", "Ajoutez une tâche ci-dessus."))

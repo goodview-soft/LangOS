@@ -217,7 +217,7 @@ func _refresh_prompt() -> void: pass
 func _ready() -> void:
 	mono = SystemFont.new(); mono.font_names = PackedStringArray(["DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono", "monospace"])
 	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_FULL_RECT); vb.add_theme_constant_override("separation", 4); add_child(vb)
-	tabbar = HBoxContainer.new(); tabbar.add_theme_constant_override("separation", 4); vb.add_child(tabbar)
+	tabbar = HBoxContainer.new(); tabbar.add_theme_constant_override("separation", UI.S2); var tbp := PanelContainer.new(); UI.style(tbp, "panel", UI.bar_box); tbp.add_child(tabbar); vb.add_child(tbp)
 	var pc := PanelContainer.new(); pc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	UI.style(pc, "panel", func(): return UI.box(_col("field", Color("171b25")), UI.rad(-4), Color(0, 0, 0, 0), 0, UI.S2)); vb.add_child(pc)
 	stack = Control.new(); stack.clip_contents = true; pc.add_child(stack)
@@ -234,11 +234,9 @@ func _rebuild_tabs() -> void:
 	for c in tabbar.get_children(): c.queue_free()
 	for i in tabs.size():
 		var b := Button.new(); b.text = tabs[i]["name"]; b.toggle_mode = true; b.button_pressed = i == cur; b.focus_mode = Control.FOCUS_NONE
-		b.custom_minimum_size = Vector2(90, 36); b.pressed.connect(_select.bind(i)); tabbar.add_child(b)
-	var n := Button.new(); n.text = "+"; n.custom_minimum_size = Vector2(40, 36); n.focus_mode = Control.FOCUS_NONE
-	n.pressed.connect(func(): new_session(); _select(tabs.size() - 1)); tabbar.add_child(n)
-	var x := Button.new(); x.text = "✕"; x.custom_minimum_size = Vector2(40, 36); x.focus_mode = Control.FOCUS_NONE
-	x.pressed.connect(func(): _close_tab(cur)); tabbar.add_child(x)
+		b.custom_minimum_size = Vector2(90, UI.BTN); b.pressed.connect(_select.bind(i)); tabbar.add_child(b)
+	tabbar.add_child(UI.icon_btn("plus", "Nouvelle session", func(): new_session(); _select(tabs.size() - 1)))
+	tabbar.add_child(UI.icon_btn("x", "Fermer la session", func(): _close_tab(cur)))
 
 func _select(i: int) -> void:
 	cur = clampi(i, 0, tabs.size() - 1)

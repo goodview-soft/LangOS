@@ -43,7 +43,7 @@ var tabs_sc: ScrollContainer
 var tabs_box: HBoxContainer
 var links_box: VBoxContainer
 var status: Label
-var mode_opt: OptionButton
+var mode_opt: Button
 var b_back: Button
 var b_fwd: Button
 var b_graph: Button
@@ -121,18 +121,19 @@ func build() -> void:
 	else: vault.start_scan()
 	vault.changed.connect(_on_index)
 	var root_v := VBoxContainer.new(); root_v.set_anchors_preset(Control.PRESET_FULL_RECT); root_v.add_theme_constant_override("separation", UI.S1); add_child(root_v)
-	# barre d'outils
-	var tb := UI.toolbar(); root_v.add_child(tb)
-	b_left = UI.icon_btn("panel-left", "Dossiers et étiquettes", func(): _toggle_left()); tb.add_child(b_left)
-	b_back = UI.icon_btn("chevron-left", "Retour", func(): _nav(-1)); tb.add_child(b_back)
-	b_fwd = UI.icon_btn("chevron-right", "Avant", func(): _nav(1)); tb.add_child(b_fwd)
-	tb.add_child(_btn("+ Note", func(): _new_flow(), "Nouvelle note (Ctrl+N)", true, 0))
-	tb.add_child(_btn("Aujourd'hui", func(): open_daily(), "Note du jour (Ctrl+D)"))
-	mode_opt = OptionButton.new(); mode_opt.custom_minimum_size = Vector2(110, UI.TOUCH)
-	for t in ["Édition", "Aperçu", "Les deux"]: mode_opt.add_item(t)
-	mode_opt.select(mode); mode_opt.item_selected.connect(func(i: int): mode = i; _layout()); tb.add_child(mode_opt)
-	b_graph = _btn("Graphe", func(): _toggle_graph(), "Vue graphe (Ctrl+G)"); tb.add_child(b_graph)
-	b_right = _btn("Liens", func(): _toggle_right(), "Rétroliens et liens sortants"); tb.add_child(b_right)
+	# barre d'en-tête standard
+	var hbar := UI.header_bar("Notes", false); root_v.add_child(hbar)
+	var st := UI.bar_start(hbar); var en := UI.bar_end(hbar)
+	b_left = UI.bar_act(hbar, st, "panel-left", "Dossiers et étiquettes", func(): _toggle_left())
+	b_back = UI.bar_act(hbar, st, "chevron-left", "Retour", func(): _nav(-1))
+	b_fwd = UI.bar_act(hbar, st, "chevron-right", "Avant", func(): _nav(1))
+	UI.bar_act(hbar, en, "plus", "Nouvelle note (Ctrl+N)", func(): _new_flow())
+	UI.bar_act(hbar, en, "calendar-days", "Note du jour (Ctrl+D)", func(): open_daily())
+	UI.bar_gap(en)
+	mode_opt = UI.bar_act(hbar, en, "pencil", "Mode : édition, aperçu, les deux (Ctrl+E)", func(): mode = (mode + 1) % 3; _layout(), true)
+	b_graph = UI.bar_act(hbar, en, "waypoints", "Vue graphe (Ctrl+G)", func(): _toggle_graph())
+	b_right = UI.bar_act(hbar, en, "link", "Rétroliens et liens sortants", func(): _toggle_right(), true)
+	UI.bar_finish(hbar)
 	# zone principale
 	var row := HBoxContainer.new(); row.size_flags_vertical = Control.SIZE_EXPAND_FILL; row.add_theme_constant_override("separation", UI.S2); root_v.add_child(row)
 	left_p = PanelContainer.new(); left_p.add_theme_stylebox_override("panel", UI.card_box(UI.S2)); row.add_child(left_p)
@@ -263,7 +264,7 @@ func _layout() -> void:
 	b_back.disabled = hpos <= 0; b_fwd.disabled = hpos >= hist.size() - 1
 	b_left.theme_type_variation = "FlatOn" if left_on else "Flat"; b_right.theme_type_variation = "FlatOn" if right_on else "Flat"
 	b_graph.theme_type_variation = "FlatOn" if show_graph else "Flat"
-	mode_opt.select(mode)
+	mode_opt.icon = UI.icon(["pencil", "eye", "columns-2"][mode])
 	if prev_box.visible: prev_t.start()
 
 # ------------------------------------------------------------------ ouverture, enregistrement

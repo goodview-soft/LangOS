@@ -17,16 +17,18 @@ func _ready() -> void:
 	for k in ["left", "right", "top", "bottom"]: m.add_theme_constant_override("margin_" + k, 14)
 	add_child(m)
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 10); m.add_child(v)
-	var top := HBoxContainer.new(); top.add_theme_constant_override("separation", 8); v.add_child(top)
-	var ttl := Label.new(); ttl.text = "Assistant IA"; ttl.add_theme_font_size_override("font_size", 20); ttl.size_flags_horizontal = SIZE_EXPAND_FILL; top.add_child(ttl)
-	status = Label.new(); status.theme_type_variation = "Muted"; top.add_child(status)
-	model_opt = OptionButton.new(); model_opt.focus_mode = Control.FOCUS_NONE; model_opt.item_selected.connect(func(i: int): core.set_model(str(core.available[i]))); top.add_child(model_opt)
-	var pg := CheckButton.new(); pg.text = "Page web"; pg.focus_mode = Control.FOCUS_NONE; pg.tooltip_text = "Le modèle voit la page du navigateur et peut ouvrir un site"
-	pg.button_pressed = core.page_ctx; pg.toggled.connect(func(on: bool): core.page_ctx = on); top.add_child(pg)
-	core.changed.connect(func(): pg.set_pressed_no_signal(core.page_ctx))
-	dl_btn = Button.new(); dl_btn.text = "Télécharger"; dl_btn.theme_type_variation = "Flat"; dl_btn.focus_mode = Control.FOCUS_NONE
-	dl_btn.visible = false; dl_btn.pressed.connect(func(): core.download_model()); top.add_child(dl_btn)
-	var nb := Button.new(); nb.text = "Nouvelle discussion"; nb.theme_type_variation = "Flat"; nb.focus_mode = Control.FOCUS_NONE; nb.pressed.connect(func(): core.clear()); top.add_child(nb)
+	var hbar := UI.header_bar("Assistant IA", false); v.add_child(hbar)
+	var en := UI.bar_end(hbar)
+	status = Label.new(); status.theme_type_variation = "Muted"; en.add_child(status)
+	model_opt = OptionButton.new(); model_opt.focus_mode = Control.FOCUS_NONE; model_opt.custom_minimum_size.y = UI.BTN; model_opt.item_selected.connect(func(i: int): core.set_model(str(core.available[i]))); en.add_child(model_opt)
+	var pg := UI.bar_act(hbar, en, "globe", "Page web : le modèle voit la page du navigateur et peut ouvrir un site", func(): pass)
+	for c in pg.pressed.get_connections(): pg.pressed.disconnect(c["callable"])
+	pg.toggle_mode = true; pg.button_pressed = core.page_ctx
+	pg.toggled.connect(func(on: bool): core.page_ctx = on; pg.theme_type_variation = "FlatOn" if on else "Flat")
+	core.changed.connect(func(): pg.set_pressed_no_signal(core.page_ctx); pg.theme_type_variation = "FlatOn" if core.page_ctx else "Flat")
+	dl_btn = UI.bar_act(hbar, en, "download", "Télécharger le modèle", func(): core.download_model())
+	dl_btn.visible = false
+	UI.bar_act(hbar, en, "plus", "Nouvelle discussion", func(): core.clear())
 	var pc := PanelContainer.new(); pc.size_flags_vertical = SIZE_EXPAND_FILL
 	UI.style(pc, "panel", func(): return UI.box(UI.p("field"), UI.rad(), Color(0, 0, 0, 0), 0, 10)); v.add_child(pc)
 	scroll = ScrollContainer.new(); scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; pc.add_child(scroll)
@@ -34,7 +36,7 @@ func _ready() -> void:
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 8); v.add_child(row)
 	input = LineEdit.new(); input.placeholder_text = "Pose ta question… (astuce : « - » ouvre l'overlay chat par-dessus un jeu)"
 	input.size_flags_horizontal = SIZE_EXPAND_FILL; input.virtual_keyboard_enabled = false; input.text_submitted.connect(func(q: String): input.text = ""; core.ask(q)); row.add_child(input)
-	send_btn = Button.new(); send_btn.text = "Envoyer"; send_btn.theme_type_variation = "Accent"; send_btn.focus_mode = Control.FOCUS_NONE
+	send_btn = UI.icon_btn("send", "Envoyer", Callable(), "Accent")
 	send_btn.pressed.connect(func(): var q := input.text; input.text = ""; core.ask(q)); row.add_child(send_btn)
 	core.changed.connect(_rebuild); core.busy_changed.connect(func(on: bool): send_btn.disabled = on; status.text = "réflexion…" if on else "")
 	core.refresh_models()

@@ -95,10 +95,10 @@ func _save() -> void:
 
 func _list_screen() -> void:
 	_clear()
-	var top := UI.toolbar(); ui.add_child(top)
-	var s := LineEdit.new(); s.placeholder_text = "Rechercher…"; s.custom_minimum_size = Vector2(180, 48); s.size_flags_horizontal = Control.SIZE_EXPAND_FILL; top.add_child(s)
-	top.add_child(_btn("+ Ajouter", func(): _edit_screen(-1), 100))
-	top.add_child(_btn("Verrouiller", _lock_screen, 110))
+	var hbar := UI.header_bar("Coffre", false); ui.add_child(hbar)
+	var s := LineEdit.new(); s.placeholder_text = "Rechercher…"; s.custom_minimum_size = Vector2(100, UI.BTN); UI.bar_center(hbar, s)
+	UI.bar_act(hbar, UI.bar_end(hbar), "plus", "Ajouter une entrée", func(): _edit_screen(-1))
+	UI.bar_act(hbar, UI.bar_end(hbar), "lock", "Verrouiller", _lock_screen)
 	var sc := ScrollContainer.new(); sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; ui.add_child(sc)
 	var box := VBoxContainer.new(); box.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.add_child(box)
 	var fill := func(q: String):

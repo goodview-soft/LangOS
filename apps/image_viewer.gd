@@ -91,13 +91,22 @@ func _c(k: String) -> Color: return m._p(k) if m else Color("232834")
 
 func build() -> void:
 	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_FULL_RECT); vb.add_theme_constant_override("separation", 6); add_child(vb)
-	var top := UI.toolbar(); vb.add_child(top)
-	for b in [["‹", func(): step(-1)], ["›", func(): step(1)], ["+", func(): _zoom(1.25)], ["−", func(): _zoom(0.8)], ["Ajuster", func(): _fit(); _label(); view.queue_redraw()],
-			["⟲", func(): rotate(false)], ["⟳", func(): rotate(true)], ["Recadrer", _toggle_crop], ["Fond d'écran", _wall]]:
-		var bt := Button.new(); bt.text = b[0]; bt.custom_minimum_size = Vector2(46, 40); bt.pressed.connect(b[1]); top.add_child(bt)
+	var hbar := UI.header_bar("Images", false); vb.add_child(hbar)
+	var st := UI.bar_start(hbar); var en := UI.bar_end(hbar)
+	UI.bar_act(hbar, st, "chevron-left", "Image précédente", func(): step(-1))
+	UI.bar_act(hbar, st, "chevron-right", "Image suivante", func(): step(1))
+	UI.bar_act(hbar, en, "zoom-in", "Zoom avant", func(): _zoom(1.25))
+	UI.bar_act(hbar, en, "zoom-out", "Zoom arrière", func(): _zoom(0.8))
+	UI.bar_act(hbar, en, "maximize-2", "Ajuster à la fenêtre", func(): _fit(); _label(); view.queue_redraw())
+	UI.bar_gap(en)
+	UI.bar_act(hbar, en, "rotate-ccw", "Pivoter à gauche", func(): rotate(false), true)
+	UI.bar_act(hbar, en, "rotate-cw", "Pivoter à droite", func(): rotate(true), true)
+	UI.bar_act(hbar, en, "crop", "Recadrer", _toggle_crop, true)
+	UI.bar_act(hbar, en, "wallpaper", "Définir comme fond d'écran", _wall, true)
 	fmt = OptionButton.new(); for f in ["png", "jpg", "webp"]: fmt.add_item(f)
-	fmt.custom_minimum_size.y = 40; top.add_child(fmt)
-	var sv := Button.new(); sv.text = "Enregistrer"; sv.custom_minimum_size.y = 40; sv.pressed.connect(_save); top.add_child(sv)
+	fmt.custom_minimum_size.y = UI.BTN; fmt.tooltip_text = "Format d'enregistrement"; en.add_child(fmt)
+	UI.bar_act(hbar, en, "save", "Enregistrer", _save)
+	UI.bar_finish(hbar)
 	view = Control.new(); view.size_flags_vertical = Control.SIZE_EXPAND_FILL; view.size_flags_horizontal = Control.SIZE_EXPAND_FILL; view.clip_contents = true
 	view.draw.connect(_draw_view); view.gui_input.connect(_view_input); view.resized.connect(view.queue_redraw); vb.add_child(view)
 	lbl = UI.note("Ouvre une image depuis Fichiers ou la recherche."); vb.add_child(lbl)

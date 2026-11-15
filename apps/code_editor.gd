@@ -174,23 +174,25 @@ func _btn(t: String, w: float, f: Callable) -> Button:
 func _ready() -> void:
 	mono = SystemFont.new(); mono.font_names = PackedStringArray(["DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono", "monospace"])
 	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_FULL_RECT); vb.add_theme_constant_override("separation", 4); add_child(vb)
-	var top := UI.toolbar(); vb.add_child(top)
-	top.add_child(_btn("Nouveau", 74, func(): new_doc()))
-	pathe = LineEdit.new(); pathe.size_flags_horizontal = Control.SIZE_EXPAND_FILL; pathe.custom_minimum_size = Vector2(200, 40); pathe.placeholder_text = "Chemin du fichier (user://note.gd, /home/...)"
-	pathe.text_submitted.connect(func(t): open_path(t.strip_edges())); top.add_child(pathe)
-	top.add_child(_btn("Ouvrir", 64, func(): open_path(pathe.text.strip_edges())))
-	top.add_child(_btn("Enregistrer", 96, func(): _save_cur()))
-	top.add_child(_btn("A-", 38, func(): set_font_size(fsize - 1)))
-	top.add_child(_btn("A+", 38, func(): set_font_size(fsize + 1)))
-	top.add_child(_btn("Chercher", 76, func(): toggle_find()))
-	var sc := ScrollContainer.new(); sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.custom_minimum_size.y = 42; vb.add_child(sc)
+	var hbar := UI.header_bar(); vb.add_child(hbar)
+	var st := UI.bar_start(hbar); var en := UI.bar_end(hbar)
+	UI.bar_act(hbar, st, "file-plus", "Nouveau document", func(): new_doc())
+	UI.bar_act(hbar, st, "folder-open", "Ouvrir", func(): open_path(pathe.text.strip_edges()))
+	UI.bar_act(hbar, st, "save", "Enregistrer (Ctrl+S)", func(): _save_cur())
+	pathe = LineEdit.new(); pathe.custom_minimum_size = Vector2(100, UI.BTN); pathe.placeholder_text = "Chemin du fichier (user://note.gd, /home/...)"
+	pathe.text_submitted.connect(func(t): open_path(t.strip_edges())); UI.bar_center(hbar, pathe)
+	UI.bar_act(hbar, en, "zoom-out", "Réduire le texte (Ctrl+-)", func(): set_font_size(fsize - 1), true)
+	UI.bar_act(hbar, en, "zoom-in", "Agrandir le texte (Ctrl++)", func(): set_font_size(fsize + 1), true)
+	UI.bar_act(hbar, en, "search", "Chercher (Ctrl+F)", func(): toggle_find())
+	UI.bar_finish(hbar)
+	var sc := ScrollContainer.new(); sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; sc.custom_minimum_size.y = UI.BTN + 6; vb.add_child(sc)
 	tabbar = HBoxContainer.new(); tabbar.add_theme_constant_override("separation", 4); sc.add_child(tabbar)
 	find_bar = HBoxContainer.new(); find_bar.visible = false; find_bar.add_theme_constant_override("separation", 4); vb.add_child(find_bar)
 	find_in = LineEdit.new(); find_in.placeholder_text = "Rechercher"; find_in.size_flags_horizontal = Control.SIZE_EXPAND_FILL; find_in.custom_minimum_size.y = 38
 	find_in.text_submitted.connect(func(t): find_next(t)); find_bar.add_child(find_in)
 	rep_in = LineEdit.new(); rep_in.placeholder_text = "Remplacer par"; rep_in.size_flags_horizontal = Control.SIZE_EXPAND_FILL; rep_in.custom_minimum_size.y = 38; find_bar.add_child(rep_in)
-	find_bar.add_child(_btn("Préc.", 56, func(): find_next(find_in.text, true)))
-	find_bar.add_child(_btn("Suiv.", 56, func(): find_next(find_in.text)))
+	find_bar.add_child(UI.icon_btn("chevron-up", "Précédent", func(): find_next(find_in.text, true)))
+	find_bar.add_child(UI.icon_btn("chevron-down", "Suivant", func(): find_next(find_in.text)))
 	find_bar.add_child(_btn("Remplacer", 86, func(): replace_one(find_in.text, rep_in.text)))
 	find_bar.add_child(_btn("Tout", 50, func(): replace_all(find_in.text, rep_in.text)))
 	stack = Control.new(); stack.size_flags_vertical = Control.SIZE_EXPAND_FILL; stack.clip_contents = true; vb.add_child(stack)
@@ -213,9 +215,8 @@ func _rebuild_tabs() -> void:
 	for c in tabbar.get_children(): c.queue_free()
 	for i in docs.size():
 		var b := Button.new(); b.text = doc_name(docs[i]); b.toggle_mode = true; b.button_pressed = i == cur; b.focus_mode = Control.FOCUS_NONE
-		b.custom_minimum_size.y = 34; b.pressed.connect(_select.bind(i)); tabbar.add_child(b)
-	var x := Button.new(); x.text = "✕"; x.custom_minimum_size = Vector2(34, 34); x.focus_mode = Control.FOCUS_NONE
-	x.pressed.connect(func(): close_doc(cur)); tabbar.add_child(x)
+		b.custom_minimum_size.y = UI.BTN; b.pressed.connect(_select.bind(i)); tabbar.add_child(b)
+	tabbar.add_child(UI.icon_btn("x", "Fermer le document", func(): close_doc(cur)))
 
 func _select(i: int) -> void:
 	cur = clampi(i, 0, docs.size() - 1)

@@ -290,6 +290,36 @@ static func header_bar(t := "", centered := true) -> PanelContainer:
 	pc.set_meta("start", a); pc.set_meta("title", l); pc.set_meta("end", e)
 	return pc
 
+## Séparateur fixe entre deux groupes de boutons d'une barre.
+static func bar_gap(group: Control, w := S3) -> void:
+	var c := Control.new(); c.custom_minimum_size = Vector2(w, 0); c.mouse_filter = Control.MOUSE_FILTER_IGNORE; group.add_child(c)
+
+## Ajoute un bouton-icône à un groupe de la barre (début ou fin). rare = passe dans le menu ⋮ sous 700 px.
+static func bar_act(bar: Control, group: Control, icon_name: String, tip: String, cb: Callable, rare := false) -> Button:
+	var b := icon_btn(icon_name, tip, cb); group.add_child(b)
+	var a: Array = bar.get_meta("acts", []); a.append([b, tip, cb, rare, icon_name]); bar.set_meta("acts", a)
+	return b
+
+## Entrée supplémentaire du menu ⋮ (toujours présente) : [libellé, callable].
+static func bar_item(bar: Control, label_: String, cb: Callable) -> void:
+	var a: Array = bar.get_meta("items", []); a.append([label_, cb]); bar.set_meta("items", a)
+
+## Termine la barre : bouton ⋮ (popup) avec les entrées supplémentaires et, sous 700 px, les actions rares.
+static func bar_finish(bar: Control) -> void:
+	var mb := icon_btn("ellipsis-vertical", "Menu"); bar_end(bar).add_child(mb)
+	var pm := PopupMenu.new(); mb.add_child(pm)
+	var fill := func():
+		pm.clear(); var narrow: bool = bar.size.x < NARROW; var n := 0
+		for a in bar.get_meta("acts", []):
+			a[0].visible = not (narrow and a[3])
+			if narrow and a[3]: pm.add_item(a[1], n); pm.set_item_metadata(n, a[2]); n += 1
+		for it in bar.get_meta("items", []): pm.add_item(it[0], n); pm.set_item_metadata(n, it[1]); n += 1
+		mb.visible = n > 0
+	pm.id_pressed.connect(func(i: int): var cb: Callable = pm.get_item_metadata(pm.get_item_index(i)); cb.call())
+	mb.pressed.connect(func(): fill.call(); if pm.item_count > 0: pm.position = Vector2i(mb.get_screen_position() + Vector2(mb.size.x - 200, mb.size.y)); pm.popup())
+	bar.resized.connect(fill); fill.call()
+	bar.set_meta("fill", fill)
+
 static func bar_start(bar: Control) -> HBoxContainer: return bar.get_meta("start")
 static func bar_end(bar: Control) -> HBoxContainer: return bar.get_meta("end")
 static func bar_title(bar: Control) -> Label: return bar.get_meta("title")

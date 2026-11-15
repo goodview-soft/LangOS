@@ -76,7 +76,7 @@ func _home() -> void:
 	for c in deck:
 		var r := HBoxContainer.new(); box.add_child(r)
 		var l := _lbl("%s  →  %s   [boîte %d]" % [c.f, c.b, c.box], 16); l.size_flags_horizontal = Control.SIZE_EXPAND_FILL; r.add_child(l)
-		var x := Button.new(); x.text = "✕"; x.custom_minimum_size = Vector2(48, 48); x.pressed.connect(func(): deck.erase(c); _save(); _home()); r.add_child(x)
+		var x := UI.icon_btn("x", "Supprimer la carte", Callable(), "Flat", 48); x.pressed.connect(func(): deck.erase(c); _save(); _home()); r.add_child(x)
 
 func _study() -> void:
 	queue = due_cards(data[cur], today()); queue.shuffle(); shown = false; _card()

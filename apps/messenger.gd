@@ -110,20 +110,22 @@ func _build_ui() -> void:
 	var cs := Label.new(); cs.text = "Contacts"; cs.theme_type_variation = "Muted"; left.add_child(cs)
 	var sc := ScrollContainer.new(); sc.size_flags_vertical = SIZE_EXPAND_FILL; sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; left.add_child(sc)
 	contacts_box = VBoxContainer.new(); contacts_box.size_flags_horizontal = SIZE_EXPAND_FILL; contacts_box.add_theme_constant_override("separation", 2); sc.add_child(contacts_box)
-	left.add_child(_btn("📂 Dossier reçu", func(): OS.shell_show_in_file_manager(ProjectSettings.globalize_path(recv_dir)), "Flat"))
 	# Droite : conversation
 	var right := VBoxContainer.new(); right.size_flags_horizontal = SIZE_EXPAND_FILL; right.add_theme_constant_override("separation", 8); root.add_child(right)
-	head_lbl = Label.new(); head_lbl.add_theme_font_size_override("font_size", 20); head_lbl.text = "Choisis un contact"; right.add_child(head_lbl)
+	var hbar := UI.header_bar("Choisis un contact", false); right.add_child(hbar); head_lbl = UI.bar_title(hbar)
+	var en := UI.bar_end(hbar)
+	UI.bar_act(hbar, en, "paperclip", "Envoyer des fichiers", _pick_files)
+	UI.bar_act(hbar, en, "vibrate", "Envoyer un wizz", _send_nudge)
+	UI.bar_act(hbar, en, "folder-open", "Dossier des fichiers reçus", func(): OS.shell_show_in_file_manager(ProjectSettings.globalize_path(recv_dir)), true)
+	UI.bar_finish(hbar)
 	var pc := PanelContainer.new(); pc.size_flags_vertical = SIZE_EXPAND_FILL; UI.style(pc, "panel", func(): return _sb(UI.p("field"), UI.rad(), 8)); right.add_child(pc)
 	scroll = ScrollContainer.new(); scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; pc.add_child(scroll)
 	chat_box = VBoxContainer.new(); chat_box.size_flags_horizontal = SIZE_EXPAND_FILL; chat_box.add_theme_constant_override("separation", 6); scroll.add_child(chat_box)
 	note = Label.new(); note.add_theme_font_size_override("font_size", 13); note.theme_type_variation = "Muted"; right.add_child(note)
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 6); right.add_child(row)
-	row.add_child(_btn("📎", _pick_files, "", 48))
 	input = LineEdit.new(); input.placeholder_text = "Écrire un message…"; input.size_flags_horizontal = SIZE_EXPAND_FILL
 	input.virtual_keyboard_enabled = false; input.text_submitted.connect(func(_t): _send_text()); row.add_child(input)
-	row.add_child(_btn("📳", _send_nudge, "", 48))
-	row.add_child(_btn("Envoyer", _send_text, "Accent"))
+	row.add_child(UI.icon_btn("send", "Envoyer", _send_text, "Accent"))
 	dialog = FileDialog.new(); dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILES; dialog.access = FileDialog.ACCESS_FILESYSTEM
 	dialog.use_native_dialog = true; dialog.title = "Envoyer des fichiers"
 	dialog.files_selected.connect(func(ps: PackedStringArray): for p in ps: _send_file(cur, p))
@@ -282,7 +284,7 @@ func _file_bubble(v: VBoxContainer, m: Dictionary, mine: bool) -> void:
 		"done":
 			st.text = "Terminé ✓" if not mine else "Envoyé ✓"
 			var r2 := HBoxContainer.new(); r2.add_theme_constant_override("separation", 6); v.add_child(r2)
-			if ext in ["mp3", "ogg", "wav"] and path != "": r2.add_child(_btn("▶ Écouter", _play.bind(path)))
+			if ext in ["mp3", "ogg", "wav"] and path != "": r2.add_child(_btn("Écouter", _play.bind(path)))
 			if path != "": r2.add_child(_btn("Ouvrir", func(): OS.shell_open(ProjectSettings.globalize_path(path) if path.begins_with("user://") else path)))
 
 

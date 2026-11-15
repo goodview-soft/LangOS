@@ -44,7 +44,7 @@ func _ready() -> void:
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 6); vb.add_child(row)
 	from_opt = OptionButton.new(); to_opt = OptionButton.new()
 	for o in [from_opt, to_opt]: o.custom_minimum_size.y = 48; o.size_flags_horizontal = Control.SIZE_EXPAND_FILL; o.item_selected.connect(func(_i): _calc())
-	var sw := Button.new(); sw.text = "⇄"; sw.custom_minimum_size = Vector2(48, 48)
+	var sw := UI.icon_btn("arrow-left-right", "Inverser", Callable(), "Flat", 48)
 	sw.pressed.connect(func():
 		var a := from_opt.selected; from_opt.select(to_opt.selected); to_opt.select(a); _calc())
 	row.add_child(from_opt); row.add_child(sw); row.add_child(to_opt)

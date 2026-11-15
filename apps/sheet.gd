@@ -326,10 +326,15 @@ func _c(k: String) -> Color: return m._p(k) if m else Color("232834")
 
 func build() -> void:
 	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_FULL_RECT); vb.add_theme_constant_override("separation", 6); add_child(vb)
-	var top := UI.toolbar(); vb.add_child(top)
-	fname = LineEdit.new(); fname.text = "tableau"; fname.custom_minimum_size = Vector2(120, 40); top.add_child(fname)
-	for b in [["Enreg.", _save], ["Ouvrir", _open], ["Export CSV", _exp], ["Import CSV", _imp], ["Graphique", _toggle_chart]]:
-		var bt := Button.new(); bt.text = b[0]; bt.custom_minimum_size.y = 40; bt.pressed.connect(b[1]); top.add_child(bt)
+	var hbar := UI.header_bar(); vb.add_child(hbar)
+	var en := UI.bar_end(hbar)
+	fname = LineEdit.new(); fname.text = "tableau"; fname.custom_minimum_size = Vector2(100, UI.BTN); UI.bar_center(hbar, fname)
+	UI.bar_act(hbar, UI.bar_start(hbar), "save", "Enregistrer", _save)
+	UI.bar_act(hbar, UI.bar_start(hbar), "folder-open", "Ouvrir", _open)
+	UI.bar_act(hbar, en, "download", "Exporter en CSV", _exp, true)
+	UI.bar_act(hbar, en, "upload", "Importer un CSV", _imp, true)
+	UI.bar_act(hbar, en, "layout-grid", "Graphique", _toggle_chart)
+	UI.bar_finish(hbar)
 	fbar = LineEdit.new(); fbar.placeholder_text = "Valeur ou formule (=SUM(A1:A5))"; fbar.custom_minimum_size.y = 40
 	fbar.text_submitted.connect(_commit); vb.add_child(fbar)
 	grid = Control.new(); grid.size_flags_vertical = Control.SIZE_EXPAND_FILL; grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL

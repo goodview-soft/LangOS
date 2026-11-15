@@ -92,6 +92,16 @@ func _init() -> void:
 		m.set_cfg["light"] = false
 		vp.queue_free()
 		await create_timer(0.3).timeout
+	# aucun bouton de barre ne doit garder un texte symbolique (icônes Lucide à la place)
+	var sym := RegEx.create_from_string("(?:\\.text = |_btn\\(|button\\()\"[\\s]*[☰◀▶⋮✓⟳＋✕×☆★⇄‹›⟲⟳📎📳💬📂][^\"]{0,2}\"")
+	for f in DirAccess.get_files_at("res://apps"):
+		if not f.ends_with(".gd") or f == "soundlink.gd": continue
+		var src := FileAccess.get_file_as_string("res://apps/" + f)
+		for ln in src.split("\n"):
+			if ln.strip_edges().begins_with("#"): continue
+			checks += 1
+			var mm := sym.search(ln)
+			if mm != null and not ("label" in ln.to_lower() and "Label.new" in ln): fails.append("texte symbolique sur un bouton (%s) : %s" % [f, ln.strip_edges().left(70)])
 	print("UI-TEST %s : %d vérifications, %d problème(s)" % ["OK" if fails.is_empty() else "ECHEC", checks, fails.size()])
 	for f in fails: print("  ✗ ", f)
 	quit(0 if fails.is_empty() else 1)

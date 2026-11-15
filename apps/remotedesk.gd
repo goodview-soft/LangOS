@@ -113,9 +113,8 @@ func _build_ui() -> void:
 	conn_btn = _btn("Se connecter", _connect_pressed, "Accent", 0, 48); v2.add_child(conn_btn)
 	# Vue distante
 	view_box = VBoxContainer.new(); view_box.size_flags_vertical = SIZE_EXPAND_FILL; view_box.visible = false; root.add_child(view_box)
-	var tb := HBoxContainer.new(); tb.add_theme_constant_override("separation", 8); view_box.add_child(tb)
-	var tl := Label.new(); tl.text = "Contrôle à distance"; tl.size_flags_horizontal = SIZE_EXPAND_FILL; tb.add_child(tl)
-	tb.add_child(_btn("Déconnecter", _client_close, "Close", 140, 40))
+	var hbar := UI.header_bar("Contrôle à distance", false); view_box.add_child(hbar)
+	UI.bar_act(hbar, UI.bar_end(hbar), "power", "Déconnecter", _client_close)
 	var pc := PanelContainer.new(); pc.size_flags_vertical = SIZE_EXPAND_FILL; pc.add_theme_stylebox_override("panel", _sb(Color.BLACK, 8, 2)); view_box.add_child(pc)
 	viewer = TextureRect.new(); viewer.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; viewer.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	viewer.focus_mode = Control.FOCUS_ALL; viewer.mouse_filter = Control.MOUSE_FILTER_STOP

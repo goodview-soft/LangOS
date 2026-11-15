@@ -149,17 +149,18 @@ func _toast(t: String, x := "") -> void:
 func _build_ui(bh: int) -> void:
 	var v := VBoxContainer.new(); v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); v.add_theme_constant_override("separation", 0); add_child(v)
 	tab_row = HBoxContainer.new(); tab_row.add_theme_constant_override("separation", 2); v.add_child(tab_row)
-	var tb := HBoxContainer.new(); tb.add_theme_constant_override("separation", 4); v.add_child(tb)
-	var nav: Array = [["◀", func(): _nav("back")], ["▶", func(): _nav("fwd")], ["⟳", func(): _nav("reload")]]
-	for it in nav:
-		var b := Button.new(); b.text = it[0]; b.custom_minimum_size = Vector2(bh + 6, bh); b.focus_mode = Control.FOCUS_NONE; b.pressed.connect(it[1]); tb.add_child(b)
-	url_edit = LineEdit.new(); url_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL; url_edit.placeholder_text = "Adresse ou recherche"
-	url_edit.text_submitted.connect(_go); tb.add_child(url_edit)
-	star = Button.new(); star.text = "☆"; star.custom_minimum_size = Vector2(bh, bh); star.focus_mode = Control.FOCUS_NONE; star.tooltip_text = "Ajouter aux favoris"
-	star.pressed.connect(_toggle_bookmark); tb.add_child(star)
-	_hook_chat(tb)
-	var mb := Button.new(); mb.text = "⋮"; mb.custom_minimum_size = Vector2(bh, bh); mb.focus_mode = Control.FOCUS_NONE
-	mb.pressed.connect(func(): _menu(mb.get_global_rect().position + Vector2(0, bh))); tb.add_child(mb)
+	var hbar := UI.header_bar(); v.add_child(hbar)
+	var st := UI.bar_start(hbar); var en := UI.bar_end(hbar)
+	UI.bar_act(hbar, st, "chevron-left", "Page précédente", func(): _nav("back"))
+	UI.bar_act(hbar, st, "chevron-right", "Page suivante", func(): _nav("fwd"))
+	UI.bar_act(hbar, st, "refresh-cw", "Actualiser", func(): _nav("reload"))
+	url_edit = LineEdit.new(); url_edit.custom_minimum_size = Vector2(100, UI.BTN); url_edit.placeholder_text = "Adresse ou recherche"
+	url_edit.text_submitted.connect(_go); UI.bar_center(hbar, url_edit)
+	star = UI.bar_act(hbar, en, "star", "Ajouter aux favoris", _toggle_bookmark)
+	_hook_chat(hbar)
+	var mb := UI.bar_act(hbar, en, "ellipsis-vertical", "Menu", func(): pass)
+	for c in mb.pressed.get_connections(): mb.pressed.disconnect(c["callable"])
+	mb.pressed.connect(func(): _menu(mb.get_global_rect().position + Vector2(0, bh)))
 	bm_bar = HBoxContainer.new(); bm_bar.add_theme_constant_override("separation", 2); v.add_child(bm_bar)
 	var body := HBoxContainer.new(); body.size_flags_vertical = Control.SIZE_EXPAND_FILL; body.add_theme_constant_override("separation", 0); v.add_child(body)
 	view = TextureRect.new(); view.size_flags_vertical = Control.SIZE_EXPAND_FILL; view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -240,15 +241,16 @@ func _refresh_tabs() -> void:
 	for i in core.tabs.size():
 		var t: Dictionary = core.tabs[i]
 		var b := Button.new(); b.toggle_mode = true; b.button_pressed = i == core.active; b.focus_mode = Control.FOCUS_NONE
-		var tt := str(t["title"]); b.text = ("🕶 " if t["private"] else "") + (tt.substr(0, 18) + "…" if tt.length() > 19 else tt)
+		var tt := str(t["title"]); b.text = tt.substr(0, 18) + "…" if tt.length() > 19 else tt
+		if t["private"]: UI.set_icon(b, "glasses")
 		b.custom_minimum_size.x = 120; b.tooltip_text = str(t["url"])
 		b.pressed.connect(func(): _activate(i))
 		b.gui_input.connect(func(ev: InputEvent):
 			if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_RIGHT: _tab_menu(i, ev.global_position)
 			elif ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_MIDDLE: _close_tab(i))
 		tab_row.add_child(b)
-		var x := Button.new(); x.text = "×"; x.flat = true; x.focus_mode = Control.FOCUS_NONE; x.pressed.connect(func(): _close_tab(i)); tab_row.add_child(x)
-	var nb := Button.new(); nb.text = "+"; nb.focus_mode = Control.FOCUS_NONE; nb.pressed.connect(func(): _new_tab()); tab_row.add_child(nb)
+		tab_row.add_child(UI.icon_btn("x", "Fermer l'onglet", func(): _close_tab(i), "Flat", 28))
+	tab_row.add_child(UI.icon_btn("plus", "Nouvel onglet", func(): _new_tab(), "Flat", 28))
 	_refresh_bm()
 
 func _tab_menu(i: int, at: Vector2) -> void:
@@ -274,7 +276,7 @@ func _refresh_bm() -> void:
 				if not items.is_empty(): _main()._popup_menu(items, b.get_global_rect().position + Vector2(0, b.size.y)))
 		bm_bar.add_child(b)
 	bm_bar.visible = not core.bookmarks.is_empty()
-	if star: star.text = "★" if core.find_bookmark(current_url()) else "☆"
+	if star: UI.set_icon(star, "star"); star.theme_type_variation = "FlatOn" if core.find_bookmark(current_url()) else "Flat"
 
 func _sync_url(u: String) -> void:
 	last_url = u
@@ -284,7 +286,7 @@ func _sync_url(u: String) -> void:
 		var changed: bool = core.tabs[i]["url"] != u
 		core.navigated(i, u, _title_of(u) if changed else "")
 		if changed: _refresh_tabs()
-	if star: star.text = "★" if core.find_bookmark(u) else "☆"
+	if star: star.theme_type_variation = "FlatOn" if core.find_bookmark(u) else "Flat"
 
 func _title_of(u: String) -> String:
 	var h: String = Core.host_of(u)
@@ -550,13 +552,11 @@ func _chat_core() -> Object:
 	var m := get_tree().current_scene
 	return m.get("chat_core") if m else null
 
-func _hook_chat(toolbar: Control) -> void:
-	var tg := Button.new(); tg.text = "💬"; tg.custom_minimum_size = Vector2(44, 38); tg.focus_mode = Control.FOCUS_NONE
-	tg.tooltip_text = "Discuter de cette page avec Chat IA"
-	tg.pressed.connect(func():
+func _hook_chat(bar: Control) -> void:
+	UI.bar_act(bar, UI.bar_end(bar), "message-circle", "Discuter de cette page avec Chat IA", func():
 		var core = _chat_core()
 		if core: core.page_ctx = true; core.changed.emit()
-		get_tree().current_scene._open_app("chat")); toolbar.add_child(tg)
+		get_tree().current_scene._open_app("chat"))
 	var core = _chat_core()
 	if core: core.browser_hook = self
 	tree_exiting.connect(func():
