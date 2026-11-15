@@ -3,7 +3,7 @@ extends Control
 
 const TRASH := "user://trash"
 const TMETA := "user://trash.json"
-const TXT := ["txt", "md", "log", "json", "cfg", "gd", "csv", "ini", "xml", "html", "py", "sh"]
+const TXT := ["txt", "md", "log", "json", "cfg", "gd", "csv", "ini", "xml", "html", "py", "sh", "js", "css", "php", "yml", "yaml", "toml"]
 const IMG := ["png", "jpg", "jpeg", "webp", "bmp", "svg"]
 var main: Node = null
 var cb := {"p": [], "cut": false}
@@ -279,6 +279,12 @@ func open_file(f: String) -> void:
 	elif e in TXT: main._open_app("notepad"); main.edit.text = FileAccess.get_file_as_string(f); main.notify("Bloc-notes", f.get_file() + " ouvert")
 	elif e == "zip": _do_unzip(f)
 
+func open_in_editor(f: String) -> void:
+	if not main: return
+	main._open_app("code")
+	for n in main.wins["code"]["win"].find_children("*", "Control", true, false):
+		if n.has_method("open_path"): n.open_path(f); return
+
 func _preview() -> void:
 	if not prev_on: return
 	var s := _sel(); prev_img.texture = null; prev_txt.text = ""
@@ -305,6 +311,7 @@ func _menu(at: Vector2, bg: bool, idx := -1) -> void:
 		if s.size() == 1 and not intr: it.append(["Renommer", func(): _ask("Nom :", s[0].get_file(), func(t): _rename(s[0], t))])
 		if not intr: it.append(["Compresser en ZIP", func(): _do_zip(s)])
 		if s.size() == 1 and s[0].get_extension().to_lower() == "zip": it.append(["Extraire ici", func(): _do_unzip(s[0])])
+		if s.size() == 1 and not is_dir(s[0]) and s[0].get_extension().to_lower() in TXT: it.append(["Ouvrir dans l'éditeur", func(): open_in_editor(s[0])])
 		if s.size() == 1 and s[0].get_extension().to_lower() in IMG: it.append(["Définir comme fond", func(): open_file(s[0])])
 		it.append(["Supprimer définitivement" if intr else "Mettre à la corbeille", func(): _act_del(s, intr)])
 		it.append(null)

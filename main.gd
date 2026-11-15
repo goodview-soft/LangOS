@@ -82,12 +82,14 @@ const APPS := {
 	"vault": ["Coffre-fort", "res://icons/app_vault.svg"],
 	"cards": ["Cartes mémoire", "res://icons/app_cards.svg"],
 	"files": ["Fichiers", "res://icons/app_files.svg"],
+	"terminal": ["Terminal", "res://icons/app_terminal.svg"],
+	"code": ["Éditeur de code", "res://icons/app_code.svg"],
 }
 ## Dossiers du bureau : id -> applications contenues (affichées seulement dans le dossier).
 const FOLDERS := {
 	"f_lang": ["translate", "dict", "music"],
 	"f_games": ["chess", "hika"],
-	"f_soft": ["chromium", "files"],
+	"f_soft": ["chromium", "files", "terminal", "code"],
 	"f_comm": ["messenger", "remote", "chat", "soundlink"],
 	"f_tools": ["calc", "units", "timer", "todo", "vault", "cards"],
 }
@@ -775,6 +777,8 @@ func _open_app(id: String) -> void:
 		"vault": _app_tool("vault", Vector2(440, 520))
 		"cards": _app_tool("cards", Vector2(460, 640))
 		"files": _app_files()
+		"terminal": _app_dev("terminal", Vector2(760, 480))
+		"code": _app_dev("code", Vector2(900, 620))
 		"notepad": _app_notepad()
 		"settings": _app_settings()
 		"system": _app_system()
@@ -1461,6 +1465,13 @@ func _app_files() -> void:
 	var c := Control.new(); c.set_script(load("res://apps/files.gd")); c.main = self
 	c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	c.custom_minimum_size = Vector2(minf(560.0, maxf(280.0, desk.size.x - 16.0)), 400); c.clip_contents = true
+	wv.add_child(c)
+
+func _app_dev(id: String, sz: Vector2) -> void:
+	var wv := _make_window(id, "", sz, Vector2(200, 30))
+	var c := Control.new(); c.set_script(load("res://apps/terminal.gd" if id == "terminal" else "res://apps/code_editor.gd")); c.main = self
+	c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c.custom_minimum_size = Vector2(minf(520.0, maxf(280.0, desk.size.x - 16.0)), 360); c.clip_contents = true
 	wv.add_child(c)
 
 func _app_chess() -> void:
