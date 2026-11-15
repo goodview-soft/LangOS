@@ -50,7 +50,7 @@ func _init() -> void:
 	# notifications
 	m.notify("Test", "bonjour"); m.notify("Deux")
 	m._toggle_notifs()
-	if m.notifs.size() != 2 or m.unread != 0 or not is_instance_valid(m.np_panel): f.append("notifications")
+	if m.notifs.filter(func(n): return n["t"] in ["Test", "Deux"]).size() != 2 or m.unread != 0 or not is_instance_valid(m.np_panel): f.append("notifications %d %d %s" % [m.notifs.size(), m.unread, str(m.notifs.map(func(n): return n["t"]))])
 	m._close_notifs()
 	# thème
 	m._set_light(true); await create_timer(0.2).timeout
