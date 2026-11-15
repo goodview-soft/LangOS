@@ -468,6 +468,9 @@ func _build_menu() -> void:
 		v.add_child(b)
 	var sp2 := Control.new(); sp2.custom_minimum_size.y = 4; v.add_child(sp2)
 	v.add_child(HSeparator.new())
+	if OS.get_name() == "Android" and Engine.has_singleton("LangLauncher"):
+		var hm := _mk_btn("Revenir à l'accueil Android", 300, 46); hm.theme_type_variation = "Flat"; hm.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		hm.pressed.connect(func(): _toggle_menu(); Engine.get_singleton("LangLauncher").chooseHome()); v.add_child(hm)
 	var q := _mk_btn("Quitter", 300, 46); q.theme_type_variation = "Flat"; q.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	q.icon = _ico("power"); q.add_theme_constant_override("icon_max_width", 22)
 	q.add_theme_constant_override("h_separation", 14)
@@ -794,8 +797,8 @@ func _app_settings() -> void:
 	v.add_child(sl)
 	if OS.get_name() == "Android" and Engine.has_singleton("LangLauncher"):
 		v.add_child(_dlbl("Écran d'accueil"))
-		var hb := _mk_btn("Utiliser LangOS comme écran d'accueil", 420, 46); hb.pressed.connect(func(): Engine.get_singleton("LangLauncher").chooseHome()); v.add_child(hb)
-		v.add_child(_mlbl("Android demandera de choisir l'application d'accueil. Pour revenir à l'ancien écran : Réglages Android > Applications > Application d'accueil."))
+		var hb := _mk_btn("Changer l'écran d'accueil (revenir à l'ancien)", 460, 46); hb.pressed.connect(func(): Engine.get_singleton("LangLauncher").chooseHome()); v.add_child(hb)
+		v.add_child(_mlbl("Android affiche la liste des écrans d'accueil : choisis LangOS pour l'utiliser, ou ton ancien écran pour y revenir. Sinon : Réglages Android > Applications > Applications par défaut > Application d'accueil."))
 	v.add_child(_dlbl("Clavier"))
 	var ko := OptionButton.new(); ko.focus_mode = Control.FOCUS_NONE
 	var kmodes := ["osk", "system", "none"]
