@@ -1,4 +1,5 @@
 extends Node
+const UI = preload("res://apps/ui.gd")
 ## Presse-papiers universel local : historique des 50 derniers textes, épingles, recherche, panneau flottant (Ctrl+Maj+V).
 ## Surveille DisplayServer.clipboard_get toutes les secondes + copies faites via main._clip_action. Tout reste sur l'appareil (user://clipboard.json).
 signal changed
@@ -142,7 +143,7 @@ func build_ui(host: Control, floating := false) -> void:
 		for c in list.get_children(): c.queue_free()
 		var idx := search(q.text)
 		if idx.is_empty():
-			var e := Label.new(); e.text = "Historique vide" if items.is_empty() else "Aucun résultat"; e.theme_type_variation = "Muted"; list.add_child(e)
+			list.add_child(UI.empty_state("Historique vide" if items.is_empty() else "Aucun résultat"))
 		for i in idx:
 			var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 4); list.add_child(row)
 			var b: Button = m._mk_btn(str(items[i]["t"]).replace("\n", " / ").substr(0, 90), 0, 40)

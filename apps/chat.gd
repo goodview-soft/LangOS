@@ -28,7 +28,7 @@ func _ready() -> void:
 	dl_btn.visible = false; dl_btn.pressed.connect(func(): core.download_model()); top.add_child(dl_btn)
 	var nb := Button.new(); nb.text = "Nouvelle discussion"; nb.theme_type_variation = "Flat"; nb.focus_mode = Control.FOCUS_NONE; nb.pressed.connect(func(): core.clear()); top.add_child(nb)
 	var pc := PanelContainer.new(); pc.size_flags_vertical = SIZE_EXPAND_FILL
-	var sb := StyleBoxFlat.new(); sb.bg_color = UI.p("field"); sb.set_corner_radius_all(UI.rad()); sb.set_content_margin_all(10); pc.add_theme_stylebox_override("panel", sb); v.add_child(pc)
+	UI.style(pc, "panel", func(): return UI.box(UI.p("field"), UI.rad(), Color(0, 0, 0, 0), 0, 10)); v.add_child(pc)
 	scroll = ScrollContainer.new(); scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; pc.add_child(scroll)
 	box = VBoxContainer.new(); box.size_flags_horizontal = SIZE_EXPAND_FILL; box.add_theme_constant_override("separation", 8); scroll.add_child(box)
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 8); v.add_child(row)

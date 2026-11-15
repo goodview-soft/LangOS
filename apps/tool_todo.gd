@@ -65,4 +65,4 @@ func _rebuild() -> void:
 		var x := Button.new(); x.text = "✕"; x.custom_minimum_size = Vector2(48, 48); x.focus_mode = Control.FOCUS_NONE
 		x.pressed.connect(func(): items.erase(e); _save(); _rebuild()); r.add_child(x)
 	if items.is_empty():
-		var l := Label.new(); l.text = "Liste vide."; l.theme_type_variation = "Muted"; box.add_child(l)
+		box.add_child(UI.empty_state("Liste vide", "Ajoutez une tâche ci-dessus."))

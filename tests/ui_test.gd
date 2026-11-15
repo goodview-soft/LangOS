@@ -11,7 +11,7 @@ const UI = preload("res://apps/ui.gd")
 func _clipped(c: Control, win: Rect2) -> String:
 	var r := c.get_global_rect()
 	if r.size.x < 1.0 or r.size.y < 1.0: return ""
-	if r.position.x < win.position.x - 2.0 or r.end.x > win.end.x + 2.0: return "hors de la fenêtre"
+	if r.position.x < win.position.x - 2.0 or r.end.x > win.end.x + 2.0: return "hors de la fenêtre « %s »" % (c.text.left(24) if c is Label else c.name)
 	if c is Label:
 		var l: Label = c
 		if l.text == "" or l.autowrap_mode != TextServer.AUTOWRAP_OFF or l.clip_text or l.text_overrun_behavior != TextServer.OVERRUN_NO_TRIMMING: return ""
@@ -24,13 +24,17 @@ func _walk(n: Node, win: Rect2, out: Array) -> void:
 	for ch in n.get_children():
 		if ch is Control:
 			var c: Control = ch
-			if c.is_visible_in_tree() and not (c is ScrollContainer) and not c.clip_contents:
+			if c.is_visible_in_tree():
 				if c is Label or c is Button:
 					var why := _clipped(c, win)
 					if why != "" and not (c is Button): out.append("%s (%s)" % [why, str(c.get_path()).get_slice("/", 6) + "/" + c.name])
+				# Seul un défilement horizontal réellement actif excuse un contenu plus large ; clip_contents ou défilement vertical seul ne masquent rien.
+				if c is ScrollContainer and (c as ScrollContainer).horizontal_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED: continue
 				_walk(c, win, out)
 		else:
 			_walk(ch, win, out)
+
+func get_nodes_in_group_of(m: Node, g: String) -> Array: return m.get_tree().get_nodes_in_group(g)
 
 func _init() -> void:
 	var fails: Array = []
@@ -55,6 +59,25 @@ func _init() -> void:
 			_walk(w, w.get_global_rect(), cl); checks += 1
 			for s in cl.slice(0, 3): fails.append("%s à %s : %s" % [id, str(size), s])
 			m._close_win(id)
+		# Recoloration à chaud : les panneaux stylés à la construction suivent le thème de fenêtres déjà ouvertes
+		if size.x == 700:
+			m.set_cfg["light"] = false; m._restyle()
+			for id in ["music", "messenger", "notes"]: m._open_app(id)
+			await create_timer(0.5).timeout
+			var before := {}
+			for n in get_nodes_in_group_of(m, "themed"):
+				if n is PanelContainer and n.has_theme_stylebox_override("panel") and n.is_visible_in_tree() and n.get_theme_stylebox("panel") is StyleBoxFlat:
+					before[n] = (n.get_theme_stylebox("panel") as StyleBoxFlat).bg_color
+			checks += 1
+			if before.size() < 3: fails.append("recoloration : seulement %d panneaux thématiques trouvés" % before.size())
+			m._set_light(true); m.set_cfg["radius"] = 3; m._restyle()
+			var changed := 0
+			for n in before:
+				if is_instance_valid(n) and (n.get_theme_stylebox("panel") as StyleBoxFlat).bg_color != before[n]: changed += 1
+			checks += 1
+			if changed < before.size() * 0.8: fails.append("recoloration : %d/%d panneaux ont changé de couleur" % [changed, before.size()])
+			m.set_cfg["radius"] = 12; m.set_cfg["light"] = false; m._restyle()
+			for id in ["music", "messenger", "notes"]: m._close_win(id)
 		# Contraste : texte / fond des cartes et des champs, dans les deux thèmes
 		for light in [false, true]:
 			m.set_cfg["light"] = light; m._restyle()

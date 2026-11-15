@@ -1,4 +1,5 @@
 extends Control
+const UI = preload("res://apps/ui.gd")
 ## Profils d'environnement : liste d'apps + bureau virtuel + disposition (+ fond/thème). Instance sans interface = logique (main.prof) ; avec build() = écran de gestion.
 var m
 var list: VBoxContainer
@@ -109,7 +110,7 @@ func _fill() -> void:
 	for c in list.get_children(): list.remove_child(c); c.queue_free()
 	for i in all().size():
 		var p: Dictionary = all()[i]
-		var card := PanelContainer.new(); card.add_theme_stylebox_override("panel", m._box(m._p("field"), m._rad(), m._p("edge"), 1, 0, 10)); list.add_child(card)
+		var card := PanelContainer.new(); UI.style(card, "panel", func(): return UI.box(UI.p("field"), UI.rad(), UI.p("edge"), 1, 10)); list.add_child(card)
 		var cv := VBoxContainer.new(); cv.add_theme_constant_override("separation", 6); card.add_child(cv)
 		var r := HBoxContainer.new(); r.add_theme_constant_override("separation", 6); cv.add_child(r)
 		var le := LineEdit.new(); le.text = str(p["name"]); le.size_flags_horizontal = Control.SIZE_EXPAND_FILL

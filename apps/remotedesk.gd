@@ -91,7 +91,7 @@ func _build_ui() -> void:
 	status = Label.new(); status.add_theme_font_size_override("font_size", 14); status.theme_type_variation = "Muted"; root.add_child(status)
 	home = HBoxContainer.new(); home.size_flags_vertical = SIZE_EXPAND_FILL; home.add_theme_constant_override("separation", 14); root.add_child(home)
 	# Carte hôte
-	var c1 := PanelContainer.new(); c1.size_flags_horizontal = SIZE_EXPAND_FILL; c1.add_theme_stylebox_override("panel", _sb(UI.p("card"), UI.rad(), 16)); home.add_child(c1)
+	var c1 := PanelContainer.new(); c1.size_flags_horizontal = SIZE_EXPAND_FILL; UI.style(c1, "panel", func(): return _sb(UI.p("card"), UI.rad(), 16)); home.add_child(c1)
 	var v1 := VBoxContainer.new(); v1.add_theme_constant_override("separation", 12); c1.add_child(v1)
 	var t1 := Label.new(); t1.text = "Partager cet écran"; t1.add_theme_font_size_override("font_size", 22); v1.add_child(t1)
 	var d1 := Label.new(); d1.text = "Un autre appareil pourra voir et piloter LangOS ici, avec le code ci-dessous."
@@ -101,7 +101,7 @@ func _build_ui() -> void:
 	host_state = Label.new(); host_state.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; host_state.theme_type_variation = "Muted"; v1.add_child(host_state)
 	share_btn = _btn("Activer le partage", _toggle_share, "Accent", 0, 48); v1.add_child(share_btn)
 	# Carte client
-	var c2 := PanelContainer.new(); c2.size_flags_horizontal = SIZE_EXPAND_FILL; c2.add_theme_stylebox_override("panel", _sb(UI.p("card"), UI.rad(), 16)); home.add_child(c2)
+	var c2 := PanelContainer.new(); c2.size_flags_horizontal = SIZE_EXPAND_FILL; UI.style(c2, "panel", func(): return _sb(UI.p("card"), UI.rad(), 16)); home.add_child(c2)
 	var v2 := VBoxContainer.new(); v2.add_theme_constant_override("separation", 10); c2.add_child(v2)
 	var t2 := Label.new(); t2.text = "Se connecter à un appareil"; t2.add_theme_font_size_override("font_size", 22); v2.add_child(t2)
 	found_box = VBoxContainer.new(); found_box.add_theme_constant_override("separation", 4); v2.add_child(found_box)
@@ -133,7 +133,7 @@ func _rebuild_found() -> void:
 		var b := _btn("🖥  %s   (%s)" % [f["name"], f["ip"]], func(): ip_edit.text = f["ip"]; code_edit.grab_focus(), "Flat")
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT; found_box.add_child(b)
 	if found.is_empty():
-		var l := Label.new(); l.text = "Aucun appareil en partage trouvé."; l.theme_type_variation = "Muted"; found_box.add_child(l)
+		found_box.add_child(UI.empty_state("Aucun appareil en partage trouvé"))
 
 
 # ---------------------------------------------------------------- Hôte

@@ -97,7 +97,7 @@ func _build_ui() -> void:
 	var root := HBoxContainer.new(); root.add_theme_constant_override("separation", 12); m.add_child(root)
 	# Gauche : profil + contacts
 	var left := VBoxContainer.new(); left.custom_minimum_size.x = 250; left.add_theme_constant_override("separation", 8); root.add_child(left)
-	var prof := PanelContainer.new(); prof.add_theme_stylebox_override("panel", _sb(UI.p("card"), UI.rad(), 10)); left.add_child(prof)
+	var prof := PanelContainer.new(); UI.style(prof, "panel", func(): return _sb(UI.p("card"), UI.rad(), 10)); left.add_child(prof)
 	var pv := VBoxContainer.new(); pv.add_theme_constant_override("separation", 6); prof.add_child(pv)
 	name_edit = LineEdit.new(); name_edit.text = my_name; name_edit.virtual_keyboard_enabled = false
 	name_edit.max_length = 24; name_edit.text_changed.connect(func(t: String): my_name = t.strip_edges() if t.strip_edges() != "" else _device_name(); _save_profile())
@@ -114,7 +114,7 @@ func _build_ui() -> void:
 	# Droite : conversation
 	var right := VBoxContainer.new(); right.size_flags_horizontal = SIZE_EXPAND_FILL; right.add_theme_constant_override("separation", 8); root.add_child(right)
 	head_lbl = Label.new(); head_lbl.add_theme_font_size_override("font_size", 20); head_lbl.text = "Choisis un contact"; right.add_child(head_lbl)
-	var pc := PanelContainer.new(); pc.size_flags_vertical = SIZE_EXPAND_FILL; pc.add_theme_stylebox_override("panel", _sb(UI.p("field"), UI.rad(), 8)); right.add_child(pc)
+	var pc := PanelContainer.new(); pc.size_flags_vertical = SIZE_EXPAND_FILL; UI.style(pc, "panel", func(): return _sb(UI.p("field"), UI.rad(), 8)); right.add_child(pc)
 	scroll = ScrollContainer.new(); scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; pc.add_child(scroll)
 	chat_box = VBoxContainer.new(); chat_box.size_flags_horizontal = SIZE_EXPAND_FILL; chat_box.add_theme_constant_override("separation", 6); scroll.add_child(chat_box)
 	note = Label.new(); note.add_theme_font_size_override("font_size", 13); note.theme_type_variation = "Muted"; right.add_child(note)
@@ -154,12 +154,11 @@ func _rebuild_contacts() -> void:
 		b.add_theme_color_override("font_color", _status_color(id)); b.add_theme_color_override("font_hover_color", _status_color(id))
 		b.add_theme_font_size_override("font_size", 17)
 		if id == cur:
-			var sb := _sb(Color(UI.p("ov"), 0.1), 8, 8); b.add_theme_stylebox_override("normal", sb)
+			UI.style(b, "normal", func(): return _sb(Color(UI.p("ov"), 0.1), 8, 8))
 		b.pressed.connect(_select.bind(id))
 		contacts_box.add_child(b)
 	if arr.is_empty():
-		var l := Label.new(); l.text = "Aucun appareil trouvé sur le réseau.\nL'autre appareil doit aussi ouvrir Messenger."
-		l.theme_type_variation = "Muted"; l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; contacts_box.add_child(l)
+		contacts_box.add_child(UI.empty_state("Aucun appareil trouvé", "L'autre appareil doit aussi ouvrir Messenger."))
 
 
 func _nm(id: String) -> String:
@@ -231,7 +230,7 @@ func _add_bubble(m: Dictionary) -> void:
 	if mine:
 		var sp := Control.new(); sp.size_flags_horizontal = SIZE_EXPAND_FILL; row.add_child(sp)
 	var bub := PanelContainer.new()
-	bub.add_theme_stylebox_override("panel", _sb(UI.bubble_bg(mine), UI.rad(2), 10)); bub.theme = UI.bubble_theme(mine)
+	UI.style(bub, "panel", func(): return _sb(UI.bubble_bg(mine), UI.rad(2), 10)); UI.on_theme(bub, func(): bub.theme = UI.bubble_theme(mine))
 	row.add_child(bub)
 	if not mine:
 		var sp2 := Control.new(); sp2.size_flags_horizontal = SIZE_EXPAND_FILL; row.add_child(sp2)

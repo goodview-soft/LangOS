@@ -219,8 +219,7 @@ func _ready() -> void:
 	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_FULL_RECT); vb.add_theme_constant_override("separation", 4); add_child(vb)
 	tabbar = HBoxContainer.new(); tabbar.add_theme_constant_override("separation", 4); vb.add_child(tabbar)
 	var pc := PanelContainer.new(); pc.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var sb := StyleBoxFlat.new(); sb.bg_color = _col("field", Color("171b25")); sb.set_corner_radius_all(8); sb.set_content_margin_all(8)
-	pc.add_theme_stylebox_override("panel", sb); vb.add_child(pc)
+	UI.style(pc, "panel", func(): return UI.box(_col("field", Color("171b25")), UI.rad(-4), Color(0, 0, 0, 0), 0, UI.S2)); vb.add_child(pc)
 	stack = Control.new(); stack.clip_contents = true; pc.add_child(stack)
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 6); vb.add_child(row)
 	plbl = Label.new(); plbl.add_theme_font_override("font", mono); plbl.add_theme_color_override("font_color", UI.ok()); row.add_child(plbl)

@@ -1,4 +1,5 @@
 extends Control
+const UI = preload("res://apps/ui.gd")
 ## Gestionnaire de fichiers : onglets, double panneau, corbeille, recherche, aperçu, ZIP, glisser-déposer.
 
 const TRASH := "user://trash"
@@ -158,9 +159,9 @@ func _ready() -> void:
 		"i": _icon('<rect x="4" y="6" width="24" height="20" rx="3" fill="#34d399"/><circle cx="11" cy="13" r="3" fill="#fff"/><path d="M5 25l8-8 5 5 4-4 6 6z" fill="#047857"/>'),
 		"z": _icon('<path d="M8 3h16v26H8z" fill="#a78bfa"/><path d="M15 3h2v3h-2v3h2v3h-2v3h2v3h-2" stroke="#fff" stroke-width="1.5" fill="none"/>')}
 	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_FULL_RECT); vb.add_theme_constant_override("separation", 6); add_child(vb)
-	var top := HBoxContainer.new(); top.add_theme_constant_override("separation", 4); vb.add_child(top)
+	var top := UI.toolbar(); vb.add_child(top)
 	top.add_child(_btn("↑", 44, func(): _go(_parent(_cur()))))
-	pathe = LineEdit.new(); pathe.custom_minimum_size.y = 40; pathe.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pathe = LineEdit.new(); pathe.custom_minimum_size = Vector2(200, 40); pathe.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pathe.text_submitted.connect(func(t): _go(t.strip_edges())); top.add_child(pathe)
 	top.add_child(_btn("+ Onglet", 80, func(): _new_tab()))
 	top.add_child(_btn("2 volets", 84, func(): dual = not dual; panes[1].root.visible = dual))
@@ -201,8 +202,9 @@ func _mk_pane(k: int) -> P:
 	p.tabbar = HBoxContainer.new(); p.tabbar.add_theme_constant_override("separation", 2); sc.add_child(p.tabbar)
 	p.list = ItemList.new(); p.list.size_flags_vertical = Control.SIZE_EXPAND_FILL; p.list.select_mode = ItemList.SELECT_MULTI
 	p.list.icon_mode = ItemList.ICON_MODE_LEFT; p.list.add_theme_font_size_override("font_size", 17); p.list.fixed_icon_size = Vector2i(26, 26)
-	var sbx := StyleBoxFlat.new(); sbx.bg_color = _col("field", Color("171b25")); sbx.set_corner_radius_all(8); p.list.add_theme_stylebox_override("panel", sbx)
-	p.list.add_theme_color_override("font_color", _col("text", Color("e5e9f0")))
+	UI.on_theme(p.list, func():
+		p.list.add_theme_stylebox_override("panel", UI.box(_col("field", Color("171b25")), UI.rad(-4)))
+		p.list.add_theme_color_override("font_color", _col("text", Color("e5e9f0"))))
 	p.list.item_activated.connect(func(i): act = k; _open_item(p, i))
 	p.list.item_selected.connect(func(_i): act = k; _preview())
 	p.list.item_clicked.connect(func(i, at, b): act = k; if b == MOUSE_BUTTON_RIGHT: _menu(p.list.get_global_transform() * at, false, i))

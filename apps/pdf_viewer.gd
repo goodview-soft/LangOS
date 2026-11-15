@@ -1,4 +1,5 @@
 extends Control
+const UI = preload("res://apps/ui.gd")
 ## Lecteur PDF : pas de moteur PDF dans Godot, on utilise pdftoppm / pdftotext / pdfinfo (poppler) s'ils existent (Linux).
 ## Sinon (Android, outils absents) : message « moteur PDF indisponible ». Pages rendues en cache user://pdfcache.
 ## Annotations (surlignage + notes) : user://pdfnotes_<hash>.json.
@@ -102,7 +103,7 @@ func _c(k: String) -> Color: return m._p(k) if m else Color("232834")
 
 func build() -> void:
 	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_FULL_RECT); vb.add_theme_constant_override("separation", 6); add_child(vb)
-	var top := HBoxContainer.new(); top.add_theme_constant_override("separation", 4); vb.add_child(top)
+	var top := UI.toolbar(); vb.add_child(top)
 	var bt := func(t: String, f: Callable) -> void:
 		var b := Button.new(); b.text = t; b.custom_minimum_size = Vector2(44, 40); b.pressed.connect(f); top.add_child(b)
 	bt.call("‹", func(): goto(page - 1)); bt.call("›", func(): goto(page + 1))
@@ -110,7 +111,7 @@ func build() -> void:
 	bt.call("+", func(): zoom = minf(zoom * 1.25, 4.0); _render()); bt.call("−", func(): zoom = maxf(zoom * 0.8, 0.4); _render())
 	bt.call("Surligner", func(): hl_mode = not hl_mode; _say("Surlignage : trace un rectangle." if hl_mode else "Surlignage désactivé."))
 	bt.call("Effacer", func(): notes.erase(str(page)); _save_notes(); view.queue_redraw())
-	note_in = LineEdit.new(); note_in.placeholder_text = "Note du prochain surlignage"; note_in.custom_minimum_size.y = 40; note_in.size_flags_horizontal = Control.SIZE_EXPAND_FILL; top.add_child(note_in)
+	note_in = LineEdit.new(); note_in.placeholder_text = "Note du prochain surlignage"; note_in.custom_minimum_size = Vector2(200, 40); note_in.size_flags_horizontal = Control.SIZE_EXPAND_FILL; top.add_child(note_in)
 	var sr := HBoxContainer.new(); sr.add_theme_constant_override("separation", 4); vb.add_child(sr)
 	q_in = LineEdit.new(); q_in.placeholder_text = "Rechercher dans le PDF…"; q_in.custom_minimum_size.y = 40; q_in.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	q_in.text_submitted.connect(_search_ui); sr.add_child(q_in)

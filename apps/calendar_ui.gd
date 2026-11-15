@@ -1,4 +1,5 @@
 extends Control
+const UI = preload("res://apps/ui.gd")
 ## Interface de l'agenda (vues mois / semaine) ; la logique est dans apps/calendar.gd (m.cal).
 var m
 var cal
@@ -23,11 +24,11 @@ func build() -> void:
 	var t := Time.get_date_dict_from_unix_time(cal.now_unix())
 	year = t.year; month = t.month; sel = "%04d-%02d-%02d" % [t.year, t.month, t.day]
 	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_FULL_RECT); vb.add_theme_constant_override("separation", 6); add_child(vb)
-	var top := HBoxContainer.new(); top.add_theme_constant_override("separation", 4); vb.add_child(top)
+	var top := UI.toolbar(); vb.add_child(top)
 	var bt := func(txt: String, f: Callable) -> void:
 		var b := Button.new(); b.text = txt; b.custom_minimum_size = Vector2(46, 40); b.pressed.connect(f); top.add_child(b)
 	bt.call("‹", func(): _nav(-1)); bt.call("›", func(): _nav(1))
-	title = Label.new(); title.size_flags_horizontal = Control.SIZE_EXPAND_FILL; title.add_theme_font_size_override("font_size", 20); top.add_child(title)
+	title = Label.new(); title.custom_minimum_size.x = 170; title.add_theme_font_size_override("font_size", 20); top.add_child(title)
 	bt.call("Mois/Semaine", func(): week = not week; _rebuild())
 	bt.call("Export .ics", _exp); bt.call("Import .ics", _imp)
 	grid = GridContainer.new(); grid.columns = 7; grid.add_theme_constant_override("h_separation", 3); grid.add_theme_constant_override("v_separation", 3)
@@ -75,7 +76,7 @@ func _cell(ds: String, label: String, dim: bool) -> void:
 	b.text = label + ("" if ev.is_empty() else (" ●%d" % ev.size() if not week else "\n" + "\n".join(ev.slice(0, 6).map(func(e): return e["tm"] + " " + e["t"]))))
 	b.clip_text = true; b.alignment = HORIZONTAL_ALIGNMENT_LEFT; b.focus_mode = Control.FOCUS_NONE
 	if dim: b.modulate = Color(1, 1, 1, 0.5)
-	if ds == sel: b.add_theme_stylebox_override("normal", m._box(Color(m.ACCENT, 0.35), 6, m.ACCENT, 2))
+	if ds == sel: UI.style(b, "normal", func(): return UI.box(Color(UI.accent(), 0.35), 6, UI.accent(), 2))
 	b.pressed.connect(func(): sel = ds; _rebuild()); grid.add_child(b)
 
 func _rebuild() -> void:

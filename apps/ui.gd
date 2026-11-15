@@ -62,6 +62,22 @@ static func box(c: Color, r := -1, bc := Color(0, 0, 0, 0), bw := 0, margin := -
 static func card_box(margin := S3, alt := false) -> StyleBoxFlat:
 	return box(p("field") if alt else p("card"), rad(2), p("edge"), 1, margin)
 
+# ---------------------------------------------------------------- Recoloration à chaud
+## Enregistre fn() : appelée tout de suite, puis à chaque changement de thème, d'accent ou de rayon (groupe « themed », voir main._restyle).
+static func on_theme(node: Node, fn: Callable) -> void:
+	var a: Array = node.get_meta("_themed", []); a.append(fn); node.set_meta("_themed", a)
+	node.add_to_group("themed"); fn.call()
+
+## Style thématique : maker() renvoie un StyleBox, réappliqué sur « slot » à chaque rafraîchissement.
+static func style(node: Control, slot: String, maker: Callable) -> void:
+	on_theme(node, func(): node.add_theme_stylebox_override(slot, maker.call()))
+
+## Réapplique tous les styles thématiques des nœuds vivants (appelé par main._restyle).
+static func refresh(tree: SceneTree) -> void:
+	for n in tree.get_nodes_in_group("themed"):
+		for f in n.get_meta("_themed", []):
+			if f.is_valid(): f.call()
+
 # ---------------------------------------------------------------- Textes
 static func label(t: String, sz := T_BODY, variation := "") -> Label:
 	var l := Label.new(); l.text = t
@@ -94,7 +110,7 @@ static func icon_button(icon: Texture2D, w := TOUCH, tip := "") -> Button:
 # ---------------------------------------------------------------- Conteneurs
 static func card(parent: Node = null, margin := S3, alt := false) -> VBoxContainer:
 	var pc := PanelContainer.new(); pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	pc.add_theme_stylebox_override("panel", card_box(margin, alt))
+	style(pc, "panel", func(): return card_box(margin, alt))
 	if parent != null: parent.add_child(pc)
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", S2); pc.add_child(v)
 	return v
@@ -136,9 +152,10 @@ static func empty_state(t: String, hint := "", kind := "") -> VBoxContainer:
 ## Pastille colorée avec texte (étiquette d'état).
 static func pill(t: String, c: Color) -> PanelContainer:
 	var pc := PanelContainer.new(); pc.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	var sb := box(Color(c, 0.18), 99, Color(c, 0.5), 1); sb.content_margin_left = S3; sb.content_margin_right = S3; sb.content_margin_top = 2; sb.content_margin_bottom = 2
-	pc.add_theme_stylebox_override("panel", sb)
-	var l := label(t, T_TINY); l.add_theme_color_override("font_color", c if c.get_luminance() < 0.6 or not light() else c.darkened(0.4)); pc.add_child(l); return pc
+	style(pc, "panel", func(): var b := box(Color(c, 0.18), 99, Color(c, 0.5), 1); b.content_margin_left = S3; b.content_margin_right = S3; b.content_margin_top = 2; b.content_margin_bottom = 2; return b)
+	var l := label(t, T_TINY); pc.add_child(l)
+	on_theme(l, func(): l.add_theme_color_override("font_color", c if c.get_luminance() < 0.6 or not light() else c.darkened(0.4)))
+	return pc
 
 static func separator() -> HSeparator:
 	return HSeparator.new()

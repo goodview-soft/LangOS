@@ -1,4 +1,5 @@
 extends Control
+const UI = preload("res://apps/ui.gd")
 ## Tableur : grille virtualisée (dessin des cellules visibles), formules avec parseur maison (aucun eval), CSV, graphique.
 ## Le moteur (set_cell / value / to_csv / from_csv) fonctionne sans interface ; build() ajoute l'UI.
 var m
@@ -325,7 +326,7 @@ func _c(k: String) -> Color: return m._p(k) if m else Color("232834")
 
 func build() -> void:
 	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_FULL_RECT); vb.add_theme_constant_override("separation", 6); add_child(vb)
-	var top := HBoxContainer.new(); top.add_theme_constant_override("separation", 4); vb.add_child(top)
+	var top := UI.toolbar(); vb.add_child(top)
 	fname = LineEdit.new(); fname.text = "tableau"; fname.custom_minimum_size = Vector2(120, 40); top.add_child(fname)
 	for b in [["Enreg.", _save], ["Ouvrir", _open], ["Export CSV", _exp], ["Import CSV", _imp], ["Graphique", _toggle_chart]]:
 		var bt := Button.new(); bt.text = b[0]; bt.custom_minimum_size.y = 40; bt.pressed.connect(b[1]); top.add_child(bt)

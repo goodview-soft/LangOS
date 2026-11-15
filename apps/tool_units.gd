@@ -1,4 +1,5 @@
 extends Control
+const UI = preload("res://apps/ui.gd")
 ## Convertisseur d'unités hors ligne.
 
 const T := "température"

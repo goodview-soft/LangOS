@@ -1,4 +1,5 @@
 extends Control
+const UI = preload("res://apps/ui.gd")
 ## Coffre à mots de passe local, chiffré AES-256-CBC + HMAC-SHA256 (clé dérivée du mot de passe maître).
 
 const PATH := "user://vault.bin"
@@ -94,8 +95,8 @@ func _save() -> void:
 
 func _list_screen() -> void:
 	_clear()
-	var top := HBoxContainer.new(); top.add_theme_constant_override("separation", 6); ui.add_child(top)
-	var s := LineEdit.new(); s.placeholder_text = "Rechercher…"; s.custom_minimum_size.y = 48; s.size_flags_horizontal = Control.SIZE_EXPAND_FILL; top.add_child(s)
+	var top := UI.toolbar(); ui.add_child(top)
+	var s := LineEdit.new(); s.placeholder_text = "Rechercher…"; s.custom_minimum_size = Vector2(180, 48); s.size_flags_horizontal = Control.SIZE_EXPAND_FILL; top.add_child(s)
 	top.add_child(_btn("+ Ajouter", func(): _edit_screen(-1), 100))
 	top.add_child(_btn("Verrouiller", _lock_screen, 110))
 	var sc := ScrollContainer.new(); sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; ui.add_child(sc)
@@ -107,7 +108,7 @@ func _list_screen() -> void:
 			if q != "" and not (e.n.to_lower().contains(q.to_lower()) or e.u.to_lower().contains(q.to_lower())): continue
 			var b := _btn("%s   %s" % [e.n, e.u], func(): _edit_screen(i)); b.alignment = HORIZONTAL_ALIGNMENT_LEFT; b.clip_text = true; box.add_child(b)
 		if box.get_child_count() == 0:
-			var l := Label.new(); l.text = "Aucune entrée."; box.add_child(l)
+			box.add_child(UI.empty_state("Aucune entrée", "Ajoutez un écran avec « + Ajouter »."))
 	s.text_changed.connect(fill); fill.call("")
 
 func _edit_screen(idx: int) -> void:

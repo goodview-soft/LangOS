@@ -1,4 +1,5 @@
 extends Node
+const UI = preload("res://apps/ui.gd")
 ## Control Center : panneau rapide depuis la barre (volume, luminosité si disponibles, thème, animations, bureaux, batterie).
 var m
 var panel: PanelContainer

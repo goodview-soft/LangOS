@@ -115,8 +115,8 @@ func _lbl(t: String, sz := 15, dim := false) -> Label:
 
 func _card() -> VBoxContainer:
 	var pc := PanelContainer.new(); pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var sb: StyleBoxFlat = m._box(m._p("field"), 12, m._p("edge"), 1); sb.content_margin_left = 12; sb.content_margin_right = 12; sb.content_margin_top = 8; sb.content_margin_bottom = 8
-	pc.add_theme_stylebox_override("panel", sb); body.add_child(pc)
+	UI.style(pc, "panel", func(): var sb := UI.card_box(UI.S3, true); sb.content_margin_top = UI.S2; sb.content_margin_bottom = UI.S2; return sb)
+	body.add_child(pc)
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 4); pc.add_child(v); return v
 
 func _line(c: Control, t: String, dim := false) -> Label:

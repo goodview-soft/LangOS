@@ -1,4 +1,5 @@
 extends Control
+const UI = preload("res://apps/ui.gd")
 ## Calculatrice scientifique avec historique (hors ligne).
 
 var expr := ""

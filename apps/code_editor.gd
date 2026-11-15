@@ -1,4 +1,5 @@
 extends Control
+const UI = preload("res://apps/ui.gd")
 ## Éditeur de code : CodeEdit, coloration par extension, onglets, recherche/remplacement, sauvegarde auto en user://.
 
 const SESSION := "user://code_session.json"
@@ -173,9 +174,9 @@ func _btn(t: String, w: float, f: Callable) -> Button:
 func _ready() -> void:
 	mono = SystemFont.new(); mono.font_names = PackedStringArray(["DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono", "monospace"])
 	var vb := VBoxContainer.new(); vb.set_anchors_preset(Control.PRESET_FULL_RECT); vb.add_theme_constant_override("separation", 4); add_child(vb)
-	var top := HBoxContainer.new(); top.add_theme_constant_override("separation", 4); vb.add_child(top)
+	var top := UI.toolbar(); vb.add_child(top)
 	top.add_child(_btn("Nouveau", 74, func(): new_doc()))
-	pathe = LineEdit.new(); pathe.size_flags_horizontal = Control.SIZE_EXPAND_FILL; pathe.custom_minimum_size.y = 38; pathe.placeholder_text = "Chemin du fichier (user://note.gd, /home/...)"
+	pathe = LineEdit.new(); pathe.size_flags_horizontal = Control.SIZE_EXPAND_FILL; pathe.custom_minimum_size = Vector2(200, 40); pathe.placeholder_text = "Chemin du fichier (user://note.gd, /home/...)"
 	pathe.text_submitted.connect(func(t): open_path(t.strip_edges())); top.add_child(pathe)
 	top.add_child(_btn("Ouvrir", 64, func(): open_path(pathe.text.strip_edges())))
 	top.add_child(_btn("Enregistrer", 96, func(): _save_cur()))

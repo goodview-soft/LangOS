@@ -399,6 +399,11 @@ func _build_theme() -> void:
 	th.set_stylebox("selected", "ItemList", _box(Color(ACCENT, 0.35), 6)); th.set_stylebox("selected_focus", "ItemList", _box(Color(ACCENT, 0.35), 6))
 	th.set_stylebox("hovered", "ItemList", _box(w.call(0.06), 6)); th.set_stylebox("focus", "ItemList", StyleBoxEmpty.new())
 	th.set_color("font_color", "ItemList", tx); th.set_color("font_selected_color", "ItemList", tx)
+	th.set_stylebox("panel", "Tree", _box(_p("field"), 10, w.call(0.07), 1, 0, 6)); th.set_stylebox("focus", "Tree", StyleBoxEmpty.new())
+	for st in ["selected", "selected_focus"]: th.set_stylebox(st, "Tree", _box(Color(ACCENT, 0.35), 6))
+	th.set_stylebox("hovered", "Tree", _box(w.call(0.06), 6)); th.set_stylebox("cursor", "Tree", _box(Color(ACCENT, 0.2), 6)); th.set_stylebox("cursor_unfocused", "Tree", _box(Color(ACCENT, 0.2), 6))
+	for k in ["font_color", "font_selected_color", "font_hovered_color"]: th.set_color(k, "Tree", tx)
+	th.set_color("guide_color", "Tree", w.call(0.1)); th.set_color("relationship_line_color", "Tree", w.call(0.1))
 	th.set_font_size("font_size", "ItemList", 19); th.set_constant("v_separation", "ItemList", 6)
 	th.set_color("default_color", "RichTextLabel", tx)
 	# Variante transparente
@@ -1012,11 +1017,9 @@ func _app_notepad() -> void:
 
 ## ---- Paramètres : sections en cartes, lignes « libellé | réglage » qui passent à la ligne sur petit écran, défilement vertical.
 func _s_card(parent: Control, title: String) -> VBoxContainer:
-	var pc := PanelContainer.new(); pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var sb := _box(_p("card"), _rad() + 2, _p("edge"), 1); sb.content_margin_left = 16; sb.content_margin_right = 16; sb.content_margin_top = 14; sb.content_margin_bottom = 14
-	pc.add_theme_stylebox_override("panel", sb); parent.add_child(pc)
-	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 12); pc.add_child(v)
-	var h := Label.new(); h.text = title.to_upper(); h.add_theme_font_size_override("font_size", 13); h.add_theme_color_override("font_color", UI.accent_text()); v.add_child(h)
+	var v := UI.card(parent, 14)
+	v.add_theme_constant_override("separation", 12)
+	var h := UI.label(title.to_upper(), UI.T_TINY, "Section"); v.add_child(h)
 	return v
 
 ## Une ligne de réglage : le libellé à gauche, le contrôle à droite ; s'il manque de place, le contrôle passe dessous.
@@ -1898,6 +1901,7 @@ func _restyle() -> void:
 	if kb != null: var ks := _box(_p("kb"), _rad() + 4, _p("edge"), 1, 24, 12); ks.corner_radius_bottom_left = 0; ks.corner_radius_bottom_right = 0; kb.add_theme_stylebox_override("panel", ks)
 	_restyle_icons()
 	_set_active(active)   # styles des fenêtres, barres de titre, tâches et dock
+	UI.refresh(get_tree())   # panneaux stylés à la construction par les applications (groupe « themed »)
 
 func _set_light(on: bool) -> void:
 	set_cfg["light"] = on; _restyle(); _save_settings()

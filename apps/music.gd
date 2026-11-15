@@ -142,8 +142,8 @@ func _build_ui() -> void:
 	for k in ["left", "right", "top", "bottom"]: m.add_theme_constant_override("margin_" + k, 12)
 	add_child(m)
 	var root := VBoxContainer.new(); root.add_theme_constant_override("separation", 10); m.add_child(root)
-	var top := HBoxContainer.new(); top.add_theme_constant_override("separation", 8); root.add_child(top)
-	url_edit = LineEdit.new(); url_edit.placeholder_text = "Colle un lien YouTube / YouTube Music (vidéo ou playlist)…"
+	var top := UI.toolbar(); root.add_child(top)
+	url_edit = LineEdit.new(); url_edit.custom_minimum_size = Vector2(200, UI.TOUCH); url_edit.placeholder_text = "Colle un lien YouTube / YouTube Music (vidéo ou playlist)…"
 	url_edit.size_flags_horizontal = SIZE_EXPAND_FILL; url_edit.virtual_keyboard_enabled = false
 	url_edit.text_submitted.connect(func(_t): _download()); top.add_child(url_edit)
 	clip_chk = CheckBox.new(); clip_chk.text = "avec le clip"; clip_chk.focus_mode = Control.FOCUS_NONE; top.add_child(clip_chk)
@@ -153,7 +153,7 @@ func _build_ui() -> void:
 	var hb := HBoxContainer.new(); hb.size_flags_vertical = SIZE_EXPAND_FILL
 	hb.add_theme_constant_override("separation", 12); root.add_child(hb)
 	# Bibliothèque
-	left = PanelContainer.new(); left.custom_minimum_size.x = 220; left.add_theme_stylebox_override("panel", _panel(UI.p("card"), UI.rad(2), 10)); hb.add_child(left)
+	left = PanelContainer.new(); left.custom_minimum_size.x = 220; UI.style(left, "panel", func(): return _panel(UI.p("card"), UI.rad(2), 10)); hb.add_child(left)
 	var lv := VBoxContainer.new(); lv.add_theme_constant_override("separation", 8); left.add_child(lv)
 	var lt := Label.new(); lt.text = "Bibliothèque"; lt.add_theme_font_size_override("font_size", 18); lv.add_child(lt)
 	list = ItemList.new(); list.size_flags_vertical = SIZE_EXPAND_FILL
@@ -187,7 +187,7 @@ func _build_ui() -> void:
 	vh.add_child(_btn("Supprimer", _vocab_delete, "Flat")); vh.add_child(_btn("Fermer", _toggle_vocab, "Flat"))
 	vocab_list = ItemList.new(); vocab_list.size_flags_vertical = SIZE_EXPAND_FILL; vv.add_child(vocab_list)
 	# Carte mot
-	var wp := PanelContainer.new(); wp.custom_minimum_size.y = 128; wp.add_theme_stylebox_override("panel", _panel(UI.p("card"), UI.rad(), 10)); right.add_child(wp)
+	var wp := PanelContainer.new(); wp.custom_minimum_size.y = 128; UI.style(wp, "panel", func(): return _panel(UI.p("card"), UI.rad(), 10)); right.add_child(wp)
 	var wh := HBoxContainer.new(); wh.add_theme_constant_override("separation", 10); wp.add_child(wh)
 	word_view = RichTextLabel.new(); word_view.bbcode_enabled = true; word_view.selection_enabled = true; word_view.context_menu_enabled = true
 	word_view.size_flags_horizontal = SIZE_EXPAND_FILL; word_view.add_theme_font_size_override("normal_font_size", 17)
@@ -195,18 +195,18 @@ func _build_ui() -> void:
 	wh.add_child(word_view)
 	star_btn = _btn("★ Apprendre", _toggle_star, "Accent", 150); star_btn.visible = false; wh.add_child(star_btn)
 	# Transport
-	var tbar := PanelContainer.new(); tbar.add_theme_stylebox_override("panel", _panel(UI.p("card"), UI.rad(2), 8)); root.add_child(tbar)
-	var tp := HBoxContainer.new(); tp.add_theme_constant_override("separation", 8); tbar.add_child(tp)
+	var tbar := PanelContainer.new(); UI.style(tbar, "panel", func(): return _panel(UI.p("card"), UI.rad(2), 8)); root.add_child(tbar)
+	var tp := UI.toolbar(); tbar.add_child(tp)
 	tp.add_child(_ibtn("prev", func(): _play(_wrap(current - 1)), 44, 44, 20))
 	play_btn = _btn("", _toggle); play_btn.custom_minimum_size = Vector2(56, 56)
 	for st in ["normal", "hover", "pressed"]:
-		var ps := StyleBoxFlat.new(); ps.bg_color = UI.accent() if st != "hover" else UI.accent().lightened(0.2); ps.set_corner_radius_all(28); play_btn.add_theme_stylebox_override(st, ps)
+		UI.style(play_btn, st, func(): var ps := StyleBoxFlat.new(); ps.bg_color = UI.accent() if st != "hover" else UI.accent().lightened(0.2); ps.set_corner_radius_all(28); return ps)
 	play_btn.icon = _ico("play"); play_btn.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER; play_btn.add_theme_constant_override("icon_max_width", 24)
-	for c in ["icon_normal_color", "icon_hover_color", "icon_pressed_color"]: play_btn.add_theme_color_override(c, UI.on(UI.accent()))
+	UI.on_theme(play_btn, func(): for c in ["icon_normal_color", "icon_hover_color", "icon_pressed_color"]: play_btn.add_theme_color_override(c, UI.on(UI.accent())))
 	tp.add_child(play_btn)
 	tp.add_child(_ibtn("next", func(): _play(_wrap(current + 1)), 44, 44, 20))
 	time_lbl = Label.new(); time_lbl.text = "0:00 / 0:00"; time_lbl.custom_minimum_size.x = 96; tp.add_child(time_lbl)
-	seek = HSlider.new(); seek.size_flags_horizontal = SIZE_EXPAND_FILL; seek.size_flags_vertical = SIZE_SHRINK_CENTER
+	seek = HSlider.new(); seek.custom_minimum_size = Vector2(180, UI.TOUCH); seek.size_flags_horizontal = SIZE_EXPAND_FILL; seek.size_flags_vertical = SIZE_SHRINK_CENTER
 	seek.focus_mode = Control.FOCUS_NONE; seek.step = 0.1
 	seek.drag_started.connect(func(): _seeking = true)
 	seek.drag_ended.connect(func(_c): _seeking = false; _seek_to(seek.value))

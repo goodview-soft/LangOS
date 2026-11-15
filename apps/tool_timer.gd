@@ -1,4 +1,5 @@
 extends Control
+const UI = preload("res://apps/ui.gd")
 ## Minuteur, chronomètre et pomodoro avec alarme sonore.
 
 var mode := 0                # 0 minuteur, 1 chrono, 2 pomodoro
