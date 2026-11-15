@@ -42,6 +42,10 @@ var apk_prompted := false
 var upd_lbl: Label
 const BG_GRADS := [["16213e","2f5fa8","7a4fb0"], ["0f1c26","1f4e5f","2e8b7a"], ["16161f","3a2a5c","b0507a"], ["12141a","2a2f3d","56607a"], ["1c120d","6b3a1f","e0873a"]]
 const ACCENT := Color("5aa2ff")
+const PAL_D := {"win": Color("232834"), "tb_on": Color("1f2432"), "tb_off": Color("171a23"), "field": Color("171b25"), "popup": Color("1b1f2a"), "bar": Color(0.07, 0.08, 0.11, 0.9), "menu": Color(0.11, 0.13, 0.18, 0.97), "text": Color("e5e9f0"), "ov": Color(1, 1, 1), "edge": Color(1, 1, 1, 0.1)}
+const PAL_L := {"win": Color("f3f5f9"), "tb_on": Color("e2e7f0"), "tb_off": Color("edf0f6"), "field": Color("ffffff"), "popup": Color("ffffff"), "bar": Color(0.93, 0.94, 0.97, 0.94), "menu": Color(0.97, 0.98, 1.0, 0.97), "text": Color("1b2230"), "ov": Color(0, 0, 0), "edge": Color(0, 0, 0, 0.14)}
+func _p(k: String):
+	return (PAL_L if set_cfg.get("light", false) else PAL_D)[k]
 const TEXT := Color("e5e9f0")
 const MUTED := Color("8f9bb3")
 const APPS := {
@@ -87,7 +91,7 @@ func _top_ids() -> Array:
 	var android := OS.get_name() == "Android"
 	return APPS.keys().filter(func(k): return not inside.has(k) and (k != "android_apps" or android))
 var active := ""
-var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "cursor": "auto", "pad": false, "pad_speed": 0.7, "zoom": 1.0, "model": "", "engine": -1, "src": "spa", "tgt": "fra"}
+var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "cursor": "auto", "pad": false, "pad_speed": 0.7, "zoom": 1.0, "model": "", "engine": -1, "src": "spa", "tgt": "fra", "light": false, "wall": false, "icons": {}, "layout": {}, "open": []}
 var kb: PanelContainer
 var ui_root: VBoxContainer
 var pointer: Control
@@ -110,9 +114,11 @@ func _ready() -> void:
 	_load_settings()
 	OS.low_processor_usage_mode = true
 	OS.low_processor_usage_mode_sleep_usec = 16000
+	n_vd = clampi(int(set_cfg.get("nvd", 2)), 1, 6)
 	_build_theme()
 	_build_desktop()
 	_setup_chat()
+	if _real(): _restore_layout.call_deferred()
 	var t := Timer.new(); t.wait_time = 1.0; t.autostart = true
 	t.timeout.connect(_tick); add_child(t); _tick()
 	_check_update()
@@ -155,6 +161,17 @@ func _input(ev: InputEvent) -> void:
 		var fo := get_viewport().gui_get_focus_owner()
 		if not (fo is LineEdit or fo is TextEdit):
 			chat_ov.toggle(); get_viewport().set_input_as_handled(); return
+	if ev is InputEventKey and ev.pressed and ev.ctrl_pressed and ev.alt_pressed and (ev.keycode == KEY_LEFT or ev.keycode == KEY_RIGHT):
+		_goto_vd(posmod(cur_vd + (1 if ev.keycode == KEY_RIGHT else -1), n_vd)); get_viewport().set_input_as_handled(); return
+	if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT:
+		if ev.pressed:
+			if _begin_resize(ev.position): get_viewport().set_input_as_handled(); return
+		elif not rs.is_empty():
+			rs = {}; _save_layout(); get_viewport().set_input_as_handled(); return
+	elif ev is InputEventMouseMotion and not rs.is_empty():
+		_do_resize(ev.position); get_viewport().set_input_as_handled(); return
+	elif ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_RIGHT and ev.pressed:
+		_context_here(ev.position); get_viewport().set_input_as_handled(); return
 	if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT:
 		if ev.pressed: _raise_window_at(ev.position)
 		lp_active = ev.pressed; lp_pos = ev.position; lp_t = Time.get_ticks_msec()
@@ -178,9 +195,13 @@ func _raise_window_at(pos: Vector2) -> void:
 func _check_longpress() -> void:
 	if lp_active and Time.get_ticks_msec() - lp_t > 550:
 		lp_active = false
-		var c := get_viewport().gui_get_hovered_control()
-		while c and not (c is TextEdit or c is LineEdit or c is RichTextLabel): c = c.get_parent() as Control
-		if c: _show_ctx(c, lp_pos)
+		_context_here(lp_pos)
+
+func _context_here(pos: Vector2) -> void:
+	var c := get_viewport().gui_get_hovered_control()
+	while c and not (c is TextEdit or c is LineEdit or c is RichTextLabel): c = c.get_parent() as Control
+	if c: _show_ctx(c, pos)
+	else: _context_at(pos)
 
 func _show_ctx(t: Control, at: Vector2) -> void:
 	_hide_ctx()
@@ -308,34 +329,36 @@ func _build_theme() -> void:
 	var f := SystemFont.new()
 	f.font_names = PackedStringArray(["Inter", "Noto Sans", "Ubuntu", "Cantarell", "Roboto", "DejaVu Sans"])
 	th.default_font = f; th.default_font_size = 17
-	var w := func(a: float) -> Color: return Color(1, 1, 1, a)
+	var ovc: Color = _p("ov")
+	var tx: Color = _p("text")
+	var w := func(a: float) -> Color: return Color(ovc, a)
 	# Boutons (touches) : remplis
 	for st in [["normal", w.call(0.08)], ["hover", w.call(0.16)], ["pressed", ACCENT], ["disabled", w.call(0.04)]]:
 		var sb := _box(st[1], 10); sb.content_margin_left = 12; sb.content_margin_right = 12
 		sb.content_margin_top = 6; sb.content_margin_bottom = 6
 		th.set_stylebox(st[0], "Button", sb)
 	th.set_stylebox("focus", "Button", StyleBoxEmpty.new())
-	th.set_color("font_color", "Button", TEXT); th.set_color("font_hover_color", "Button", Color.WHITE)
+	th.set_color("font_color", "Button", tx); th.set_color("font_hover_color", "Button", tx)
 	th.set_color("font_pressed_color", "Button", Color.WHITE)
-	th.set_color("icon_normal_color", "Button", TEXT); th.set_color("icon_hover_color", "Button", Color.WHITE)
+	th.set_color("icon_normal_color", "Button", tx); th.set_color("icon_hover_color", "Button", tx)
 	th.set_color("icon_pressed_color", "Button", Color.WHITE)
 	th.set_font_size("font_size", "Button", 19)
 	th.set_constant("icon_max_width", "Button", 22); th.set_constant("h_separation", "Button", 10)
 	for st in ["normal", "hover", "pressed", "disabled"]:
 		th.set_stylebox(st, "OptionButton", th.get_stylebox(st, "Button"))
 	th.set_stylebox("focus", "OptionButton", StyleBoxEmpty.new())
-	th.set_color("font_color", "OptionButton", TEXT); th.set_color("font_hover_color", "OptionButton", Color.WHITE)
+	th.set_color("font_color", "OptionButton", tx); th.set_color("font_hover_color", "OptionButton", tx)
 	th.set_font_size("font_size", "OptionButton", 17)
-	th.set_stylebox("panel", "PopupMenu", _box(Color("1b1f2a"), 10, w.call(0.12), 1, 12, 6))
+	th.set_stylebox("panel", "PopupMenu", _box(_p("popup"), 10, w.call(0.12), 1, 12, 6))
 	th.set_stylebox("hover", "PopupMenu", _box(Color(ACCENT, 0.35), 6))
-	th.set_color("font_color", "PopupMenu", TEXT); th.set_font_size("font_size", "PopupMenu", 17)
+	th.set_color("font_color", "PopupMenu", tx); th.set_font_size("font_size", "PopupMenu", 17)
 	th.set_constant("v_separation", "PopupMenu", 8)
-	th.set_stylebox("panel", "ItemList", _box(Color("171b25"), 10, w.call(0.07), 1, 0, 6))
+	th.set_stylebox("panel", "ItemList", _box(_p("field"), 10, w.call(0.07), 1, 0, 6))
 	th.set_stylebox("selected", "ItemList", _box(Color(ACCENT, 0.35), 6)); th.set_stylebox("selected_focus", "ItemList", _box(Color(ACCENT, 0.35), 6))
 	th.set_stylebox("hovered", "ItemList", _box(w.call(0.06), 6)); th.set_stylebox("focus", "ItemList", StyleBoxEmpty.new())
-	th.set_color("font_color", "ItemList", TEXT); th.set_color("font_selected_color", "ItemList", Color.WHITE)
+	th.set_color("font_color", "ItemList", tx); th.set_color("font_selected_color", "ItemList", tx)
 	th.set_font_size("font_size", "ItemList", 19); th.set_constant("v_separation", "ItemList", 6)
-	th.set_color("default_color", "RichTextLabel", TEXT)
+	th.set_color("default_color", "RichTextLabel", tx)
 	# Variante transparente
 	th.set_type_variation("Flat", "Button")
 	for st in [["normal", 0.0], ["hover", 0.09], ["pressed", 0.16]]:
@@ -354,17 +377,17 @@ func _build_theme() -> void:
 	th.set_color("font_color", "Accent", Color("0b1220")); th.set_color("font_hover_color", "Accent", Color("0b1220"))
 	th.set_color("font_pressed_color", "Accent", Color("0b1220")); th.set_color("font_disabled_color", "Accent", Color(0.04, 0.07, 0.12, 0.6))
 	# Texte
-	th.set_color("font_color", "Label", TEXT)
+	th.set_color("font_color", "Label", tx)
 	th.set_font_size("font_size", "Label", 16)
-	var te := _box(Color("171b25"), 10, w.call(0.07), 1, 0, 14)
-	th.set_stylebox("normal", "TextEdit", te); th.set_stylebox("focus", "TextEdit", _box(Color("171b25"), 10, ACCENT.darkened(0.3), 1, 0, 14))
-	th.set_color("font_color", "TextEdit", TEXT); th.set_color("caret_color", "TextEdit", ACCENT)
+	var te := _box(_p("field"), 10, w.call(0.07), 1, 0, 14)
+	th.set_stylebox("normal", "TextEdit", te); th.set_stylebox("focus", "TextEdit", _box(_p("field"), 10, ACCENT.darkened(0.3), 1, 0, 14))
+	th.set_color("font_color", "TextEdit", tx); th.set_color("caret_color", "TextEdit", ACCENT)
 	th.set_color("font_placeholder_color", "TextEdit", Color(0.56, 0.61, 0.7, 0.6))
 	th.set_color("selection_color", "TextEdit", Color(ACCENT, 0.35)); th.set_color("current_line_color", "TextEdit", w.call(0.03))
 	th.set_font_size("font_size", "TextEdit", 22)
-	th.set_stylebox("normal", "LineEdit", _box(Color("171b25"), 8, w.call(0.07), 1, 0, 10))
-	th.set_stylebox("focus", "LineEdit", _box(Color("171b25"), 8, ACCENT.darkened(0.3), 1, 0, 10))
-	th.set_color("font_color", "LineEdit", TEXT); th.set_color("caret_color", "LineEdit", ACCENT)
+	th.set_stylebox("normal", "LineEdit", _box(_p("field"), 8, w.call(0.07), 1, 0, 10))
+	th.set_stylebox("focus", "LineEdit", _box(_p("field"), 8, ACCENT.darkened(0.3), 1, 0, 10))
+	th.set_color("font_color", "LineEdit", tx); th.set_color("caret_color", "LineEdit", ACCENT)
 	# Curseur
 	th.set_stylebox("slider", "HSlider", _box(w.call(0.12), 4, Color(0, 0, 0, 0), 0, 0, 0))
 	th.get_stylebox("slider", "HSlider").content_margin_top = 3; th.get_stylebox("slider", "HSlider").content_margin_bottom = 3
@@ -384,9 +407,6 @@ func _icon_btn(icon: String, variation := "Flat", w := 40, h := 36, isz := 18) -
 	b.icon = _ico(icon); b.add_theme_constant_override("icon_max_width", isz)
 	b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	return b
-
-func _apply_bg() -> void:
-	bg.texture = _grad_tex(set_cfg["bg"])
 
 func _build_desktop() -> void:
 	bg = TextureRect.new(); bg.mouse_filter = Control.MOUSE_FILTER_IGNORE; bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -410,7 +430,8 @@ func _build_desktop() -> void:
 	desk.resized.connect(_layout_icons); desk.resized.connect(_clamp_windows); _layout_icons.call_deferred()
 	# Barre des tâches
 	var bar := PanelContainer.new()
-	var bs := _box(Color(0.07, 0.08, 0.11, 0.9), 0); bs.border_width_top = 1; bs.border_color = Color(1, 1, 1, 0.08)
+	bar_panel = bar
+	var bs := _box(_p("bar"), 0); bs.border_width_top = 1; bs.border_color = Color(1, 1, 1, 0.08)
 	bs.content_margin_left = 8; bs.content_margin_right = 12; bs.content_margin_top = 5; bs.content_margin_bottom = 5
 	bar.add_theme_stylebox_override("panel", bs)
 	root.add_child(bar)
@@ -423,6 +444,9 @@ func _build_desktop() -> void:
 	var vs := VSeparator.new(); vs.modulate = Color(1, 1, 1, 0.4); bh.add_child(vs)
 	task_box = HBoxContainer.new(); task_box.add_theme_constant_override("separation", 4); bh.add_child(task_box)
 	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; bh.add_child(sp)
+	vd_btn = _mk_btn("1/%d" % n_vd, 64, 42); vd_btn.theme_type_variation = "Flat"; vd_btn.add_theme_font_size_override("font_size", 16)
+	vd_btn.tooltip_text = "Bureaux virtuels (Ctrl+Alt+←/→)"; vd_btn.pressed.connect(_vd_menu); bh.add_child(vd_btn)
+	bell_btn = _icon_btn("bell", "Flat", 56, 42, 22); bell_btn.tooltip_text = "Notifications"; bell_btn.pressed.connect(_toggle_notifs); bh.add_child(bell_btn)
 	kb_btn = _icon_btn("keyboard", "Flat", 48, 42, 24); kb_btn.pressed.connect(_toggle_kb); bh.add_child(kb_btn)
 	var tray := Control.new(); tray.set_script(load("res://apps/systray.gd")); bh.add_child(tray)
 	clock = Label.new(); clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -436,6 +460,7 @@ func _build_desktop() -> void:
 	if OS.get_name() == "Android" and Engine.has_singleton("LangLauncher") and int(Engine.get_singleton("LangLauncher").nativeLevel()) >= 7:
 		var ll := Engine.get_singleton("LangLauncher")
 		ll.connect("fold_changed", _on_fold); _on_fold(str(ll.foldState()))
+	get_window().files_dropped.connect(_on_files)
 	get_window().content_scale_factor = set_cfg["zoom"]
 	resized.connect(_update_flex)
 	_update_flex.call_deferred()
@@ -454,9 +479,21 @@ func _clamp_windows() -> void:
 		w.position = Vector2(clampf(w.position.x, 0.0, maxf(0.0, desk.size.x - w.size.x)), clampf(w.position.y, 0.0, maxf(0.0, desk.size.y - w.size.y)))
 
 func _layout_icons() -> void:
-	var per_col := maxi(1, int((desk.size.y - 16.0) / 108.0))
-	for i in desk_icons.size():
-		desk_icons[i].position = Vector2(16 + (i / per_col) * 108, 16 + (i % per_col) * 108)
+	var rows := maxi(1, int((desk.size.y - 16.0) / GRID)); var cols := maxi(1, int((desk.size.x - 16.0) / GRID))
+	var taken := {}; var rest := []
+	var saved: Dictionary = set_cfg["icons"]
+	for b in desk_icons:
+		var id := str(b.get_meta("id"))
+		if saved.has(id):
+			var c := Vector2i(int(saved[id][0]), int(saved[id][1]))
+			if c.x < cols and c.y < rows and not taken.has(c):
+				taken[c] = true; b.position = Vector2(16, 16) + Vector2(c) * GRID; continue
+		rest.append(b)
+	var i := 0
+	for b in rest:
+		var c := Vector2i(i / rows, i % rows)
+		while taken.has(c): i += 1; c = Vector2i(i / rows, i % rows)
+		taken[c] = true; i += 1; b.position = Vector2(16, 16) + Vector2(c) * GRID
 
 func _desk_icon(id: String, pos: Vector2) -> void:
 	var b := Button.new(); b.theme_type_variation = "Flat"; b.focus_mode = Control.FOCUS_NONE
@@ -471,7 +508,7 @@ func _desk_icon(id: String, pos: Vector2) -> void:
 	l.add_theme_font_size_override("font_size", 14); l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
 	l.add_theme_constant_override("shadow_offset_x", 1); l.add_theme_constant_override("shadow_offset_y", 1)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE; v.add_child(l)
-	b.pressed.connect(_open_app.bind(id))
+	b.set_meta("id", id); b.gui_input.connect(_icon_input.bind(b, id))
 	desk.add_child(b); desk_icons.append(b)
 
 # ---------------------------------------------------------------- Menu Démarrer
@@ -482,7 +519,7 @@ func _build_menu() -> void:
 	catcher.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed: _toggle_menu())
 	add_child(catcher)
 	menu = PanelContainer.new(); menu.visible = false
-	menu.add_theme_stylebox_override("panel", _box(Color(0.11, 0.13, 0.18, 0.97), 16, Color(1, 1, 1, 0.1), 1, 28, 12))
+	menu.add_theme_stylebox_override("panel", _box(_p("menu"), 16, Color(1, 1, 1, 0.1), 1, 28, 12))
 	add_child(menu)
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 4); menu.add_child(v)
 	var head := HBoxContainer.new(); v.add_child(head)
@@ -707,6 +744,8 @@ func _open_app(id: String) -> void:
 		"update": _app_update()
 
 func _show(id: String) -> void:
+	if int(wins[id]["vd"]) != cur_vd: _goto_vd(int(wins[id]["vd"]))
+	wins[id]["min"] = false
 	wins[id]["win"].visible = true
 	wins[id]["win"].move_to_front()
 	if kb.visible: kb.move_to_front()
@@ -717,11 +756,12 @@ func _set_active(id: String) -> void:
 	for k in wins:
 		var on: bool = k == id
 		var tb: PanelContainer = wins[k]["tb"]
-		var st := _box(Color("1f2432") if on else Color("171a23"), 12)
+		var st := _box(_p("tb_on") if on else _p("tb_off"), 12)
 		st.corner_radius_bottom_left = 0; st.corner_radius_bottom_right = 0
 		st.content_margin_left = 12; st.content_margin_right = 6; st.content_margin_top = 4; st.content_margin_bottom = 4
 		tb.add_theme_stylebox_override("panel", st)
-		wins[k]["title"].modulate = Color.WHITE if on else Color(1, 1, 1, 0.5)
+		wins[k]["title"].modulate = Color.WHITE if on else Color(1, 1, 1, 0.55)
+		if set_cfg.get("light", false): wins[k]["title"].modulate = Color.WHITE if on else Color(1, 1, 1, 0.6)
 		var t: Button = wins[k]["task"]
 		if on:
 			var sb := _box(Color(1, 1, 1, 0.12), 8); sb.border_width_bottom = 3; sb.border_color = ACCENT
@@ -734,8 +774,10 @@ func _set_active(id: String) -> void:
 func _make_window(id: String, _title: String, sz: Vector2, pos: Vector2) -> VBoxContainer:
 	var title: String = APPS[id][0]
 	var w := PanelContainer.new()
-	w.add_theme_stylebox_override("panel", _box(Color("232834"), 12, Color(1, 1, 1, 0.1), 1, 34))
+	w.add_theme_stylebox_override("panel", _box(_p("win"), 12, _p("edge"), 1, 34))
 	# Petits écrans : la fenêtre ne dépasse pas le bureau ; sur téléphone (bureau étroit) elle s'ouvre agrandie.
+	var mem = set_cfg["layout"].get(id) if _real() else null
+	if mem is Array and mem.size() > 3 and float(mem[2]) > 100.0: sz = Vector2(float(mem[2]), float(mem[3])); pos = Vector2(float(mem[0]), float(mem[1]))
 	var ds := desk.size if desk.size.x > 100.0 else Vector2(1280, 740)
 	sz = Vector2(minf(sz.x, ds.x - 8.0), minf(sz.y, ds.y - 8.0))
 	pos = Vector2(clampf(pos.x, 0.0, maxf(0.0, ds.x - sz.x)), clampf(pos.y, 0.0, maxf(0.0, ds.y - sz.y)))
@@ -761,32 +803,55 @@ func _make_window(id: String, _title: String, sz: Vector2, pos: Vector2) -> VBox
 	tk.icon = load(APPS[id][1]); tk.add_theme_constant_override("icon_max_width", 24)
 	tk.add_theme_color_override("icon_normal_color", Color.WHITE); tk.add_theme_color_override("icon_hover_color", Color.WHITE)
 	tk.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	tk.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_RIGHT: _win_menu(id, Vector2(tk.global_position.x, tk.global_position.y - 6.0), true))
 	tk.pressed.connect(func(): if active == id and w.visible: _toggle_win(id) else: (_show(id) if w.visible else _toggle_win(id)))
 	task_box.add_child(tk)
-	wins[id] = {"win": w, "task": tk, "tb": tb, "maxed": false, "saved": Rect2(), "title": tl}
+	tb.set_meta("wid", id)
+	wins[id] = {"win": w, "task": tk, "tb": tb, "maxed": false, "saved": Rect2(), "title": tl, "vd": restore_vd if restore_vd >= 0 else cur_vd, "min": false, "snapped": false}
+	tk.visible = int(wins[id]["vd"]) == cur_vd; w.visible = tk.visible
 	_show(id)
 	var end := pos
 	w.position = pos + Vector2(0, 18); w.modulate.a = 0.0
 	var tw := create_tween().set_parallel(true).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 	tw.tween_property(w, "position", end, 0.18); tw.tween_property(w, "modulate:a", 1.0, 0.18)
 	_clamp_windows.call_deferred()
-	get_tree().create_timer(0.3).timeout.connect(_clamp_windows)   # après l'animation d'ouverture et la mise en place du contenu
+	get_tree().create_timer(0.3).timeout.connect(_clamp_windows)
+	get_tree().create_timer(0.5).timeout.connect(_save_layout)   # après l'animation d'ouverture et la mise en place du contenu
 	return wv
 
 func _title_input(ev: InputEvent, id: String) -> void:
 	var d: Dictionary = wins[id]
 	var w: PanelContainer = d["win"]
-	if ev is InputEventMouseButton and ev.pressed:
+	if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and not ev.pressed: _title_release(id)
+	elif ev is InputEventMouseButton and ev.pressed:
 		_show(id)
 		if ev.double_click: _toggle_max(id)
 	elif ev is InputEventMouseMotion and (ev.button_mask & MOUSE_BUTTON_MASK_LEFT) and not d["maxed"]:
+		d["dragged"] = true
+		if d.get("snapped", false):
+			d["snapped"] = false
+			if d["saved"].size.x > 0: w.size = d["saved"].size
 		var p: Vector2 = w.position + ev.relative
 		var lim: Vector2 = desk.size - Vector2(120, 40)
 		w.position = Vector2(clampf(p.x, -w.size.x + 120, lim.x), clampf(p.y, 0, lim.y))
 
+## Fin du déplacement d'une fenêtre : au bord du bureau elle s'ancre (haut = agrandie, côtés = moitié, coins = quart).
+func _title_release(id: String) -> void:
+	var d: Dictionary = wins[id]
+	if not d.get("dragged", false): return
+	d["dragged"] = false
+	var p := get_viewport().get_mouse_position() - desk.global_position
+	var l := p.x <= 4.0; var r := p.x >= desk.size.x - 4.0; var t := p.y <= 4.0; var b := p.y >= desk.size.y - 4.0
+	if t and not (l or r):
+		if not d["maxed"]: _toggle_max(id)
+	elif l or r: _snap(id, ("t" if t else "b" if b else "") + ("l" if l else "r"))
+	elif b: _snap(id, "b")
+	else: _save_layout()
+
 func _toggle_win(id: String) -> void:
 	var w: PanelContainer = wins[id]["win"]
 	w.visible = not w.visible
+	wins[id]["min"] = not w.visible
 	if w.visible: _show(id)
 	else: _set_active("")
 
@@ -798,13 +863,15 @@ func _toggle_max(id: String) -> void:
 	else:
 		d["saved"] = Rect2(w.position, w.size)
 		w.position = Vector2.ZERO; w.size = desk.size
-	d["maxed"] = not d["maxed"]
+	d["maxed"] = not d["maxed"]; d["snapped"] = false
+	_save_layout()
 
 func _close_win(id: String) -> void:
 	if id == "notepad": _save()
 	wins[id]["win"].queue_free(); wins[id]["task"].queue_free()
 	wins.erase(id)
 	_set_active("")
+	_save_layout()
 
 # ---------------------------------------------------------------- Applications
 
@@ -891,9 +958,11 @@ func _app_settings() -> void:
 		var st := StyleBoxTexture.new(); st.texture = _grad_tex(i, 64, 44)
 		var sth := StyleBoxTexture.new(); sth.texture = st.texture; sth.modulate_color = Color(1.25, 1.25, 1.25)
 		b.add_theme_stylebox_override("normal", st); b.add_theme_stylebox_override("hover", sth); b.add_theme_stylebox_override("pressed", sth)
-		b.pressed.connect(func(): set_cfg["bg"] = i; _apply_bg(); _save_settings())
+		b.pressed.connect(func(): _set_gradient(i))
 		sw.add_child(b)
+	var pick := _mk_btn("Image…", 0, 40); pick.pressed.connect(_pick_wallpaper); sw.add_child(pick)
 	_s_row(c, "Fond d'écran", sw, 200)
+	_s_row(c, "Thème", _s_opt(["Sombre", "Clair"], 1 if set_cfg.get("light", false) else 0, func(i: int): _set_light(i == 1)))
 	_s_row(c, "Zoom de l'interface", _s_slider(0.5, 2.2, 0.05, float(set_cfg["zoom"]), func(x: float, l: Label): _set_zoom(x); l.text = "%d %%" % int(float(set_cfg["zoom"]) * 100)))
 	_s_row(c, "Texte du Bloc-notes", _s_slider(14, 40, 1, float(set_cfg["font"]), func(x: float, l: Label):
 		l.text = "%d" % int(x); set_cfg["font"] = int(x)
@@ -1123,6 +1192,7 @@ func _on_tr_dl(result: int, code: int, _h: PackedStringArray, _b: PackedByteArra
 		if is_instance_valid(tr_status): tr_status.text = "Échec du téléchargement, réessayer."; tr_btn.disabled = false
 		return
 	DirAccess.rename_absolute(tmp, LOCAL_FILE)
+	notify("Traduction", "Modèle local téléchargé.")
 	if is_instance_valid(tr_status): _tr_engine_changed()
 
 func _tr_local_translate(text: String) -> void:
@@ -1478,12 +1548,18 @@ func _load_settings() -> void:
 		set_cfg["kb"] = str(c.get_value("ui", "kb", "osk")); set_cfg["cursor"] = str(c.get_value("ui", "cursor", "auto")); set_cfg["pad"] = bool(c.get_value("ui", "pad", false)); set_cfg["pad_speed"] = clampf(float(c.get_value("ui", "pad_speed", 0.7)), 0.2, 2.5); set_cfg["zoom"] = clampf(float(c.get_value("ui", "zoom", 1.0)), 0.5, 2.2)
 		set_cfg["engine"] = int(c.get_value("translate", "engine", -1))
 		set_cfg["src"] = str(c.get_value("lang", "src", "spa")); set_cfg["tgt"] = str(c.get_value("lang", "tgt", "fra"))
+		set_cfg["light"] = bool(c.get_value("ui", "light", false)); set_cfg["wall"] = bool(c.get_value("ui", "wall", false)); set_cfg["nvd"] = int(c.get_value("ui", "nvd", 2))
+		for k in ["icons", "layout"]:
+			var v = c.get_value("ui", k, {}); set_cfg[k] = v if v is Dictionary else {}
+		var o = c.get_value("ui", "open", []); set_cfg["open"] = o if o is Array else []
 
 func _save_settings() -> void:
 	var c := ConfigFile.new()
 	c.set_value("ui", "bg", set_cfg["bg"]); c.set_value("ui", "font", set_cfg["font"]); c.set_value("ui", "kb", set_cfg["kb"]); c.set_value("ui", "cursor", set_cfg["cursor"]); c.set_value("ui", "pad", set_cfg["pad"]); c.set_value("ui", "pad_speed", set_cfg["pad_speed"]); c.set_value("ui", "zoom", set_cfg["zoom"])
 	c.set_value("translate", "server", set_cfg["ollama"]); c.set_value("translate", "model", set_cfg["model"]); c.set_value("translate", "engine", set_cfg["engine"])
 	c.set_value("lang", "src", set_cfg["src"]); c.set_value("lang", "tgt", set_cfg["tgt"])
+	for k in ["light", "wall", "icons", "layout", "open"]: c.set_value("ui", k, set_cfg[k])
+	c.set_value("ui", "nvd", n_vd)
 	c.save("user://settings.cfg")
 
 func _type_key(r: int, c: int) -> void:
@@ -1580,6 +1656,7 @@ func _on_version_json(result: int, code: int, _h: PackedStringArray, body: Packe
 	if not preload("res://boot.gd").newer(str(info["version"]), VERSION):
 		_set_upd("✓ À jour (v%s)" % VERSION, "Vérifier"); return
 	upd_info = info
+	notify("Mise à jour", "Version %s disponible." % info["version"])
 	var v := Engine.get_version_info()
 	var same: bool = str(info.get("godot", "")) == "%d.%d.%d" % [v.major, v.minor, v.patch]
 	if same and info.has("pck"):
@@ -1609,3 +1686,329 @@ func _on_pck(result: int, code: int, _h: PackedStringArray, _b: PackedByteArray)
 	c.set_value("update", "version", str(upd_info["version"])); c.save("user://update.cfg")
 	if OS.has_feature("pc"): _set_upd("Mise à jour %s installée." % upd_info["version"], "Redémarrer")
 	else: _set_upd("Mise à jour %s installée : fermer puis rouvrir l'appli." % upd_info["version"], "Redémarrer")
+
+# ---------------------------------------------------------------- Bureau étendu : redimensionner, ancrer, bureaux virtuels, menus, notifications
+
+var bar_panel: PanelContainer
+var cur_vd := 0
+var n_vd := 2
+var restore_vd := -1
+var vd_btn: Button
+var bell_btn: Button
+var notifs: Array = []
+var unread := 0
+var toast: PanelContainer
+var np_panel: PanelContainer
+var np_catcher: Control
+var rs := {}       # redimensionnement en cours
+var idrag := {}    # glisser d'une icône en cours
+const GRID := 108.0
+const NO_RESTORE := ["hika", "chromium", "update"]
+
+func _real() -> bool:
+	return get_tree().current_scene == self
+
+func _restyle() -> void:
+	_build_theme()
+	(bar_panel.get_theme_stylebox("panel") as StyleBoxFlat).bg_color = _p("bar")
+	menu.add_theme_stylebox_override("panel", _box(_p("menu"), 16, _p("edge"), 1, 28, 12))
+	for id in wins: wins[id]["win"].add_theme_stylebox_override("panel", _box(_p("win"), 12, _p("edge"), 1, 34))
+	_set_active(active)
+
+func _set_light(on: bool) -> void:
+	set_cfg["light"] = on; _restyle(); _save_settings()
+
+func _apply_bg() -> void:
+	if set_cfg.get("wall", false) and FileAccess.file_exists("user://wallpaper.png"):
+		var img := Image.load_from_file("user://wallpaper.png")
+		if img != null and not img.is_empty():
+			bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED; bg.texture = ImageTexture.create_from_image(img); return
+	bg.stretch_mode = TextureRect.STRETCH_SCALE
+	bg.texture = _grad_tex(set_cfg["bg"])
+
+func _set_gradient(i: int) -> void:
+	set_cfg["bg"] = i; set_cfg["wall"] = false; _apply_bg(); _save_settings()
+
+func _set_wallpaper(path: String) -> bool:
+	var img := Image.load_from_file(path)
+	if img == null or img.is_empty():
+		notify("Fond d'écran", "Image illisible."); return false
+	var m := maxi(img.get_width(), img.get_height())
+	if m > 2048: img.resize(img.get_width() * 2048 / m, img.get_height() * 2048 / m, Image.INTERPOLATE_BILINEAR)
+	img.save_png("user://wallpaper.png"); set_cfg["wall"] = true; _apply_bg(); _save_settings()
+	return true
+
+func _pick_wallpaper() -> void:
+	var fd := FileDialog.new(); fd.file_mode = FileDialog.FILE_MODE_OPEN_FILE; fd.access = FileDialog.ACCESS_FILESYSTEM
+	fd.use_native_dialog = true; fd.filters = PackedStringArray(["*.png,*.jpg,*.jpeg,*.webp,*.bmp ; Images"])
+	fd.file_selected.connect(func(p: String): _set_wallpaper(p); fd.queue_free())
+	fd.canceled.connect(fd.queue_free)
+	add_child(fd); fd.popup_centered_ratio(0.7)
+
+## Fichiers glissés sur la fenêtre : image = fond d'écran, texte = Bloc-notes.
+func _on_files(files: PackedStringArray) -> void:
+	if files.is_empty(): return
+	var f := files[0]; var e := f.get_extension().to_lower()
+	if e in ["png", "jpg", "jpeg", "webp", "bmp"]:
+		if _set_wallpaper(f): notify("Fond d'écran", "Image appliquée : " + f.get_file())
+	elif e in ["txt", "md", "log"]:
+		_open_app("notepad"); edit.text = FileAccess.get_file_as_string(f); notify("Bloc-notes", f.get_file() + " ouvert")
+
+# --- Menu contextuel générique (items : [libellé, Callable] ou null pour un séparateur)
+func _popup_menu(items: Array, at: Vector2, up := false) -> void:
+	_hide_ctx()
+	ctx_catcher = Control.new(); ctx_catcher.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ctx_catcher.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed: _hide_ctx())
+	add_child(ctx_catcher)
+	ctx_menu = PanelContainer.new(); ctx_menu.add_theme_stylebox_override("panel", _box(_p("menu"), 12, _p("edge"), 1, 18, 6))
+	add_child(ctx_menu)
+	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 0); ctx_menu.add_child(v)
+	for it in items:
+		if it == null: v.add_child(HSeparator.new()); continue
+		var b := _mk_btn(it[0], 230, 42); b.theme_type_variation = "Flat"; b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.add_theme_font_size_override("font_size", 17)
+		b.pressed.connect(func(): _hide_ctx(); it[1].call())
+		v.add_child(b)
+	ctx_menu.size = ctx_menu.get_combined_minimum_size()
+	var y := at.y - ctx_menu.size.y if up else at.y
+	ctx_menu.position = Vector2(clampf(at.x, 8, size.x - ctx_menu.size.x - 8), clampf(y, 8, maxf(8, size.y - ctx_menu.size.y - 8)))
+
+func _context_at(pos: Vector2) -> bool:
+	if not desk.get_global_rect().has_point(pos): return false
+	var p := pos - desk.global_position
+	var kids := desk.get_children(); kids.reverse()
+	for c in kids:
+		if not (c is Control and c.visible): continue
+		if not Rect2(c.position, c.size).has_point(p): continue
+		if desk_icons.has(c): _icon_menu(str(c.get_meta("id")), pos); return true
+		for id in wins:
+			if wins[id]["win"] == c and p.y < c.position.y + 42.0: _win_menu(id, pos); return true
+		return false
+	_desk_menu(pos); return true
+
+func _desk_menu(at: Vector2) -> void:
+	var light: bool = set_cfg.get("light", false)
+	_popup_menu([
+		["Changer le fond d'écran", func(): _set_gradient((int(set_cfg["bg"]) + 1) % BG_GRADS.size())],
+		["Image de fond…", _pick_wallpaper],
+		["Thème sombre" if light else "Thème clair", func(): _set_light(not light)],
+		null,
+		["Ranger les icônes", _reset_icons],
+		["Disposer les fenêtres", _tile_all],
+		["Nouveau bureau virtuel", _vd_add],
+		null,
+		["Paramètres", func(): _open_app("settings")]], at)
+
+func _icon_menu(id: String, at: Vector2) -> void:
+	_popup_menu([["Ouvrir", func(): _open_app(id)], null, ["Ranger les icônes", _reset_icons]], at)
+
+func _win_menu(id: String, at: Vector2, up := false) -> void:
+	if not wins.has(id): return
+	var d: Dictionary = wins[id]
+	var it := [
+		["Réduire", func(): if d["win"].visible: _toggle_win(id)],
+		["Restaurer" if d["maxed"] else "Agrandir", func(): _toggle_max(id)], null,
+		["Ancrer à gauche", func(): _snap(id, "l")], ["Ancrer à droite", func(): _snap(id, "r")],
+		["Ancrer en haut", func(): _snap(id, "t")], ["Ancrer en bas", func(): _snap(id, "b")],
+		["Quart haut gauche", func(): _snap(id, "tl")], ["Quart haut droite", func(): _snap(id, "tr")],
+		["Quart bas gauche", func(): _snap(id, "bl")], ["Quart bas droite", func(): _snap(id, "br")],
+		["Tiers gauche", func(): _snap(id, "3l")], ["Tiers centre", func(): _snap(id, "3c")], ["Tiers droite", func(): _snap(id, "3r")], null]
+	for i in n_vd:
+		if i != int(d["vd"]): it.append(["Déplacer vers le bureau %d" % (i + 1), func(): _move_to_vd(id, i)])
+	it.append(null); it.append(["Fermer", func(): _close_win(id)])
+	_popup_menu(it, at, up)
+
+# --- Ancrage et disposition
+func _snap(id: String, z: String) -> void:
+	var d: Dictionary = wins[id]; var w: PanelContainer = d["win"]
+	var keep: bool = d["maxed"] or d.get("snapped", false)
+	d["maxed"] = false
+	var s := desk.size; var h := s / 2.0; var t := s.x / 3.0
+	var r: Rect2 = {"l": Rect2(0, 0, h.x, s.y), "r": Rect2(h.x, 0, h.x, s.y), "t": Rect2(0, 0, s.x, h.y), "b": Rect2(0, h.y, s.x, h.y),
+		"tl": Rect2(0, 0, h.x, h.y), "tr": Rect2(h.x, 0, h.x, h.y), "bl": Rect2(0, h.y, h.x, h.y), "br": Rect2(h.x, h.y, h.x, h.y),
+		"3l": Rect2(0, 0, t, s.y), "3c": Rect2(t, 0, t, s.y), "3r": Rect2(2 * t, 0, t, s.y)}[z]
+	if not keep or d["saved"].size.x <= 0: d["saved"] = Rect2(w.position, w.size)
+	d["snapped"] = true
+	w.position = r.position; w.size = r.size; _clamp_windows(); _show(id); _save_layout()
+
+func _tile_all() -> void:
+	var ids := []
+	for id in wins:
+		if int(wins[id]["vd"]) == cur_vd and wins[id]["win"].visible: ids.append(id)
+	if ids.is_empty(): return
+	var k := ids.size(); var cols := k if k <= 3 else int(ceil(sqrt(k))); var rows := int(ceil(float(k) / cols))
+	var cw := desk.size.x / cols; var ch := desk.size.y / rows
+	for i in k:
+		var d: Dictionary = wins[ids[i]]; d["maxed"] = false
+		d["win"].position = Vector2((i % cols) * cw, (i / cols) * ch); d["win"].size = Vector2(cw, ch)
+	_clamp_windows(); _save_layout()
+
+# --- Redimensionnement par les bords
+func _begin_resize(pos: Vector2) -> bool:
+	if menu.visible or is_instance_valid(ctx_menu) or desk == null: return false
+	var p := pos - desk.global_position
+	var kids := desk.get_children(); kids.reverse()
+	for c in kids:
+		if not (c is PanelContainer and c.visible): continue
+		var id := ""
+		for k in wins:
+			if wins[k]["win"] == c: id = k
+		if id == "" or not Rect2(c.position, c.size).grow(6).has_point(p): continue
+		if wins[id]["maxed"]: return false
+		var r := Rect2(c.position, c.size)
+		var l := p.x < r.position.x + 8 and p.y > r.position.y + 40
+		var rr := p.x > r.end.x - 8 and p.y > r.position.y + 40
+		var b := p.y > r.end.y - 8
+		if not (l or rr or b): return false
+		rs = {"win": c, "id": id, "rect": r, "p0": p, "l": l, "r": rr, "b": b}
+		lp_active = false
+		return true
+	return false
+
+func _do_resize(pos: Vector2) -> void:
+	var w: PanelContainer = rs["win"]
+	var r: Rect2 = rs["rect"]; var dp: Vector2 = pos - desk.global_position - rs["p0"]
+	var mn := w.get_combined_minimum_size()
+	var x0 := r.position.x; var x1 := r.end.x; var y1 := r.end.y
+	if rs["l"]: x0 = maxf(minf(r.position.x + dp.x, x1 - mn.x), 0.0)
+	if rs["r"]: x1 = minf(maxf(r.end.x + dp.x, x0 + mn.x), desk.size.x)
+	if rs["b"]: y1 = minf(maxf(r.end.y + dp.y, r.position.y + mn.y), desk.size.y)
+	w.position = Vector2(x0, r.position.y); w.size = Vector2(x1 - x0, y1 - r.position.y)
+	wins[rs["id"]]["snapped"] = false
+
+# --- Icônes : glisser-déposer sur une grille
+func _icon_input(ev: InputEvent, b: Button, id: String) -> void:
+	if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT:
+		if ev.pressed:
+			idrag = {"b": b, "p0": get_viewport().get_mouse_position(), "pos0": b.position, "moved": false}
+		elif idrag.get("b") == b:
+			var moved: bool = idrag["moved"]; var from: Vector2 = idrag["pos0"]; idrag = {}
+			if moved: _drop_icon(b, id, from)
+			elif Time.get_ticks_msec() - lp_t < 550: _open_app(id)
+			else: _layout_icons()
+	elif ev is InputEventMouseMotion and idrag.get("b") == b and (ev.button_mask & MOUSE_BUTTON_MASK_LEFT):
+		var dl: Vector2 = get_viewport().get_mouse_position() - idrag["p0"]
+		if idrag["moved"] or dl.length() > 10.0:
+			idrag["moved"] = true; lp_active = false
+			b.position = (idrag["pos0"] + dl).clamp(Vector2.ZERO, desk.size - b.size)
+
+func _cell_of(b: Control) -> Vector2i:
+	return Vector2i(int(roundf((b.position.x - 16.0) / GRID)), int(roundf((b.position.y - 16.0) / GRID)))
+
+func _drop_icon(b: Button, id: String, from: Vector2) -> void:
+	var cols := maxi(1, int((desk.size.x - 16.0) / GRID)); var rows := maxi(1, int((desk.size.y - 16.0) / GRID))
+	var c := _cell_of(b); c = Vector2i(clampi(c.x, 0, cols - 1), clampi(c.y, 0, rows - 1))
+	var old := Vector2i(int(roundf((from.x - 16.0) / GRID)), int(roundf((from.y - 16.0) / GRID)))
+	for o in desk_icons:
+		if o != b and _cell_of(o) == c: set_cfg["icons"][str(o.get_meta("id"))] = [old.x, old.y]
+	set_cfg["icons"][id] = [c.x, c.y]
+	_layout_icons(); _save_settings()
+
+func _reset_icons() -> void:
+	set_cfg["icons"] = {}; _layout_icons(); _save_settings()
+
+# --- Bureaux virtuels
+func _goto_vd(i: int) -> void:
+	cur_vd = clampi(i, 0, n_vd - 1)
+	for id in wins:
+		var d: Dictionary = wins[id]; var on: bool = int(d["vd"]) == cur_vd
+		d["win"].visible = on and not d["min"]; d["task"].visible = on
+	if vd_btn: vd_btn.text = "%d/%d" % [cur_vd + 1, n_vd]
+	_set_active("")
+
+func _move_to_vd(id: String, i: int) -> void:
+	wins[id]["vd"] = i; _goto_vd(cur_vd); _save_layout()
+
+func _vd_add() -> void:
+	if n_vd >= 6: return
+	n_vd += 1; _goto_vd(n_vd - 1)
+
+func _vd_remove() -> void:
+	if n_vd <= 1: return
+	for id in wins:
+		if int(wins[id]["vd"]) >= n_vd - 1: wins[id]["vd"] = n_vd - 2
+	n_vd -= 1; _goto_vd(mini(cur_vd, n_vd - 1)); _save_layout()
+
+func _vd_menu() -> void:
+	var it := []
+	for i in n_vd: it.append(["%sBureau %d" % ["✓ " if i == cur_vd else "", i + 1], func(): _goto_vd(i)])
+	it.append(null)
+	if n_vd < 6: it.append(["Nouveau bureau", _vd_add])
+	if n_vd > 1: it.append(["Supprimer le dernier bureau", _vd_remove])
+	_popup_menu(it, Vector2(vd_btn.global_position.x - 90, vd_btn.global_position.y - 6), true)
+
+# --- Mémoire des fenêtres
+func _save_layout() -> void:
+	if not _real(): return
+	var cur: Dictionary = set_cfg["layout"]
+	for id in wins:
+		var d: Dictionary = wins[id]; var w: PanelContainer = d["win"]
+		var r: Rect2 = d["saved"] if (d["maxed"] or d.get("snapped", false)) and d["saved"].size.x > 0 else Rect2(w.position, w.size)
+		cur[id] = [r.position.x, r.position.y, r.size.x, r.size.y, int(d["vd"]), bool(d["maxed"])]
+	set_cfg["layout"] = cur
+	set_cfg["open"] = wins.keys().filter(func(k): return not NO_RESTORE.has(k))
+	_save_settings()
+
+func _restore_layout() -> void:
+	for id in set_cfg["open"]:
+		if not APPS.has(id) or wins.has(id): continue
+		var a = set_cfg["layout"].get(id)
+		restore_vd = int(a[4]) if a is Array and a.size() > 4 else 0
+		n_vd = maxi(n_vd, restore_vd + 1)
+		_open_app(id)
+		if a is Array and a.size() > 5 and a[5] and wins.has(id): _toggle_max(id)
+	restore_vd = -1
+	_goto_vd(0)
+
+# --- Notifications centralisées
+func notify(title: String, text := "") -> void:
+	notifs.push_front({"t": title, "x": text, "time": Time.get_datetime_string_from_system().substr(11, 5)})
+	if notifs.size() > 30: notifs.resize(30)
+	unread += 1; _upd_bell()
+	if is_instance_valid(toast): toast.queue_free()
+	toast = PanelContainer.new(); toast.add_theme_stylebox_override("panel", _box(_p("menu"), 12, ACCENT, 1, 20, 12))
+	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 2); toast.add_child(v)
+	var l1 := Label.new(); l1.text = title; l1.add_theme_font_size_override("font_size", 17); v.add_child(l1)
+	if text != "":
+		var l2 := _mlbl(text, 15); l2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l2.custom_minimum_size.x = minf(300.0, size.x - 50.0); v.add_child(l2)
+	toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(toast); toast.size = toast.get_combined_minimum_size()
+	var end := Vector2(size.x - toast.size.x - 12.0, 12.0)
+	toast.position = end + Vector2(toast.size.x + 20.0, 0)
+	var tw := toast.create_tween()
+	tw.tween_property(toast, "position", end, 0.2).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tw.tween_interval(4.0); tw.tween_property(toast, "modulate:a", 0.0, 0.4); tw.tween_callback(toast.queue_free)
+
+func _upd_bell() -> void:
+	if bell_btn: bell_btn.text = str(unread) if unread > 0 else ""
+
+func _close_notifs() -> void:
+	if is_instance_valid(np_panel): np_panel.queue_free()
+	if is_instance_valid(np_catcher): np_catcher.queue_free()
+
+func _toggle_notifs() -> void:
+	if is_instance_valid(np_panel): _close_notifs(); return
+	unread = 0; _upd_bell(); _hide_ctx()
+	np_catcher = Control.new(); np_catcher.set_anchors_preset(Control.PRESET_FULL_RECT)
+	np_catcher.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed: _close_notifs())
+	add_child(np_catcher)
+	np_panel = PanelContainer.new(); np_panel.add_theme_stylebox_override("panel", _box(_p("menu"), 14, _p("edge"), 1, 24, 12)); add_child(np_panel)
+	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 8); np_panel.add_child(v)
+	var h := HBoxContainer.new(); v.add_child(h)
+	var t := Label.new(); t.text = "Notifications"; t.add_theme_font_size_override("font_size", 19); t.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h.add_child(t)
+	var clr := _mk_btn("Tout effacer", 0, 34); clr.theme_type_variation = "Flat"; clr.add_theme_font_size_override("font_size", 15)
+	clr.pressed.connect(func(): notifs.clear(); _close_notifs()); h.add_child(clr)
+	var sc := ScrollContainer.new(); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var lw := minf(330.0, size.x - 40.0)
+	sc.custom_minimum_size = Vector2(lw, minf(380.0, size.y - bar_h - 130.0)); v.add_child(sc)
+	var list := VBoxContainer.new(); list.add_theme_constant_override("separation", 8); list.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.add_child(list)
+	if notifs.is_empty(): list.add_child(_mlbl("Aucune notification", 15))
+	for n in notifs:
+		var c := VBoxContainer.new(); c.add_theme_constant_override("separation", 0); list.add_child(c)
+		var l1 := Label.new(); l1.text = "%s  ·  %s" % [n["t"], n["time"]]; l1.add_theme_font_size_override("font_size", 16); l1.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; c.add_child(l1)
+		if n["x"] != "":
+			var l2 := _mlbl(n["x"], 14); l2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; c.add_child(l2)
+		list.add_child(HSeparator.new())
+	np_panel.size = np_panel.get_combined_minimum_size()
+	np_panel.position = Vector2(size.x - np_panel.size.x - 10.0, size.y - bar_h - 10.0 - np_panel.size.y)
