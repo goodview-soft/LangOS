@@ -938,6 +938,12 @@ func _make_window(id: String, _title: String, sz: Vector2, pos: Vector2) -> VBox
 	var mem = set_cfg["layout"].get(id) if _real() else null
 	if mem is Array and mem.size() > 3 and float(mem[2]) > 100.0: sz = Vector2(float(mem[2]), float(mem[3])); pos = Vector2(float(mem[0]), float(mem[1]))
 	var ds := desk.size if desk.size.x > 100.0 else Vector2(1280, 740)
+	if mem == null and _real():
+		# Cascade : chaque nouvelle fenêtre est décalée pour ne pas se superposer exactement aux autres
+		var n := 0
+		for k in wins:
+			if int(wins[k]["vd"]) == cur_vd and wins[k]["win"].visible: n += 1
+		pos += Vector2(34, 30) * float(n % 6)
 	sz = Vector2(minf(sz.x, ds.x - 8.0), minf(sz.y, ds.y - 8.0))
 	pos = Vector2(clampf(pos.x, 0.0, maxf(0.0, ds.x - sz.x)), clampf(pos.y, 0.0, maxf(0.0, ds.y - sz.y)))
 	w.size = sz; w.position = pos
