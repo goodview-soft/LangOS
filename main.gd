@@ -1042,6 +1042,7 @@ var ctl := PacketPeerUDP.new()
 
 func _setup_chat() -> void:
 	chat_core = ChatCore.new(); chat_core.ollama_url = set_cfg["ollama"]; add_child(chat_core)
+	chat_core.server_found.connect(func(u: String): set_cfg["ollama"] = u; _save_settings())
 	if OS.has_feature("mobile"): return
 	chat_ov = ChatOverlay.new(); chat_ov.core = chat_core; add_child(chat_ov)
 	# Canal de commande local : le raccourci global du système envoie « toggle-chat » (voir langos-chat.sh)

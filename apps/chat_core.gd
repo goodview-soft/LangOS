@@ -14,6 +14,10 @@ var model := ""
 var available: Array = []
 var messages: Array = []     # {role: user|assistant, content}
 var is_busy := false
+var note := ""                      # état affiché quand aucun modèle n'est disponible
+var _scanning := false
+var _scan_t := -100000
+signal server_found(url: String)
 var browser_hook: Object            # navigateur ouvert (get_page_text / current_url / open_url) ou null
 var page_ctx := false               # « Page web » : le modèle voit la page du navigateur et peut ouvrir une adresse
 const PAGE_SYS := "\nLe navigateur de LangOS est ouvert. Tu vois le texte de la page affichée (tronqué) ci-dessous. Pour ouvrir un site, écris sur une ligne [[OUVRIR https://adresse]]."
@@ -39,23 +43,63 @@ func set_model(m: String) -> void:
 	model = m; _save()
 
 
-func refresh_models() -> void:
-	var http := HTTPRequest.new(); http.timeout = 8; add_child(http)
-	if http.request(ollama_url + "/api/tags") != OK: http.queue_free(); return
+## Liste des modèles d'un serveur Ollama ([] si injoignable).
+func _tags(url: String) -> Array:
+	var http := HTTPRequest.new(); http.timeout = 4; add_child(http)
+	if http.request(url + "/api/tags") != OK: http.queue_free(); return []
 	var r = await http.request_completed
 	http.queue_free()
-	if r[0] != HTTPRequest.RESULT_SUCCESS or r[1] != 200: return
+	var out := []
+	if r[0] != HTTPRequest.RESULT_SUCCESS or r[1] != 200: return out
 	var d = JSON.parse_string(r[3].get_string_from_utf8())
-	available = []
 	if d is Dictionary:
 		for m in d.get("models", []):
 			var n := str(m["name"])
-			if not "embed" in n: available.append(n)
+			if not "embed" in n: out.append(n)
+	return out
+
+
+## Cherche un serveur Ollama (port 11434) sur le réseau local : renvoie son adresse ou "".
+func _discover() -> String:
+	var bases := []
+	for a in IP.get_local_addresses():
+		if a.count(".") == 3 and (a.begins_with("192.168.") or a.begins_with("10.") or a.begins_with("172.")): bases.append(a.substr(0, a.rfind(".") + 1))
+	var peers := []
+	for b in bases.slice(0, 2):
+		for i in range(1, 255):
+			var p := StreamPeerTCP.new()
+			if p.connect_to_host(b + str(i), 11434) == OK: peers.append([p, b + str(i)])
+	var found := []
+	var t0 := Time.get_ticks_msec()
+	while not peers.is_empty() and Time.get_ticks_msec() - t0 < 2500:
+		await get_tree().process_frame
+		for e in peers.duplicate():
+			e[0].poll()
+			var st: int = e[0].get_status()
+			if st == StreamPeerTCP.STATUS_CONNECTED: found.append(e[1]); e[0].disconnect_from_host(); peers.erase(e)
+			elif st == StreamPeerTCP.STATUS_ERROR or st == StreamPeerTCP.STATUS_NONE: peers.erase(e)
+	for e in peers: e[0].disconnect_from_host()
+	for ip in found:
+		var u: String = "http://" + str(ip) + ":11434"
+		if not (await _tags(u)).is_empty(): return u
+	return ""
+
+
+func refresh_models() -> void:
+	var names: Array = await _tags(ollama_url)
+	if names.is_empty() and not _scanning and Time.get_ticks_msec() - _scan_t > 60000:
+		_scanning = true; _scan_t = Time.get_ticks_msec(); note = "Recherche d'Ollama sur le réseau local…"; changed.emit()
+		var u: String = await _discover()
+		_scanning = false
+		if u != "":
+			ollama_url = u; names = await _tags(u); server_found.emit(u)
+	available = names
 	if model == "" or not model in available:
 		model = ""
 		for p in PREFS:
 			if p in available: model = p; break
 		if model == "" and not available.is_empty(): model = available[0]
+	note = "" if not available.is_empty() else "Aucun modèle sur %s. Ollama doit tourner sur un PC du réseau et écouter sur le réseau (OLLAMA_HOST=0.0.0.0), ou règle son adresse dans Paramètres." % ollama_url
 	changed.emit()
 
 

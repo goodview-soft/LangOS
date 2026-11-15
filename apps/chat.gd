@@ -46,6 +46,7 @@ func _rebuild() -> void:
 	if core.is_busy: box.add_child(ChatCore.bubble("assistant", "…", 120.0, 17, f))
 	model_opt.clear()
 	for n in core.available: model_opt.add_item(n)
+	if not core.is_busy: status.text = core.note
 	var i := core.available.find(core.model)
 	if i >= 0: model_opt.select(i)
 	await get_tree().process_frame
