@@ -22,6 +22,9 @@ func _ready() -> void:
 	var pg := CheckButton.new(); pg.text = "Page web"; pg.focus_mode = Control.FOCUS_NONE; pg.tooltip_text = "Le modèle voit la page du navigateur et peut ouvrir un site"
 	pg.button_pressed = core.page_ctx; pg.toggled.connect(func(on: bool): core.page_ctx = on); top.add_child(pg)
 	core.changed.connect(func(): pg.set_pressed_no_signal(core.page_ctx))
+	var cw := Button.new(); cw.text = "Claude.ai"; cw.theme_type_variation = "Flat"; cw.focus_mode = Control.FOCUS_NONE
+	cw.tooltip_text = "Ouvre claude.ai dans le navigateur intégré : connecte-toi avec ton abonnement, sans clé API"
+	cw.pressed.connect(func(): get_tree().current_scene.open_browser("https://claude.ai/")); top.add_child(cw)
 	var nb := Button.new(); nb.text = "Nouvelle discussion"; nb.theme_type_variation = "Flat"; nb.focus_mode = Control.FOCUS_NONE; nb.pressed.connect(func(): core.clear()); top.add_child(nb)
 	var pc := PanelContainer.new(); pc.size_flags_vertical = SIZE_EXPAND_FILL
 	var sb := StyleBoxFlat.new(); sb.bg_color = Color("171b25"); sb.set_corner_radius_all(12); sb.set_content_margin_all(10); pc.add_theme_stylebox_override("panel", sb); v.add_child(pc)

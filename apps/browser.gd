@@ -168,7 +168,7 @@ func _start() -> void:
 	view.gui_input.connect(_view_input); view.resized.connect(func(): if browser: browser.resize(view.size)); body.add_child(view)
 	_hook_chat(tb)
 	await get_tree().process_frame
-	browser = cef.create_browser(HOME, view, {"javascript": true, "webgl": true, "enable_ad_block": true})
+	browser = cef.create_browser(str(Engine.get_meta("lang_browser_url", HOME)), view, {"javascript": true, "webgl": true, "enable_ad_block": true})
 	if browser == null: _build_install(); info.text = "Impossible de créer le navigateur : " + str(cef.get_error()); return
 	browser.resize(view.size)
 
@@ -215,7 +215,7 @@ func _start_android() -> void:
 	_hook_chat(tb)
 	await get_tree().process_frame; await get_tree().process_frame
 	wv_rect = _screen_rect()
-	wv.open(HOME, wv_rect.position.x, wv_rect.position.y, wv_rect.size.x, wv_rect.size.y); wv_shown = true
+	wv.open(str(Engine.get_meta("lang_browser_url", HOME)), wv_rect.position.x, wv_rect.position.y, wv_rect.size.x, wv_rect.size.y); wv_shown = true
 
 ## Zone de la page en pixels d'écran (la fenêtre Godot occupe tout l'écran sous Android).
 func _screen_rect() -> Rect2i:

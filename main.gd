@@ -1130,6 +1130,13 @@ func _launch_browser() -> void:
 	if OS.create_process(cmd, args) < 0: status.text = "Impossible de lancer Chromium."
 	else: status.text = "Chromium lancé (s'il est installé : sudo apt install chromium)."
 
+## Ouvre le navigateur intégré sur une adresse (le lance s'il est fermé).
+func open_browser(url: String) -> void:
+	if chat_core and chat_core.browser_hook != null and is_instance_valid(chat_core.browser_hook):
+		chat_core.browser_hook.open_url(url); _show("chromium"); return
+	Engine.set_meta("lang_browser_url", url)
+	_open_app("chromium")
+
 func _app_browser() -> void:
 	var big := Vector2(minf(1100.0, desk.size.x - 24.0), minf(700.0, desk.size.y - 16.0))
 	var wv := _make_window("chromium", "", big, Vector2(20, 10))
