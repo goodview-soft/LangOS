@@ -4,7 +4,7 @@ extends PanelContainer
 
 var pointer: Control
 var top_h := 400.0            # hauteur de la zone pilotée (haut de l'écran)
-var gain := 1.7
+var gain := 0.7
 var _t0 := 0
 var _moved := 0.0
 var _down := false

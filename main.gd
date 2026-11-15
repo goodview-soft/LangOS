@@ -87,7 +87,7 @@ func _top_ids() -> Array:
 	var android := OS.get_name() == "Android"
 	return APPS.keys().filter(func(k): return not inside.has(k) and (k != "android_apps" or android))
 var active := ""
-var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "cursor": "auto", "pad": false, "model": "", "engine": -1, "src": "spa", "tgt": "fra"}
+var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "cursor": "auto", "pad": false, "pad_speed": 0.7, "model": "", "engine": -1, "src": "spa", "tgt": "fra"}
 var kb: PanelContainer
 var ui_root: VBoxContainer
 var pointer: Control
@@ -427,7 +427,7 @@ func _build_desktop() -> void:
 	_build_keyboard()
 	get_tree().node_added.connect(_on_node_added)
 	pointer = Control.new(); pointer.set_script(load("res://apps/pointer.gd")); pointer.set("mode", set_cfg["cursor"]); add_child(pointer)
-	flex = PanelContainer.new(); flex.set_script(load("res://apps/flex_pad.gd")); flex.set("pointer", pointer); flex.visible = false; add_child(flex)
+	flex = PanelContainer.new(); flex.set_script(load("res://apps/flex_pad.gd")); flex.set("pointer", pointer); flex.set("gain", set_cfg["pad_speed"]); flex.visible = false; add_child(flex)
 	flex.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	if OS.get_name() == "Android" and Engine.has_singleton("LangLauncher") and int(Engine.get_singleton("LangLauncher").nativeLevel()) >= 7:
 		var ll := Engine.get_singleton("LangLauncher")
@@ -864,6 +864,9 @@ func _app_settings() -> void:
 	v.add_child(co)
 	var pc := CheckButton.new(); pc.text = "Pavé tactile en bas de l'écran"; pc.focus_mode = Control.FOCUS_NONE; pc.button_pressed = bool(set_cfg["pad"])
 	pc.toggled.connect(func(on: bool): set_cfg["pad"] = on; _save_settings(); _update_flex()); v.add_child(pc)
+	var psl := Label.new(); psl.text = "Vitesse du curseur du pavé : %.1f" % set_cfg["pad_speed"]; v.add_child(psl)
+	var ps := HSlider.new(); ps.min_value = 0.2; ps.max_value = 2.5; ps.step = 0.1; ps.value = set_cfg["pad_speed"]; ps.custom_minimum_size.y = 28; ps.focus_mode = Control.FOCUS_NONE
+	ps.value_changed.connect(func(val: float): set_cfg["pad_speed"] = val; psl.text = "Vitesse du curseur du pavé : %.1f" % val; flex.set("gain", val); _save_settings()); v.add_child(ps)
 	v.add_child(_mlbl("Le pavé s'affiche aussi tout seul quand un téléphone pliable est plié à moitié (mode Flex)."))
 	v.add_child(_dlbl("Clavier"))
 	var ko := OptionButton.new(); ko.focus_mode = Control.FOCUS_NONE
@@ -1407,13 +1410,13 @@ func _load_settings() -> void:
 		set_cfg["font"] = clampi(int(c.get_value("ui", "font", 22)), 14, 40)
 		set_cfg["ollama"] = str(c.get_value("translate", "server", set_cfg["ollama"]))
 		set_cfg["model"] = str(c.get_value("translate", "model", ""))
-		set_cfg["kb"] = str(c.get_value("ui", "kb", "osk")); set_cfg["cursor"] = str(c.get_value("ui", "cursor", "auto")); set_cfg["pad"] = bool(c.get_value("ui", "pad", false))
+		set_cfg["kb"] = str(c.get_value("ui", "kb", "osk")); set_cfg["cursor"] = str(c.get_value("ui", "cursor", "auto")); set_cfg["pad"] = bool(c.get_value("ui", "pad", false)); set_cfg["pad_speed"] = clampf(float(c.get_value("ui", "pad_speed", 0.7)), 0.2, 2.5)
 		set_cfg["engine"] = int(c.get_value("translate", "engine", -1))
 		set_cfg["src"] = str(c.get_value("lang", "src", "spa")); set_cfg["tgt"] = str(c.get_value("lang", "tgt", "fra"))
 
 func _save_settings() -> void:
 	var c := ConfigFile.new()
-	c.set_value("ui", "bg", set_cfg["bg"]); c.set_value("ui", "font", set_cfg["font"]); c.set_value("ui", "kb", set_cfg["kb"]); c.set_value("ui", "cursor", set_cfg["cursor"]); c.set_value("ui", "pad", set_cfg["pad"])
+	c.set_value("ui", "bg", set_cfg["bg"]); c.set_value("ui", "font", set_cfg["font"]); c.set_value("ui", "kb", set_cfg["kb"]); c.set_value("ui", "cursor", set_cfg["cursor"]); c.set_value("ui", "pad", set_cfg["pad"]); c.set_value("ui", "pad_speed", set_cfg["pad_speed"])
 	c.set_value("translate", "server", set_cfg["ollama"]); c.set_value("translate", "model", set_cfg["model"]); c.set_value("translate", "engine", set_cfg["engine"])
 	c.set_value("lang", "src", set_cfg["src"]); c.set_value("lang", "tgt", set_cfg["tgt"])
 	c.save("user://settings.cfg")
