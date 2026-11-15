@@ -412,6 +412,7 @@ func _build_desktop() -> void:
 	task_box = HBoxContainer.new(); task_box.add_theme_constant_override("separation", 4); bh.add_child(task_box)
 	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; bh.add_child(sp)
 	kb_btn = _icon_btn("keyboard", "Flat", 48, 42, 24); kb_btn.pressed.connect(_toggle_kb); bh.add_child(kb_btn)
+	var tray := Control.new(); tray.set_script(load("res://apps/systray.gd")); bh.add_child(tray)
 	clock = Label.new(); clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	clock.add_theme_font_size_override("font_size", 14); bh.add_child(clock)
 	bar_h = 54.0
@@ -656,6 +657,10 @@ func _make_window(id: String, _title: String, sz: Vector2, pos: Vector2) -> VBox
 	var title: String = APPS[id][0]
 	var w := PanelContainer.new()
 	w.add_theme_stylebox_override("panel", _box(Color("232834"), 12, Color(1, 1, 1, 0.1), 1, 34))
+	# Petits écrans : la fenêtre ne dépasse pas le bureau ; sur téléphone (bureau étroit) elle s'ouvre agrandie.
+	var ds := desk.size if desk.size.x > 100.0 else Vector2(1280, 740)
+	sz = Vector2(minf(sz.x, ds.x - 8.0), minf(sz.y, ds.y - 8.0))
+	pos = Vector2(clampf(pos.x, 0.0, maxf(0.0, ds.x - sz.x)), clampf(pos.y, 0.0, maxf(0.0, ds.y - sz.y)))
 	w.size = sz; w.position = pos
 	desk.add_child(w)
 	var wv := VBoxContainer.new(); wv.add_theme_constant_override("separation", 0)

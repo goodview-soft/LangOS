@@ -6,7 +6,14 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.content.IntentFilter;
 import android.graphics.drawable.Drawable;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.wifi.WifiInfo;
+import android.net.wifi.WifiManager;
+import android.os.BatteryManager;
 import android.provider.Settings;
 import android.util.Base64;
 
@@ -35,7 +42,53 @@ public class LangLauncherPlugin extends GodotPlugin {
 	/** Niveau de la partie native de cette APK (comparé à version.json « native » pour proposer de réinstaller l'APK). */
 	@UsedByGodot
 	public int nativeLevel() {
-		return 5;
+		return 6;
+	}
+
+	/** JSON d'état système : {"battery":%, "charging":bool, "net":"wifi|cell|eth|none", "level":0..3} (barre des tâches). */
+	@UsedByGodot
+	public String systemStatus() {
+		JSONObject o = new JSONObject();
+		Activity a = getActivity();
+		try {
+			if (a == null) return "{}";
+			Intent b = a.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+			int pct = -1;
+			boolean charging = false;
+			if (b != null) {
+				int lv = b.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+				int sc = b.getIntExtra(BatteryManager.EXTRA_SCALE, 100);
+				if (lv >= 0 && sc > 0) pct = lv * 100 / sc;
+				int st = b.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
+				charging = st == BatteryManager.BATTERY_STATUS_CHARGING || st == BatteryManager.BATTERY_STATUS_FULL;
+			}
+			o.put("battery", pct);
+			o.put("charging", charging);
+			String net = "none";
+			int level = 3;
+			try {
+				ConnectivityManager cm = (ConnectivityManager) a.getSystemService(android.content.Context.CONNECTIVITY_SERVICE);
+				Network n = cm.getActiveNetwork();
+				NetworkCapabilities nc = n == null ? null : cm.getNetworkCapabilities(n);
+				if (nc != null) {
+					if (nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) net = "wifi";
+					else if (nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) net = "cell";
+					else if (nc.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) net = "eth";
+				}
+				if (net.equals("wifi")) {
+					WifiManager wm = (WifiManager) a.getApplicationContext().getSystemService(android.content.Context.WIFI_SERVICE);
+					WifiInfo wi = wm.getConnectionInfo();
+					if (wi != null) level = WifiManager.calculateSignalLevel(wi.getRssi(), 4);
+				}
+			} catch (Exception e) {
+				// état réseau indisponible : on garde « none »
+			}
+			o.put("net", net);
+			o.put("level", level);
+		} catch (Exception e) {
+			return "{}";
+		}
+		return o.toString();
 	}
 
 	/** JSON : [{"label":..., "pkg":..., "icon":"<png base64>"}], trié par nom, sans LangOS lui-même. */
