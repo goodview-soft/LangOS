@@ -6,3 +6,4 @@ build/
 /android/build/.gradle/
 /android/build/libs/
 /android/build/src/main/assets/
+.claude/worktrees/
