@@ -388,7 +388,7 @@ func _apply_bg() -> void:
 	bg.texture = _grad_tex(set_cfg["bg"])
 
 func _build_desktop() -> void:
-	bg = TextureRect.new(); bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bg = TextureRect.new(); bg.mouse_filter = Control.MOUSE_FILTER_IGNORE; bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	bg.stretch_mode = TextureRect.STRETCH_SCALE
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT); add_child(bg); _apply_bg()
 	# Halo lumineux
