@@ -469,7 +469,10 @@ func _build_menu() -> void:
 	var sp2 := Control.new(); sp2.custom_minimum_size.y = 4; v.add_child(sp2)
 	v.add_child(HSeparator.new())
 	if OS.get_name() == "Android" and Engine.has_singleton("LangLauncher"):
-		var hm := _mk_btn("Revenir à l'accueil Android", 300, 46); hm.theme_type_variation = "Flat"; hm.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		if _native_level() >= 3:
+			var hb := _mk_btn("Bureau Android", 300, 46); hb.theme_type_variation = "Flat"; hb.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			hb.pressed.connect(func(): _toggle_menu(); Engine.get_singleton("LangLauncher").launchOtherHome()); v.add_child(hb)
+		var hm := _mk_btn("Changer l'écran d'accueil…", 300, 46); hm.theme_type_variation = "Flat"; hm.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		hm.pressed.connect(func(): _toggle_menu(); Engine.get_singleton("LangLauncher").chooseHome()); v.add_child(hm)
 	var q := _mk_btn("Quitter", 300, 46); q.theme_type_variation = "Flat"; q.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	q.icon = _ico("power"); q.add_theme_constant_override("icon_max_width", 22)

@@ -5,3 +5,4 @@ build/
 /android/build/build/
 /android/build/.gradle/
 /android/build/libs/
+/android/build/src/main/assets/

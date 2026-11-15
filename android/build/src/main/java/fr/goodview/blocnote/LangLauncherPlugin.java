@@ -35,7 +35,7 @@ public class LangLauncherPlugin extends GodotPlugin {
 	/** Niveau de la partie native de cette APK (comparé à version.json « native » pour proposer de réinstaller l'APK). */
 	@UsedByGodot
 	public int nativeLevel() {
-		return 2;
+		return 3;
 	}
 
 	/** JSON : [{"label":..., "pkg":..., "icon":"<png base64>"}], trié par nom, sans LangOS lui-même. */
@@ -92,6 +92,30 @@ public class LangLauncherPlugin extends GodotPlugin {
 		i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 		a.startActivity(i);
 		return true;
+	}
+
+	/** Ouvre un autre écran d'accueil que LangOS (le bureau Android d'origine), sans changer l'écran d'accueil par défaut. */
+	@UsedByGodot
+	public boolean launchOtherHome() {
+		Activity a = getActivity();
+		if (a == null) return false;
+		PackageManager pm = a.getPackageManager();
+		Intent home = new Intent(Intent.ACTION_MAIN);
+		home.addCategory(Intent.CATEGORY_HOME);
+		for (ResolveInfo ri : pm.queryIntentActivities(home, 0)) {
+			if (ri.activityInfo.packageName.equals(a.getPackageName())) continue;
+			Intent i = new Intent(Intent.ACTION_MAIN);
+			i.addCategory(Intent.CATEGORY_HOME);
+			i.setClassName(ri.activityInfo.packageName, ri.activityInfo.name);
+			i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+			try {
+				a.startActivity(i);
+				return true;
+			} catch (Exception e) {
+				// on essaie le suivant
+			}
+		}
+		return false;
 	}
 
 	/** Ouvre le réglage Android « application d'accueil » pour choisir LangOS. */
