@@ -76,7 +76,7 @@ func _top_ids() -> Array:
 	for f in FOLDERS: inside += FOLDERS[f]
 	return APPS.keys().filter(func(k): return not inside.has(k))
 var active := ""
-var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "claude_key": "", "model": "", "engine": -1, "src": "spa", "tgt": "fra"}
+var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "model": "", "engine": -1, "src": "spa", "tgt": "fra"}
 var kb: PanelContainer
 var upd_http: HTTPRequest
 var upd_btn: Button
@@ -744,30 +744,9 @@ func _app_settings() -> void:
 	v.add_child(sl)
 	v.add_child(_dlbl("Serveur de traduction (Ollama local)"))
 	var le := LineEdit.new(); le.text = set_cfg["ollama"]; le.virtual_keyboard_enabled = false
-	le.text_changed.connect(func(t: String): set_cfg["ollama"] = t.strip_edges().rstrip("/"); _save_settings(); chat_core.ollama_url = set_cfg["ollama"])
+	le.text_changed.connect(func(t: String): set_cfg["ollama"] = t.strip_edges().rstrip("/"); _save_settings())
 	v.add_child(le)
 	v.add_child(_mlbl("Sur téléphone : adresse du PC, ex. http://192.168.1.20:11434"))
-	v.add_child(_dlbl("Clé API Claude (Chat IA sans PC)"))
-	var ke := LineEdit.new(); ke.text = set_cfg["claude_key"]; ke.secret = true; ke.virtual_keyboard_enabled = false; ke.placeholder_text = "sk-ant-…"
-	ke.text_changed.connect(func(t: String): set_cfg["claude_key"] = t.strip_edges(); _save_settings(); chat_core.api_key = set_cfg["claude_key"]; chat_core.refresh_models())
-	v.add_child(ke)
-	var kst := _mlbl("")
-	var kb_row := HBoxContainer.new(); kb_row.add_theme_constant_override("separation", 8); v.add_child(kb_row)
-	var b_open := _mk_btn("1. Obtenir une clé", 200, 44); b_open.pressed.connect(func(): OS.shell_open("https://console.anthropic.com/settings/keys")); kb_row.add_child(b_open)
-	var b_paste := _mk_btn("2. Coller", 120, 44); kb_row.add_child(b_paste)
-	var b_chk := _mk_btn("3. Vérifier", 130, 44); kb_row.add_child(b_chk)
-	b_paste.pressed.connect(func():
-		var t := DisplayServer.clipboard_get().strip_edges()
-		if t.begins_with("sk-ant-"): ke.text = t; ke.text_changed.emit(t); kst.text = "Clé collée."
-		else: kst.text = "Le presse-papiers ne contient pas de clé (sk-ant-…). Copie-la d'abord depuis la console.")
-	b_chk.pressed.connect(func():
-		kst.text = "Vérification…"
-		var h := HTTPRequest.new(); h.timeout = 10; add_child(h)
-		h.request("https://api.anthropic.com/v1/models", ["x-api-key: " + set_cfg["claude_key"], "anthropic-version: 2023-06-01"])
-		var r = await h.request_completed; h.queue_free()
-		kst.text = "✓ Clé valide : Chat IA utilisera Claude." if r[1] == 200 else ("✗ Clé refusée." if r[1] == 401 else "Pas de connexion à api.anthropic.com."))
-	v.add_child(kst)
-	v.add_child(_mlbl("Clé créée sur console.anthropic.com (facturation à l'usage, ≠ abonnement Claude.ai). Utilisée seulement pour api.anthropic.com ; les modèles « ☁ Claude » apparaissent dans Chat IA."))
 
 func _app_system() -> void:
 	var wv := _make_window("system", "🖥 Système", Vector2(520, 360), Vector2(260, 80))
@@ -1062,8 +1041,7 @@ var chat_ov: ChatOverlay
 var ctl := PacketPeerUDP.new()
 
 func _setup_chat() -> void:
-	chat_core = ChatCore.new(); chat_core.ollama_url = set_cfg["ollama"]; chat_core.api_key = set_cfg["claude_key"]; add_child(chat_core)
-	chat_core.server_found.connect(func(u: String): set_cfg["ollama"] = u; _save_settings())
+	chat_core = ChatCore.new(); add_child(chat_core)
 	if OS.has_feature("mobile"): return
 	chat_ov = ChatOverlay.new(); chat_ov.core = chat_core; add_child(chat_ov)
 	# Canal de commande local : le raccourci global du système envoie « toggle-chat » (voir langos-chat.sh)
@@ -1129,13 +1107,6 @@ func _launch_browser() -> void:
 	if FileAccess.file_exists("/.flatpak-info"): cmd = "flatpak-spawn"; args = ["--host", "sh", "-c", sh]   # Godot lancé en Flatpak
 	if OS.create_process(cmd, args) < 0: status.text = "Impossible de lancer Chromium."
 	else: status.text = "Chromium lancé (s'il est installé : sudo apt install chromium)."
-
-## Ouvre le navigateur intégré sur une adresse (le lance s'il est fermé).
-func open_browser(url: String) -> void:
-	if chat_core and chat_core.browser_hook != null and is_instance_valid(chat_core.browser_hook):
-		chat_core.browser_hook.open_url(url); _show("chromium"); return
-	Engine.set_meta("lang_browser_url", url)
-	_open_app("chromium")
 
 func _app_browser() -> void:
 	var big := Vector2(minf(1100.0, desk.size.x - 24.0), minf(700.0, desk.size.y - 16.0))
@@ -1290,7 +1261,6 @@ func _load_settings() -> void:
 		set_cfg["font"] = clampi(int(c.get_value("ui", "font", 22)), 14, 40)
 		set_cfg["ollama"] = str(c.get_value("translate", "server", set_cfg["ollama"]))
 		set_cfg["model"] = str(c.get_value("translate", "model", ""))
-		set_cfg["claude_key"] = str(c.get_value("claude", "api_key", ""))
 		set_cfg["engine"] = int(c.get_value("translate", "engine", -1))
 		set_cfg["src"] = str(c.get_value("lang", "src", "spa")); set_cfg["tgt"] = str(c.get_value("lang", "tgt", "fra"))
 
@@ -1299,7 +1269,6 @@ func _save_settings() -> void:
 	c.set_value("ui", "bg", set_cfg["bg"]); c.set_value("ui", "font", set_cfg["font"])
 	c.set_value("translate", "server", set_cfg["ollama"]); c.set_value("translate", "model", set_cfg["model"]); c.set_value("translate", "engine", set_cfg["engine"])
 	c.set_value("lang", "src", set_cfg["src"]); c.set_value("lang", "tgt", set_cfg["tgt"])
-	c.set_value("claude", "api_key", set_cfg["claude_key"])
 	c.save("user://settings.cfg")
 
 func _type_key(r: int, c: int) -> void:

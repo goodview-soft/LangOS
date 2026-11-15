@@ -9,8 +9,6 @@ const DIR := "user://cef"
 const HOME := "https://duckduckgo.com/"
 const ACCENT := Color("5aa2ff")
 const MUTED := Color("8f9bb3")
-const CFG := "user://cef/browser.cfg"
-const DEBUG_PORT := 9222
 
 var external: Callable                 # ouvre le navigateur du système (donné par le bureau)
 var cef: Object
@@ -24,18 +22,10 @@ var http: HTTPRequest
 var thread: Thread
 var last_url := ""
 var box: VBoxContainer
-var ctl_note: Label
-var cef_port_active := false
 
 func _g(p: String) -> String: return ProjectSettings.globalize_path(p)
 func _zip() -> String: return _g(DIR + "/gdcef.zip")
 func _lib() -> String: return _g(DIR + "/linux/libgdcef.so")
-func _debug_on() -> bool:
-	var c := ConfigFile.new(); c.load(CFG); return bool(c.get_value("browser", "claude_control", false))
-func _set_debug(on: bool) -> void:
-	var c := ConfigFile.new(); c.load(CFG); c.set_value("browser", "claude_control", on); c.save(CFG)
-	if cef_port_active != on: ctl_note.text = "Redémarre LangOS pour appliquer."; ctl_note.visible = true
-	else: ctl_note.visible = false
 func _supported() -> bool: return OS.get_name() == "Linux" and Engine.get_architecture_name() == "x86_64"
 func _installed() -> bool: return FileAccess.file_exists(_lib()) and FileAccess.file_exists(_g(DIR + "/linux/libcef.so"))
 
@@ -144,11 +134,10 @@ func _start() -> void:
 		cef = ClassDB.instantiate("GdCEF"); get_tree().root.add_child(cef)
 		var L := _g(DIR + "/linux")
 		if not cef.initialize({"cache_path": _g("user://cef_cache"), "root_cache_path": _g("user://cef_cache"), "browser_subprocess_path": L + "/gdCefRenderProcess",
-				"log_file": _g(DIR + "/debug.log"), "log_severity": "error", "use_gpu": false, "locale": "fr-FR"}.merged({"remote_debugging_port": DEBUG_PORT} if _debug_on() else {})):
+				"log_file": _g(DIR + "/debug.log"), "log_severity": "error", "use_gpu": false, "locale": "fr-FR"}):
 			var e: String = cef.get_error(); cef.queue_free(); cef = null
 			_build_install(); info.text = "Chromium n'a pas démarré : " + e; return
-		Engine.set_meta("lang_cef", cef); Engine.set_meta("lang_cef_port", _debug_on())
-	cef_port_active = bool(Engine.get_meta("lang_cef_port", false))
+		Engine.set_meta("lang_cef", cef)
 	OS.low_processor_usage_mode = false
 	var v := VBoxContainer.new(); v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); v.add_theme_constant_override("separation", 0); add_child(v)
 	var tb := HBoxContainer.new(); tb.add_theme_constant_override("separation", 4); v.add_child(tb)
@@ -156,19 +145,13 @@ func _start() -> void:
 		var b := Button.new(); b.text = it[0]; b.custom_minimum_size = Vector2(44, 38); b.focus_mode = Control.FOCUS_NONE; b.pressed.connect(it[1]); tb.add_child(b)
 	url_edit = LineEdit.new(); url_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL; url_edit.placeholder_text = "Adresse ou recherche"
 	url_edit.text_submitted.connect(_go); tb.add_child(url_edit)
-	var cc := CheckButton.new(); cc.text = "Claude Code"; cc.focus_mode = Control.FOCUS_NONE; cc.button_pressed = _debug_on()
-	cc.tooltip_text = "Autorise Claude Code à piloter ce navigateur (DevTools sur 127.0.0.1:%d). Redémarrage requis." % DEBUG_PORT
-	cc.toggled.connect(_set_debug); tb.add_child(cc)
-	ctl_note = Label.new(); ctl_note.visible = false; ctl_note.add_theme_color_override("font_color", Color("fbbf24")); tb.add_child(ctl_note)
-	if cef_port_active:
-		var dot := Label.new(); dot.text = "● piloté (port %d)" % DEBUG_PORT; dot.add_theme_color_override("font_color", Color("f87171")); tb.add_child(dot)
 	var body := HBoxContainer.new(); body.size_flags_vertical = Control.SIZE_EXPAND_FILL; body.add_theme_constant_override("separation", 0); v.add_child(body)
 	view = TextureRect.new(); view.size_flags_vertical = Control.SIZE_EXPAND_FILL; view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; view.focus_mode = Control.FOCUS_ALL; view.clip_contents = true
 	view.gui_input.connect(_view_input); view.resized.connect(func(): if browser: browser.resize(view.size)); body.add_child(view)
 	_hook_chat(tb)
 	await get_tree().process_frame
-	browser = cef.create_browser(str(Engine.get_meta("lang_browser_url", HOME)), view, {"javascript": true, "webgl": true, "enable_ad_block": true})
+	browser = cef.create_browser(HOME, view, {"javascript": true, "webgl": true, "enable_ad_block": true})
 	if browser == null: _build_install(); info.text = "Impossible de créer le navigateur : " + str(cef.get_error()); return
 	browser.resize(view.size)
 
@@ -215,7 +198,7 @@ func _start_android() -> void:
 	_hook_chat(tb)
 	await get_tree().process_frame; await get_tree().process_frame
 	wv_rect = _screen_rect()
-	wv.open(str(Engine.get_meta("lang_browser_url", HOME)), wv_rect.position.x, wv_rect.position.y, wv_rect.size.x, wv_rect.size.y); wv_shown = true
+	wv.open(HOME, wv_rect.position.x, wv_rect.position.y, wv_rect.size.x, wv_rect.size.y); wv_shown = true
 
 ## Zone de la page en pixels d'écran (la fenêtre Godot occupe tout l'écran sous Android).
 func _screen_rect() -> Rect2i:
@@ -274,53 +257,3 @@ func get_page_text() -> String:
 func current_url() -> String: return last_url
 
 func open_url(u: String) -> void: _go(u)
-
-# ---------------------------------------------------------------- Outils pour l'agent (Chat IA + clé Claude)
-
-signal js_done(res: String, seq: int)
-var js_seq := 0
-
-## Appelée par la page (window.godotMethods.lang_js_result) : renvoie le résultat d'un script (Linux/CEF).
-func lang_js_result(data = "") -> void:
-	js_done.emit(str(data), js_seq)
-
-## Exécute `body` (corps de fonction JavaScript qui renvoie une chaîne) dans la page et renvoie le résultat.
-func run_js(body: String) -> String:
-	js_seq += 1
-	var my := js_seq
-	if wv:
-		wv.eval("(function(){try{" + body + "}catch(e){return 'ERREUR '+e}})()")
-		var r = await Signal(wv, "js_result")
-		var j = JSON.parse_string(str(r))
-		return str(j) if j != null else str(r)
-	if browser == null or not is_instance_valid(browser): return "Navigateur indisponible."
-	browser.register_method(Callable(self, "lang_js_result"))
-	browser.execute_javascript("(function(){var r;try{r=(function(){" + body + "})()}catch(e){r='ERREUR '+e} window.godotMethods.lang_js_result(String(r))})()")
-	get_tree().create_timer(5.0).timeout.connect(func(): if js_seq == my: js_done.emit("(pas de réponse de la page)", my))
-	while true:
-		var a = await js_done
-		if a[1] == my: return str(a[0])
-	return ""
-
-const JS_ELEMS := "var els=[].slice.call(document.querySelectorAll('a[href],button,input,textarea,select,[role=button],[onclick]')).filter(function(e){var r=e.getBoundingClientRect();return r.width>0&&r.height>0&&r.bottom>0&&r.top<innerHeight*1.5}).slice(0,60);return els.map(function(e,i){e.setAttribute('data-li',i);var t=(e.innerText||e.value||e.placeholder||e.getAttribute('aria-label')||e.title||'').trim().replace(/\\s+/g,' ').slice(0,60);return i+': <'+e.tagName.toLowerCase()+(e.type?' '+e.type:'')+'> '+t}).join('\\n')"
-
-func tool_read() -> String:
-	var txt: String = await run_js("return (document.body?document.body.innerText:'').replace(/\\s+/g,' ').slice(0,3500)")
-	var els: String = await run_js(JS_ELEMS)
-	return "Adresse : %s\nTexte :\n%s\n\nÉléments :\n%s" % [last_url, txt, els]
-
-func tool_click(i: int) -> String:
-	var r: String = await run_js("var e=document.querySelector('[data-li=\"%d\"]');if(!e)return 'élément introuvable : relis la page';e.scrollIntoView({block:'center'});e.click();return 'cliqué'" % i)
-	await get_tree().create_timer(1.8).timeout
-	return r
-
-func tool_type(i: int, text: String, submit: bool) -> String:
-	var js := "var e=document.querySelector('[data-li=\"%d\"]');if(!e)return 'champ introuvable : relis la page';e.focus();var d=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');if(d&&d.set)d.set.call(e,%s);else e.value=%s;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));" % [i, JSON.stringify(text), JSON.stringify(text)]
-	if submit: js += "if(e.form){if(e.form.requestSubmit)e.form.requestSubmit();else e.form.submit()}else{e.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',keyCode:13,bubbles:true}))}"
-	js += "return 'saisi'"
-	var r: String = await run_js(js)
-	await get_tree().create_timer(1.8 if submit else 0.3).timeout
-	return r
-
-func tool_scroll(dir: String) -> String:
-	return await run_js("window.scrollBy(0,innerHeight*0.8*(%s));return 'défilé'" % ("-1" if dir == "haut" else "1"))
