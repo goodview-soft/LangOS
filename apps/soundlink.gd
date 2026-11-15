@@ -62,6 +62,8 @@ const C_DANGER := Color("#f87171")
 var dev_opt: OptionButton
 var mic_opt: OptionButton
 var vsink_lbl: Label
+var monitor_msg := ""
+var monitor_wanted := false
 var monitor_module := ""  # id du module-loopback pactl (retour son)
 var ip_edit: LineEdit
 var name_edit: LineEdit
@@ -440,6 +442,7 @@ func _exit_tree() -> void:
 	for id in listening.keys():
 		_unlisten(id)
 	_stop_capture()
+	monitor_wanted = false
 	_stop_monitor()
 	for k in rxs.keys():
 		_free_rx(k)
@@ -1266,6 +1269,8 @@ func _update_status(now: float) -> void:
 	hero_name.text = _my_name()
 	vsink_lbl.text = "Micros reçus : uniquement dans « Sound-Link-Micro »." if vsink_exists \
 		else "Micro virtuel absent (sound-link.sh) : les micros reçus restent muets."
+	if monitor_wanted and monitor_msg != "":
+		vsink_lbl.text += "\n" + monitor_msg
 
 
 func _local_ips() -> String:
@@ -1375,6 +1380,7 @@ func _discovery(now: float, delta: float) -> void:
 	beacon_t -= delta
 	if beacon_t <= 0.0:
 		beacon_t = 1.0
+		_check_monitor()
 		vsink_exists = VSINK in AudioServer.get_output_device_list()
 		var flags := ("1" if cap_kind == "snd" else "0") + ("1" if cap_kind == "mic" else "0")
 		var msg := ("%s|%s|%d|%s|%s" % [BEACON, my_id, data_port, flags, _my_name().replace("|", " ")]).to_utf8_buffer()
@@ -1580,17 +1586,43 @@ func _move_output(sink: String) -> void:
 
 ## Retour son : branche « Sound-Link-Micro » sur la sortie par défaut pour entendre ce que la tablette envoie.
 func _set_monitor(on: bool) -> void:
+	monitor_wanted = on
 	_stop_monitor()
-	if not on:
+	if on:
+		_load_monitor()
+
+
+## Appelé chaque seconde : si le retour son a disparu (le module s'est déchargé tout seul), on le remet.
+func _check_monitor() -> void:
+	if not monitor_wanted:
 		return
+	var o := []
+	if OS.execute("pactl", ["list", "short", "modules"], o) == 0 and o.size() > 0:
+		if not str(o[0]).contains("source=soundlink_mic"):
+			monitor_module = ""
+			_load_monitor()
+
+
+func _load_monitor() -> void:
 	var out := []
-	if OS.execute("pactl", ["get-default-sink"], out) != 0 or out.is_empty():
+	var rc := OS.execute("pactl", ["get-default-sink"], out)
+	if rc != 0 or out.is_empty():
+		_monitor_status("Retour son : échec (pactl get-default-sink code %d)" % rc)
 		return
 	var sink := str(out[0]).strip_edges()
 	out = []
-	if OS.execute("pactl", ["load-module", "module-loopback", "source=soundlink_mic", "sink=" + sink,
-			"latency_msec=40"], out) == 0 and out.size() > 0:
+	rc = OS.execute("pactl", ["load-module", "module-loopback", "source=soundlink_mic", "sink=" + sink,
+			"latency_msec=40"], out, true)
+	if rc == 0 and out.size() > 0:
 		monitor_module = str(out[0]).strip_edges()
+		_monitor_status("Retour son : actif → %s" % sink)
+	else:
+		_monitor_status("Retour son : échec (code %d) %s" % [rc, str(out).left(80)])
+
+
+func _monitor_status(t: String) -> void:
+	print(t)
+	monitor_msg = t
 
 
 func _stop_monitor() -> void:

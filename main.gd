@@ -448,6 +448,7 @@ func _build_desktop() -> void:
 	vd_btn = _mk_btn("1/%d" % n_vd, 64, 42); vd_btn.theme_type_variation = "Flat"; vd_btn.add_theme_font_size_override("font_size", 16)
 	vd_btn.tooltip_text = "Bureaux virtuels (Ctrl+Alt+←/→)"; vd_btn.pressed.connect(_vd_menu); bh.add_child(vd_btn)
 	bell_btn = _icon_btn("bell", "Flat", 56, 42, 22); bell_btn.tooltip_text = "Notifications"; bell_btn.pressed.connect(_toggle_notifs); bh.add_child(bell_btn)
+	pad_btn = _icon_btn("pad", "Flat", 48, 42, 24); pad_btn.tooltip_text = "Mode pavé tactile (Flex)"; pad_btn.pressed.connect(_toggle_pad); bh.add_child(pad_btn)
 	kb_btn = _icon_btn("keyboard", "Flat", 48, 42, 24); kb_btn.pressed.connect(_toggle_kb); bh.add_child(kb_btn)
 	var tray := Control.new(); tray.set_script(load("res://apps/systray.gd")); bh.add_child(tray)
 	clock = Label.new(); clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -668,7 +669,7 @@ func _set_zoom(z: float) -> void:
 
 func _update_flex() -> void:
 	if flex == null: return
-	var on: bool = fold_half or bool(set_cfg["pad"])
+	var on: bool = (fold_half and not pad_off) or bool(set_cfg["pad"])
 	if fold_half:
 		var inv := get_viewport().get_final_transform().affine_inverse()
 		fold_top = (inv * Vector2(0, fold_px_top)).y; fold_bottom = (inv * Vector2(0, fold_px_bottom)).y
@@ -677,6 +678,7 @@ func _update_flex() -> void:
 	var sc := get_viewport().get_final_transform().get_scale().y
 	if on and (top * sc < 200.0 or (size.y - bot) * sc < 200.0): on = false   # zone trop petite (en pixels réels, donc indépendante du zoom)
 	flex.visible = on
+	if pad_btn: pad_btn.modulate = ACCENT.lightened(0.3) if on else Color.WHITE; pad_btn.visible = fold_half or OS.get_name() == "Android" or bool(set_cfg["pad"]) or pad_always
 	pointer.set("pad_active", on); pointer.set("pad_top", bot if on else -1.0)
 	flex.set("top_h", top)
 	if on:
@@ -700,6 +702,16 @@ func _apply_kb() -> void:
 		var n: Node = stack.pop_back()
 		if n is LineEdit or n is TextEdit: n.virtual_keyboard_enabled = mode == "system"
 		stack.append_array(n.get_children())
+
+var pad_btn: Button
+var pad_off := false
+var pad_always := true
+
+## Bouton de la barre : active/désactive le pavé tactile (mode Flex), y compris quand l'écran est plié.
+func _toggle_pad() -> void:
+	if fold_half: pad_off = not pad_off
+	else: set_cfg["pad"] = not bool(set_cfg["pad"]); _save_settings()
+	_update_flex()
 
 func _toggle_kb() -> void:
 	kb.visible = not kb.visible
