@@ -278,6 +278,7 @@ func open_file(f: String) -> void:
 	if e in IMG: main.open_with("imgview", f)
 	elif e == "pdf": main.open_with("pdf", f)
 	elif e == "ics": main.open_with("calendar", f)
+	elif e == "md": main.open_with("notes", f)
 	elif e in TXT: main._open_app("notepad"); main.edit.text = FileAccess.get_file_as_string(f); main.notify("Bloc-notes", f.get_file() + " ouvert")
 	elif e == "zip": _do_unzip(f)
 

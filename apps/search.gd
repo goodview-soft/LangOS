@@ -96,6 +96,10 @@ func query(q: String, files := true) -> Array:
 	for ln in note.split("\n"):
 		if k >= 3: break
 		if fold(ln).contains(f): out.append(["Note", ln.strip_edges().left(70), "Bloc-notes", m._open_app.bind("notepad")]); k += 1
+	if f.length() >= 2:
+		var nv = m.notes_vault(); k = 0
+		for r in nv.search(q, 4, false):
+			out.append(["Note", nv.name_of(r["p"]), "Notes", m.open_with.bind("notes", nv.abs_path(r["p"]))]); k += 1
 	if files and f.length() >= 2:
 		ensure_index(); k = 0
 		for p in index:
@@ -106,7 +110,8 @@ func query(q: String, files := true) -> Array:
 
 func open_file(p: String) -> void:
 	var e := p.get_extension().to_lower()
-	if e in CODE:
+	if e == "md": m.open_with("notes", p)
+	elif e in CODE:
 		m._open_app("code")
 		for n in m.wins["code"]["win"].find_children("*", "Control", true, false): if n.has_method("open_path"): n.open_path(p); return
 	elif e in IMG: m.open_with("imgview", p)

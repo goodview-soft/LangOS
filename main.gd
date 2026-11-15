@@ -100,12 +100,13 @@ const APPS := {
 	"imgview": ["Images", "res://icons/app_imgview.svg"],
 	"pdf": ["Lecteur PDF", "res://icons/app_pdf.svg"],
 	"calendar": ["Agenda", "res://icons/app_calendar.svg"],
+	"notes": ["Notes", "res://icons/app_notes.svg"],
 }
 ## Dossiers du bureau : id -> applications contenues (affichées seulement dans le dossier).
 const FOLDERS := {
 	"f_lang": ["translate", "dict", "music"],
 	"f_games": ["chess", "hika"],
-	"f_soft": ["chromium", "files", "terminal", "code", "profiles", "clipboard", "devices"],
+	"f_soft": ["chromium", "notes", "files", "terminal", "code", "profiles", "clipboard", "devices"],
 	"f_comm": ["messenger", "remote", "chat", "soundlink"],
 	"f_office": ["sheet", "imgview", "pdf", "calendar"],
 	"f_tools": ["calc", "units", "timer", "todo", "vault", "cards"],
@@ -829,6 +830,7 @@ func _open_app(id: String) -> void:
 		"pdf": _app_office("pdf", Vector2(820, 680))
 		"calendar": _app_office("calendar", Vector2(860, 640))
 		"notepad": _app_notepad()
+		"notes": _app_notes()
 		"settings": _app_settings()
 		"system": _app_system()
 		"translate": _app_translate()
@@ -1541,6 +1543,19 @@ func _app_clipboard() -> void:
 	var c := Control.new(); c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	c.custom_minimum_size = Vector2(minf(420.0, maxf(280.0, desk.size.x - 16.0)), 440); c.clip_contents = true
 	wv.add_child(c); clip.build_ui(c)
+
+var _nvault = null
+func notes_vault():
+	if _nvault == null:
+		_nvault = load("res://apps/vault.gd").new(); _nvault.load_cfg(); _nvault.load_cache()
+	return _nvault
+
+func _app_notes() -> void:
+	var wv := _make_window("notes", "", Vector2(1000, 660), Vector2(150 + randi() % 60, 20 + randi() % 30))
+	var c := Control.new(); c.set_script(load("res://apps/notes.gd")); c.m = self
+	c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c.custom_minimum_size = Vector2(minf(560.0, maxf(280.0, desk.size.x - 16.0)), 420); c.clip_contents = true
+	wv.add_child(c); c.build()
 
 func _app_office(id: String, sz: Vector2) -> void:
 	var wv := _make_window(id, "", sz + Vector2(0, 60), Vector2(160 + randi() % 80, 20 + randi() % 30))
