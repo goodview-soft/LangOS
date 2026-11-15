@@ -43,6 +43,11 @@ func _init() -> void:
 		if ui.is_empty(): f.append("ui introuvable")
 		else:
 			ui[0].dual = true; ui[0].panes[1].root.visible = true; ui[0]._new_tab(); ui[0].search("a"); ui[0]._menu(Vector2(300, 300), true)
+			if ui[0].sys_btn == null: f.append("bouton système")
+			ui[0].open_in_system()   # user:// : simple notification
+			ui[0].panes[0].tabs[0] = "/nonexistent_x"; ui[0].act = 0
+			if OS.get_name() == "Android": ui[0].open_in_system()   # garde nativeLevel/singleton absent : sans erreur
+			ui[0].panes[0].tabs[0] = "user://"
 			if ui[0].panes[0].tabs.size() != 2 or m.ctx_menu == null: f.append("onglets/menu")
 	print("FILES-TEST OK" if f.is_empty() else "FILES-TEST ECHEC: " + str(f))
 	quit()

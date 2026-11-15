@@ -135,7 +135,42 @@ public class LangLauncherPlugin extends GodotPlugin {
 	/** Niveau de la partie native de cette APK (comparé à version.json « native » pour proposer de réinstaller l'APK). */
 	@UsedByGodot
 	public int nativeLevel() {
-		return 8;
+		return 9;
+	}
+
+	/** Ouvre le dossier (chemin /storage/emulated/0/...) dans un gestionnaire de fichiers installé ; false si aucun. */
+	@UsedByGodot
+	public boolean openFileManager(String path) {
+		Activity a = getActivity();
+		if (a == null) return false;
+		String rel = "";
+		if (path != null && path.startsWith("/storage/emulated/0")) rel = path.substring("/storage/emulated/0".length());
+		if (rel.startsWith("/")) rel = rel.substring(1);
+		android.net.Uri[] uris = new android.net.Uri[] {
+			android.net.Uri.parse("content://com.android.externalstorage.documents/document/primary%3A" + android.net.Uri.encode(rel)),
+			android.net.Uri.parse("content://com.android.externalstorage.documents/root/primary")
+		};
+		for (android.net.Uri u : uris) {
+			try {
+				Intent i = new Intent(Intent.ACTION_VIEW);
+				i.setDataAndType(u, "vnd.android.document/directory");
+				i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+				a.startActivity(i);
+				return true;
+			} catch (Exception e) {
+				// essai suivant
+			}
+		}
+		try {
+			Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+			i.setType("*/*");
+			i.addCategory(Intent.CATEGORY_OPENABLE);
+			i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+			a.startActivity(i);
+			return true;
+		} catch (Exception e) {
+			return false;
+		}
 	}
 
 	/** JSON d'état système : {"battery":%, "charging":bool, "net":"wifi|cell|eth|none", "level":0..3} (barre des tâches). */

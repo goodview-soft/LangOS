@@ -21,6 +21,7 @@ var prev_txt: Label
 var prev_img: TextureRect
 var panes_box: HBoxContainer
 var ico := {}
+var sys_btn: Button
 
 class P:
 	var tabs: Array = ["user://"]
@@ -163,6 +164,7 @@ func _ready() -> void:
 	pathe.text_submitted.connect(func(t): _go(t.strip_edges())); top.add_child(pathe)
 	top.add_child(_btn("+ Onglet", 80, func(): _new_tab()))
 	top.add_child(_btn("2 volets", 84, func(): dual = not dual; panes[1].root.visible = dual))
+	sys_btn = _btn("Système", 76, open_in_system); sys_btn.tooltip_text = "Ouvrir dans le gestionnaire du système"; top.add_child(sys_btn)
 	top.add_child(_btn("Aperçu", 70, func(): prev_on = not prev_on; prev_box.visible = prev_on; _preview()))
 	var pl := ScrollContainer.new(); pl.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; pl.custom_minimum_size.y = 46; vb.add_child(pl)
 	var pr := HBoxContainer.new(); pr.add_theme_constant_override("separation", 4); pl.add_child(pr)
@@ -320,8 +322,23 @@ func _menu(at: Vector2, bg: bool, idx := -1) -> void:
 		it.append(null)
 	if not intr: it += [["Coller", func(): _act_paste()], ["Nouveau dossier", func(): _ask("Nom du dossier :", "Nouveau dossier", func(t): DirAccess.make_dir_recursive_absolute(uniq(_cur(), t)); refresh())]]
 	else: it.append(["Vider la corbeille", func(): _n("Corbeille", "%d élément(s) supprimé(s)" % fs_empty_trash()); refresh()])
-	it += [["Actualiser", refresh]]
+	it += [["Actualiser", refresh], ["Ouvrir dans le gestionnaire du système", open_in_system]]
 	main._popup_menu(it, at)
+
+## Ouvre le dossier courant dans le gestionnaire de fichiers du système (Linux : gestionnaire de bureau ; Android : intent).
+func open_in_system() -> void:
+	var cur := _cur()
+	if cur.begins_with("user://"):
+		_n("Fichiers", "Dossier interne à LangOS, invisible au système : " + ProjectSettings.globalize_path(cur)); return
+	if OS.get_name() == "Android":
+		if not Engine.has_singleton("LangLauncher") or int(Engine.get_singleton("LangLauncher").nativeLevel()) < 9:
+			_n("Fichiers", "Réinstalle l'APK pour cette fonction"); return
+		if not Engine.get_singleton("LangLauncher").openFileManager(cur): _n("Fichiers", "Aucun gestionnaire de fichiers trouvé")
+		return
+	if OS.shell_show_in_file_manager(cur, true) == OK: return
+	var cmd := "xdg-open"; var args := [cur]
+	if FileAccess.file_exists("/.flatpak-info"): cmd = "flatpak-spawn"; args = ["--host", "xdg-open", cur]
+	if OS.create_process(cmd, args) < 0: _n("Fichiers", "Impossible d'ouvrir : " + cur)
 
 func _ask(lbl: String, init: String, cbk: Callable) -> void:
 	pr_lbl.text = lbl; pr_in.text = init; pr_cb = cbk; bar2.visible = true; pr_in.grab_focus()
