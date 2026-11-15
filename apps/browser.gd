@@ -9,6 +9,8 @@ const DIR := "user://cef"
 const HOME := "https://duckduckgo.com/"
 const ACCENT := Color("5aa2ff")
 const MUTED := Color("8f9bb3")
+const CFG := "user://cef/browser.cfg"
+const DEBUG_PORT := 9222
 
 var external: Callable                 # ouvre le navigateur du système (donné par le bureau)
 var cef: Object
@@ -22,18 +24,34 @@ var http: HTTPRequest
 var thread: Thread
 var last_url := ""
 var box: VBoxContainer
+var ctl_note: Label
+var cef_port_active := false
 
 func _g(p: String) -> String: return ProjectSettings.globalize_path(p)
 func _zip() -> String: return _g(DIR + "/gdcef.zip")
 func _lib() -> String: return _g(DIR + "/linux/libgdcef.so")
+func _debug_on() -> bool:
+	var c := ConfigFile.new(); c.load(CFG); return bool(c.get_value("browser", "claude_control", false))
+func _set_debug(on: bool) -> void:
+	var c := ConfigFile.new(); c.load(CFG); c.set_value("browser", "claude_control", on); c.save(CFG)
+	if cef_port_active != on: ctl_note.text = "Redémarre LangOS pour appliquer."; ctl_note.visible = true
+	else: ctl_note.visible = false
 func _supported() -> bool: return OS.get_name() == "Linux" and Engine.get_architecture_name() == "x86_64"
 func _installed() -> bool: return FileAccess.file_exists(_lib()) and FileAccess.file_exists(_g(DIR + "/linux/libcef.so"))
 
+var wv: Object                         # plugin Android « LangWebView » (WebView du système)
+var wv_rect := Rect2i()
+var wv_shown := false
+
+func _android() -> bool: return OS.get_name() == "Android" and Engine.has_singleton("LangWebView")
+
 func _ready() -> void:
-	if _installed() and _supported(): _start()
+	if _android(): _start_android()
+	elif _installed() and _supported(): _start()
 	else: _build_install()
 
 func _exit_tree() -> void:
+	if wv: wv.close()
 	if browser and is_instance_valid(browser): browser.close()
 	if thread and thread.is_started(): thread.wait_to_finish()
 	OS.low_processor_usage_mode = true
@@ -71,6 +89,7 @@ func _process(_d: float) -> void:
 	if http and bar and bar.visible and http.get_body_size() > 0:
 		bar.max_value = http.get_body_size(); bar.value = http.get_downloaded_bytes()
 		info.text = "Téléchargement : %d / %d Mo" % [http.get_downloaded_bytes() / 1048576, http.get_body_size() / 1048576]
+	if wv: _sync_wv()
 	if browser and is_instance_valid(browser):
 		var u: String = browser.get_url()
 		if u != last_url and not url_edit.has_focus(): last_url = u; url_edit.text = u
@@ -121,10 +140,11 @@ func _start() -> void:
 		cef = ClassDB.instantiate("GdCEF"); get_tree().root.add_child(cef)
 		var L := _g(DIR + "/linux")
 		if not cef.initialize({"cache_path": _g("user://cef_cache"), "root_cache_path": _g("user://cef_cache"), "browser_subprocess_path": L + "/gdCefRenderProcess",
-				"log_file": _g(DIR + "/debug.log"), "log_severity": "error", "use_gpu": false, "locale": "fr-FR"}):
+				"log_file": _g(DIR + "/debug.log"), "log_severity": "error", "use_gpu": false, "locale": "fr-FR"}.merged({"remote_debugging_port": DEBUG_PORT} if _debug_on() else {})):
 			var e: String = cef.get_error(); cef.queue_free(); cef = null
 			_build_install(); info.text = "Chromium n'a pas démarré : " + e; return
-		Engine.set_meta("lang_cef", cef)
+		Engine.set_meta("lang_cef", cef); Engine.set_meta("lang_cef_port", _debug_on())
+	cef_port_active = bool(Engine.get_meta("lang_cef_port", false))
 	OS.low_processor_usage_mode = false
 	var v := VBoxContainer.new(); v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); v.add_theme_constant_override("separation", 0); add_child(v)
 	var tb := HBoxContainer.new(); tb.add_theme_constant_override("separation", 4); v.add_child(tb)
@@ -132,6 +152,12 @@ func _start() -> void:
 		var b := Button.new(); b.text = it[0]; b.custom_minimum_size = Vector2(44, 38); b.focus_mode = Control.FOCUS_NONE; b.pressed.connect(it[1]); tb.add_child(b)
 	url_edit = LineEdit.new(); url_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL; url_edit.placeholder_text = "Adresse ou recherche"
 	url_edit.text_submitted.connect(_go); tb.add_child(url_edit)
+	var cc := CheckButton.new(); cc.text = "Claude Code"; cc.focus_mode = Control.FOCUS_NONE; cc.button_pressed = _debug_on()
+	cc.tooltip_text = "Autorise Claude Code à piloter ce navigateur (DevTools sur 127.0.0.1:%d). Redémarrage requis." % DEBUG_PORT
+	cc.toggled.connect(_set_debug); tb.add_child(cc)
+	ctl_note = Label.new(); ctl_note.visible = false; ctl_note.add_theme_color_override("font_color", Color("fbbf24")); tb.add_child(ctl_note)
+	if cef_port_active:
+		var dot := Label.new(); dot.text = "● piloté (port %d)" % DEBUG_PORT; dot.add_theme_color_override("font_color", Color("f87171")); tb.add_child(dot)
 	view = TextureRect.new(); view.size_flags_vertical = Control.SIZE_EXPAND_FILL; view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; view.focus_mode = Control.FOCUS_ALL; view.clip_contents = true
 	view.gui_input.connect(_view_input); view.resized.connect(func(): if browser: browser.resize(view.size)); v.add_child(view)
@@ -142,10 +168,11 @@ func _start() -> void:
 
 func _go(t: String) -> void:
 	t = t.strip_edges()
-	if t == "" or browser == null: return
+	if t == "" or (browser == null and wv == null): return
 	if not (t.begins_with("http://") or t.begins_with("https://") or t.begins_with("file://")):
 		t = "https://" + t if (t.contains(".") and not t.contains(" ")) else "https://duckduckgo.com/?q=" + t.uri_encode()
-	browser.load_url(t); view.grab_focus()
+	if wv: wv.load(t)
+	else: browser.load_url(t); view.grab_focus()
 
 func _view_input(ev: InputEvent) -> void:
 	if browser == null: return
@@ -164,3 +191,37 @@ func _input(ev: InputEvent) -> void:
 	if browser == null or not (ev is InputEventKey) or get_viewport().gui_get_focus_owner() != view: return
 	browser.set_key_pressed(ev.unicode if ev.unicode != 0 else ev.keycode, ev.pressed, ev.shift_pressed, ev.alt_pressed, ev.is_command_or_control_pressed())
 	get_viewport().set_input_as_handled()
+
+# ---------------------------------------------------------------- Android : WebView natif superposé
+
+func _start_android() -> void:
+	_clear()
+	wv = Engine.get_singleton("LangWebView")
+	wv.connect("url_changed", func(u: String): last_url = u; if url_edit and not url_edit.has_focus(): url_edit.text = u)
+	var v := VBoxContainer.new(); v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); v.add_theme_constant_override("separation", 0); add_child(v)
+	var tb := HBoxContainer.new(); tb.add_theme_constant_override("separation", 4); v.add_child(tb)
+	for it in [["◀", func(): wv.back()], ["▶", func(): wv.forward()], ["⟳", func(): wv.reload()]]:
+		var b := Button.new(); b.text = it[0]; b.custom_minimum_size = Vector2(52, 44); b.focus_mode = Control.FOCUS_NONE; b.pressed.connect(it[1]); tb.add_child(b)
+	url_edit = LineEdit.new(); url_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL; url_edit.placeholder_text = "Adresse ou recherche"
+	url_edit.text_submitted.connect(_go); tb.add_child(url_edit)
+	view = TextureRect.new(); view.size_flags_vertical = Control.SIZE_EXPAND_FILL; view.size_flags_horizontal = Control.SIZE_EXPAND_FILL; v.add_child(view)
+	await get_tree().process_frame; await get_tree().process_frame
+	wv_rect = _screen_rect()
+	wv.open(HOME, wv_rect.position.x, wv_rect.position.y, wv_rect.size.x, wv_rect.size.y); wv_shown = true
+
+## Zone de la page en pixels d'écran (la fenêtre Godot occupe tout l'écran sous Android).
+func _screen_rect() -> Rect2i:
+	var r: Rect2 = get_viewport().get_final_transform() * view.get_global_rect()
+	return Rect2i(Vector2i(r.position), Vector2i(r.size))
+
+## Le WebView est une vue native au-dessus de Godot : on la cale sur la fenêtre et on la cache si celle-ci n'est pas visible
+## (fenêtre réduite ou menu Démarrer ouvert).
+func _sync_wv() -> void:
+	if view == null: return
+	var shown := is_visible_in_tree()
+	var main := get_tree().current_scene
+	if main and main.get("menu") and main.menu.visible: shown = false
+	if shown != wv_shown: wv_shown = shown; wv.setShown(shown)
+	if not shown: return
+	var r := _screen_rect()
+	if r != wv_rect: wv_rect = r; wv.place(r.position.x, r.position.y, r.size.x, r.size.y)

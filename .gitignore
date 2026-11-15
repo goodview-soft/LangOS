@@ -1,3 +1,7 @@
 .godot/
 build/
 *.tmp
+!/android/build/
+/android/build/build/
+/android/build/.gradle/
+/android/build/libs/
