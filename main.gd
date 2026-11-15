@@ -75,12 +75,13 @@ const APPS := {
 	"todo": ["Listes", "res://icons/app_todo.svg"],
 	"vault": ["Coffre-fort", "res://icons/app_vault.svg"],
 	"cards": ["Cartes mémoire", "res://icons/app_cards.svg"],
+	"files": ["Fichiers", "res://icons/app_files.svg"],
 }
 ## Dossiers du bureau : id -> applications contenues (affichées seulement dans le dossier).
 const FOLDERS := {
 	"f_lang": ["translate", "dict", "music"],
 	"f_games": ["chess", "hika"],
-	"f_soft": ["chromium"],
+	"f_soft": ["chromium", "files"],
 	"f_comm": ["messenger", "remote", "chat", "soundlink"],
 	"f_tools": ["calc", "units", "timer", "todo", "vault", "cards"],
 }
@@ -731,6 +732,7 @@ func _open_app(id: String) -> void:
 		"todo": _app_tool("todo", Vector2(440, 600))
 		"vault": _app_tool("vault", Vector2(440, 520))
 		"cards": _app_tool("cards", Vector2(460, 640))
+		"files": _app_files()
 		"notepad": _app_notepad()
 		"settings": _app_settings()
 		"system": _app_system()
@@ -1404,6 +1406,13 @@ func _app_tool(id: String, sz: Vector2) -> void:
 	c.set_script(load("res://apps/tool_%s.gd" % id))
 	c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	c.custom_minimum_size = Vector2(minf(sz.x, maxf(280.0, desk.size.x - 16.0)), sz.y); c.clip_contents = true
+	wv.add_child(c)
+
+func _app_files() -> void:
+	var wv := _make_window("files", "", Vector2(860, 600), Vector2(160, 20))
+	var c := Control.new(); c.set_script(load("res://apps/files.gd")); c.main = self
+	c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c.custom_minimum_size = Vector2(minf(560.0, maxf(280.0, desk.size.x - 16.0)), 400); c.clip_contents = true
 	wv.add_child(c)
 
 func _app_chess() -> void:
