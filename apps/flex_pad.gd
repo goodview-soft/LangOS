@@ -93,6 +93,10 @@ func _ready() -> void:
 		_wv.mouse_filter = Control.MOUSE_FILTER_IGNORE; _wh.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		for n in [l]: n.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
+## Position « interface » → pixels fenêtre : les événements injectés dans Input sont lus en pixels, puis ramenés à l'interface par la fenêtre.
+func _inj(p: Vector2) -> Vector2:
+	return get_viewport().get_final_transform() * p
+
 var px_scale := -1.0           # tests : échelle fixe (la fenêtre headless est minuscule) ; sinon transformation réelle vue → pixels
 func _px(p: Vector2) -> Vector2:
 	return p * px_scale if px_scale > 0.0 else get_viewport().get_final_transform() * p
@@ -161,7 +165,7 @@ func _touch_release(f: Dictionary) -> void:
 func _move_pointer(d: Vector2) -> void:
 	var np: Vector2 = (pointer.pos + d).clamp(Vector2.ZERO, Vector2(get_viewport_rect().size.x - 1.0, maxf(1.0, top_h - 1.0)))
 	pointer.move_to(np)
-	var e := InputEventMouseMotion.new(); e.position = np; e.global_position = np; e.relative = d
+	var e := InputEventMouseMotion.new(); e.position = _inj(np); e.global_position = e.position; e.relative = d
 	e.button_mask = MOUSE_BUTTON_MASK_LEFT if _hold_left else 0
 	Input.call_deferred("parse_input_event", e)
 
@@ -185,13 +189,13 @@ func _pad_input(ev: InputEvent) -> void:
 		accept_event()
 
 func _wheel(idx: int) -> void:
-	var e := InputEventMouseButton.new(); e.button_index = idx; e.pressed = true; e.factor = 1.0; e.position = pointer.pos; e.global_position = pointer.pos
+	var e := InputEventMouseButton.new(); e.button_index = idx; e.pressed = true; e.factor = 1.0; e.position = _inj(pointer.pos); e.global_position = e.position
 	Input.call_deferred("parse_input_event", e)
-	var u := InputEventMouseButton.new(); u.button_index = idx; u.pressed = false; u.position = pointer.pos; u.global_position = pointer.pos
+	var u := InputEventMouseButton.new(); u.button_index = idx; u.pressed = false; u.position = _inj(pointer.pos); u.global_position = u.position
 	Input.call_deferred("parse_input_event", u)
 
 func _btn(idx: int, down: bool) -> void:
-	var e := InputEventMouseButton.new(); e.button_index = idx; e.pressed = down; e.position = pointer.pos; e.global_position = pointer.pos
+	var e := InputEventMouseButton.new(); e.button_index = idx; e.pressed = down; e.position = _inj(pointer.pos); e.global_position = e.position
 	e.button_mask = (1 << (idx - 1)) if down else 0
 	pointer.pressed = down; pointer.queue_redraw()
 	Input.call_deferred("parse_input_event", e)
@@ -199,7 +203,7 @@ func _btn(idx: int, down: bool) -> void:
 func _click(idx: int) -> void:
 	while _click_busy: await get_tree().process_frame     # deux appuis rapprochés ne se mélangent pas
 	_click_busy = true
-	var mv := InputEventMouseMotion.new(); mv.position = pointer.pos; mv.global_position = pointer.pos; Input.call_deferred("parse_input_event", mv)
+	var mv := InputEventMouseMotion.new(); mv.position = _inj(pointer.pos); mv.global_position = mv.position; Input.call_deferred("parse_input_event", mv)
 	_btn(idx, true)
 	await get_tree().create_timer(0.05).timeout
 	_btn(idx, false)

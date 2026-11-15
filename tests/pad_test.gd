@@ -11,10 +11,11 @@ class Spy extends Node:
 	var left := 0
 	var right := 0
 	var wheel: Array = []
+	var left_pos: Array = []
 	func _input(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed:
 			match ev.button_index:
-				MOUSE_BUTTON_LEFT: left += 1
+				MOUSE_BUTTON_LEFT: left += 1; left_pos.append(ev.position)
 				MOUSE_BUTTON_RIGHT: right += 1
 				_: wheel.append(ev.button_index)
 
@@ -60,6 +61,7 @@ func _init() -> void:
 	await test_pincement()
 	await test_annulation_et_nettoyage()
 	await test_fuzz()
+	await test_echelle()
 	await test_zoom_stable()
 	print("PAD-TEST %s : %d vérifications, %d échec(s)" % ["OK" if fails.is_empty() else "ECHEC", checks, fails.size()])
 	for f in fails: print("  ✗ ", f)
@@ -243,3 +245,22 @@ func test_zoom_stable() -> void:
 	m._set_zoom(1.0)
 	await create_timer(1.0).timeout
 	m.queue_free()
+
+# ------------------------------------------------------------------ les clics tombent là où le curseur est dessiné, quelle que soit l'échelle
+func test_echelle() -> void:
+	for sc in [1.0, 1.5, 2.0, 0.6]:
+		root.content_scale_factor = sc
+		await create_timer(0.3).timeout
+		rig = make_rig(); var f = rig["flex"]; var p = rig["pointer"]; var spy = rig["spy"]
+		f.set("px_scale", -1.0)            # vraie transformation
+		await settle()
+		var warm := InputEventMouseMotion.new(); warm.position = Vector2(5, 5); Input.parse_input_event(warm); await settle()
+		var target := Vector2(321, 123)
+		p.move_to(target)
+		var c: Vector2 = f._pad.get_global_rect().get_center()
+		f._input(tch(c, true)); await create_timer(0.1).timeout; f._input(tch(c, false)); await settle()
+		var ok: bool = spy.left_pos.size() == 1 and (spy.left_pos[0] as Vector2).distance_to(target) < 1.5
+		check("échelle %.1f: le clic tombe sur le curseur" % sc, ok, "clic=%s curseur=%s" % [str(spy.left_pos), str(target)])
+		check("échelle %.1f: le curseur ne saute pas à cause de ses propres clics" % sc, p.pos.distance_to(target) < 1.5, str(p.pos))
+		await create_timer(0.4).timeout; rig["host"].queue_free(); spy.queue_free()
+	root.content_scale_factor = 1.0
