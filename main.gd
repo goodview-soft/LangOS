@@ -41,7 +41,13 @@ var upd_avail := false
 var apk_prompted := false
 var upd_lbl: Label
 const BG_GRADS := [["16213e","2f5fa8","7a4fb0"], ["0f1c26","1f4e5f","2e8b7a"], ["16161f","3a2a5c","b0507a"], ["12141a","2a2f3d","56607a"], ["1c120d","6b3a1f","e0873a"]]
-const ACCENT := Color("5aa2ff")
+var ACCENT := Color("5aa2ff")   # variable : couleur d'accent choisie dans Paramètres > Apparence
+var fx            # apps/fx.gd : animations, aperçu d'ancrage, réglages d'apparence
+var dock          # apps/dock.gd
+var ccenter       # apps/control_center.gd
+var tray_node: Control
+var menu_hi: TextureRect
+var cc_btn: Button
 const PAL_D := {"win": Color("232834"), "tb_on": Color("1f2432"), "tb_off": Color("171a23"), "field": Color("171b25"), "popup": Color("1b1f2a"), "bar": Color(0.07, 0.08, 0.11, 0.9), "menu": Color(0.11, 0.13, 0.18, 0.97), "text": Color("e5e9f0"), "ov": Color(1, 1, 1), "edge": Color(1, 1, 1, 0.1)}
 const PAL_L := {"win": Color("f3f5f9"), "tb_on": Color("e2e7f0"), "tb_off": Color("edf0f6"), "field": Color("ffffff"), "popup": Color("ffffff"), "bar": Color(0.93, 0.94, 0.97, 0.94), "menu": Color(0.97, 0.98, 1.0, 0.97), "text": Color("1b2230"), "ov": Color(0, 0, 0), "edge": Color(0, 0, 0, 0.14)}
 func _p(k: String):
@@ -91,7 +97,7 @@ func _top_ids() -> Array:
 	var android := OS.get_name() == "Android"
 	return APPS.keys().filter(func(k): return not inside.has(k) and (k != "android_apps" or android))
 var active := ""
-var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "cursor": "auto", "pad": false, "pad_speed": 0.7, "zoom": 1.0, "model": "", "engine": -1, "src": "spa", "tgt": "fra", "light": false, "wall": false, "icons": {}, "layout": {}, "open": []}
+var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "cursor": "auto", "pad": false, "pad_speed": 0.7, "zoom": 1.0, "model": "", "engine": -1, "src": "spa", "tgt": "fra", "light": false, "wall": false, "icons": {}, "layout": {}, "open": [], "accent": "5aa2ff", "anim": true, "wtrans": 1.0, "radius": 12, "isize": 56, "pins": ["notepad", "settings", "calc", "music"], "dock_hide": false}
 var kb: PanelContainer
 var ui_root: VBoxContainer
 var pointer: Control
@@ -306,6 +312,17 @@ func _box(c: Color, r := 8, bc := Color(0, 0, 0, 0), bw := 0, sh := 0, m := 0) -
 	if m > 0: s.set_content_margin_all(m)
 	return s
 
+func _rad() -> int:
+	return int(set_cfg.get("radius", 12))
+
+## Style d'une fenêtre : ombre plus large quand elle est active, encore plus pendant le déplacement.
+func _winbox(on: bool, drag := false) -> StyleBoxFlat:
+	var c: Color = _p("win"); c.a = float(set_cfg.get("wtrans", 1.0))
+	var s := _box(c, _rad(), Color(ACCENT, 0.4) if on else _p("edge"), 1)
+	s.shadow_size = 52 if drag else (34 if on else 12)
+	s.shadow_color = Color(0, 0, 0, 0.6 if drag else (0.45 if on else 0.2)); s.shadow_offset = Vector2(0, s.shadow_size * 0.3)
+	return s
+
 func _flat(c: Color, r := 0) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new(); s.bg_color = c; s.set_corner_radius_all(r)
 	return s
@@ -448,7 +465,8 @@ func _build_desktop() -> void:
 	vd_btn.tooltip_text = "Bureaux virtuels (Ctrl+Alt+←/→)"; vd_btn.pressed.connect(_vd_menu); bh.add_child(vd_btn)
 	bell_btn = _icon_btn("bell", "Flat", 56, 42, 22); bell_btn.tooltip_text = "Notifications"; bell_btn.pressed.connect(_toggle_notifs); bh.add_child(bell_btn)
 	kb_btn = _icon_btn("keyboard", "Flat", 48, 42, 24); kb_btn.pressed.connect(_toggle_kb); bh.add_child(kb_btn)
-	var tray := Control.new(); tray.set_script(load("res://apps/systray.gd")); bh.add_child(tray)
+	cc_btn = _icon_btn("ctrl", "Flat", 48, 42, 22); cc_btn.tooltip_text = "Centre de contrôle"; cc_btn.pressed.connect(func(): ccenter.toggle(cc_btn)); bh.add_child(cc_btn)
+	var tray := Control.new(); tray.set_script(load("res://apps/systray.gd")); bh.add_child(tray); tray_node = tray
 	clock = Label.new(); clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	clock.add_theme_font_size_override("font_size", 14); bh.add_child(clock)
 	bar_h = 54.0
@@ -466,6 +484,10 @@ func _build_desktop() -> void:
 	_update_flex.call_deferred()
 	_apply_kb.call_deferred()
 	_build_menu()
+	fx = load("res://apps/fx.gd").new(); fx.m = self; add_child(fx)
+	ccenter = load("res://apps/control_center.gd").new(); ccenter.m = self; add_child(ccenter)
+	dock = load("res://apps/dock.gd").new(); add_child(dock); dock.setup(self)
+	_restyle_icons()
 
 ## Range les icônes en colonnes ; passe à la colonne suivante quand la hauteur est atteinte.
 ## Après une rotation ou un changement de zone (mode Flex) : les fenêtres restent dans le bureau, les fenêtres agrandies le remplissent.
@@ -509,7 +531,15 @@ func _desk_icon(id: String, pos: Vector2) -> void:
 	l.add_theme_constant_override("shadow_offset_x", 1); l.add_theme_constant_override("shadow_offset_y", 1)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE; v.add_child(l)
 	b.set_meta("id", id); b.gui_input.connect(_icon_input.bind(b, id))
+	b.mouse_entered.connect(func(): fx.hover(b, true)); b.mouse_exited.connect(func(): fx.hover(b, false))
 	desk.add_child(b); desk_icons.append(b)
+
+## Taille des icônes du bureau (réglage « Taille des icônes »).
+func _restyle_icons() -> void:
+	var s := float(set_cfg.get("isize", 56))
+	for b in desk_icons:
+		var t: Control = b.get_child(0).get_child(0)
+		t.custom_minimum_size = Vector2(s, s)
 
 # ---------------------------------------------------------------- Menu Démarrer
 
@@ -523,7 +553,7 @@ func _build_menu() -> void:
 	add_child(menu)
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 4); menu.add_child(v)
 	var head := HBoxContainer.new(); v.add_child(head)
-	var hi := TextureRect.new(); hi.texture = _ico("start"); hi.modulate = ACCENT; hi.custom_minimum_size = Vector2(22, 22)
+	var hi := TextureRect.new(); hi.texture = _ico("start"); hi.modulate = ACCENT; hi.custom_minimum_size = Vector2(22, 22); menu_hi = hi
 	hi.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; hi.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED; head.add_child(hi)
 	var ht := Label.new(); ht.text = " LangOS"; ht.add_theme_font_size_override("font_size", 20); ht.size_flags_horizontal = Control.SIZE_EXPAND_FILL; head.add_child(ht)
 	var hv := Label.new(); hv.text = "v" + VERSION; hv.add_theme_color_override("font_color", MUTED); hv.add_theme_font_size_override("font_size", 14); head.add_child(hv)
@@ -745,8 +775,11 @@ func _open_app(id: String) -> void:
 
 func _show(id: String) -> void:
 	if int(wins[id]["vd"]) != cur_vd: _goto_vd(int(wins[id]["vd"]))
+	var was_hidden: bool = not wins[id]["win"].visible or wins[id]["min"]
 	wins[id]["min"] = false
+	fx.reset_win(wins[id])
 	wins[id]["win"].visible = true
+	if was_hidden and wins[id].has("shown"): fx.open_win(wins[id]["win"])
 	wins[id]["win"].move_to_front()
 	if kb.visible: kb.move_to_front()
 	_set_active(id)
@@ -756,7 +789,8 @@ func _set_active(id: String) -> void:
 	for k in wins:
 		var on: bool = k == id
 		var tb: PanelContainer = wins[k]["tb"]
-		var st := _box(_p("tb_on") if on else _p("tb_off"), 12)
+		wins[k]["win"].add_theme_stylebox_override("panel", _winbox(on))
+		var st := _box(_p("tb_on") if on else _p("tb_off"), _rad())
 		st.corner_radius_bottom_left = 0; st.corner_radius_bottom_right = 0
 		st.content_margin_left = 12; st.content_margin_right = 6; st.content_margin_top = 4; st.content_margin_bottom = 4
 		tb.add_theme_stylebox_override("panel", st)
@@ -769,12 +803,13 @@ func _set_active(id: String) -> void:
 			t.add_theme_stylebox_override("normal", sb)
 		else:
 			t.remove_theme_stylebox_override("normal")
+	if dock != null: dock.refresh()
 
 ## Crée une fenêtre déplaçable ; renvoie son conteneur vertical.
 func _make_window(id: String, _title: String, sz: Vector2, pos: Vector2) -> VBoxContainer:
 	var title: String = APPS[id][0]
 	var w := PanelContainer.new()
-	w.add_theme_stylebox_override("panel", _box(_p("win"), 12, _p("edge"), 1, 34))
+	w.add_theme_stylebox_override("panel", _winbox(true))
 	# Petits écrans : la fenêtre ne dépasse pas le bureau ; sur téléphone (bureau étroit) elle s'ouvre agrandie.
 	var mem = set_cfg["layout"].get(id) if _real() else null
 	if mem is Array and mem.size() > 3 and float(mem[2]) > 100.0: sz = Vector2(float(mem[2]), float(mem[3])); pos = Vector2(float(mem[0]), float(mem[1]))
@@ -793,12 +828,12 @@ func _make_window(id: String, _title: String, sz: Vector2, pos: Vector2) -> VBox
 	ti.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; ti.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	ti.mouse_filter = Control.MOUSE_FILTER_PASS; tbh.add_child(ti)
 	var tl := Label.new(); tl.text = "  " + title
-	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL; tl.add_theme_font_size_override("font_size", 15)
 	tl.mouse_filter = Control.MOUSE_FILTER_PASS
 	tbh.add_child(tl)
-	var mn := _icon_btn("minimize", "Flat", 38, 30, 14); mn.pressed.connect(_toggle_win.bind(id)); tbh.add_child(mn)
-	var mx := _icon_btn("maximize", "Flat", 38, 30, 14); mx.pressed.connect(_toggle_max.bind(id)); tbh.add_child(mx)
-	var cl := _icon_btn("close", "Close", 38, 30, 14); cl.pressed.connect(_close_win.bind(id)); tbh.add_child(cl)
+	var mn := _icon_btn("minimize", "Flat", 34, 26, 13); mn.pressed.connect(_toggle_win.bind(id)); tbh.add_child(mn)
+	var mx := _icon_btn("maximize", "Flat", 34, 26, 13); mx.pressed.connect(_toggle_max.bind(id)); tbh.add_child(mx)
+	var cl := _icon_btn("close", "Close", 34, 26, 13); cl.pressed.connect(_close_win.bind(id)); tbh.add_child(cl)
 	var tk := _mk_btn(title, 150, 42); tk.theme_type_variation = "Flat"
 	tk.icon = load(APPS[id][1]); tk.add_theme_constant_override("icon_max_width", 24)
 	tk.add_theme_color_override("icon_normal_color", Color.WHITE); tk.add_theme_color_override("icon_hover_color", Color.WHITE)
@@ -810,10 +845,8 @@ func _make_window(id: String, _title: String, sz: Vector2, pos: Vector2) -> VBox
 	wins[id] = {"win": w, "task": tk, "tb": tb, "maxed": false, "saved": Rect2(), "title": tl, "vd": restore_vd if restore_vd >= 0 else cur_vd, "min": false, "snapped": false}
 	tk.visible = int(wins[id]["vd"]) == cur_vd; w.visible = tk.visible
 	_show(id)
-	var end := pos
-	w.position = pos + Vector2(0, 18); w.modulate.a = 0.0
-	var tw := create_tween().set_parallel(true).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-	tw.tween_property(w, "position", end, 0.18); tw.tween_property(w, "modulate:a", 1.0, 0.18)
+	wins[id]["shown"] = true
+	fx.open_win(w)
 	_clamp_windows.call_deferred()
 	get_tree().create_timer(0.3).timeout.connect(_clamp_windows)
 	get_tree().create_timer(0.5).timeout.connect(_save_layout)   # après l'animation d'ouverture et la mise en place du contenu
@@ -827,6 +860,7 @@ func _title_input(ev: InputEvent, id: String) -> void:
 		_show(id)
 		if ev.double_click: _toggle_max(id)
 	elif ev is InputEventMouseMotion and (ev.button_mask & MOUSE_BUTTON_MASK_LEFT) and not d["maxed"]:
+		if not d.get("dragged", false): w.add_theme_stylebox_override("panel", _winbox(true, true))   # ombre étendue pendant le déplacement
 		d["dragged"] = true
 		if d.get("snapped", false):
 			d["snapped"] = false
@@ -834,26 +868,26 @@ func _title_input(ev: InputEvent, id: String) -> void:
 		var p: Vector2 = w.position + ev.relative
 		var lim: Vector2 = desk.size - Vector2(120, 40)
 		w.position = Vector2(clampf(p.x, -w.size.x + 120, lim.x), clampf(p.y, 0, lim.y))
+		fx.show_preview(fx.zone_at(get_viewport().get_mouse_position() - desk.global_position, desk.size))
 
 ## Fin du déplacement d'une fenêtre : au bord du bureau elle s'ancre (haut = agrandie, côtés = moitié, coins = quart).
 func _title_release(id: String) -> void:
 	var d: Dictionary = wins[id]
 	if not d.get("dragged", false): return
 	d["dragged"] = false
-	var p := get_viewport().get_mouse_position() - desk.global_position
-	var l := p.x <= 4.0; var r := p.x >= desk.size.x - 4.0; var t := p.y <= 4.0; var b := p.y >= desk.size.y - 4.0
-	if t and not (l or r):
+	d["win"].add_theme_stylebox_override("panel", _winbox(active == id))
+	fx.hide_preview()
+	var z: String = fx.zone_at(get_viewport().get_mouse_position() - desk.global_position, desk.size)
+	if z == "max":
 		if not d["maxed"]: _toggle_max(id)
-	elif l or r: _snap(id, ("t" if t else "b" if b else "") + ("l" if l else "r"))
-	elif b: _snap(id, "b")
+	elif z != "": _snap(id, z)
 	else: _save_layout()
 
 func _toggle_win(id: String) -> void:
 	var w: PanelContainer = wins[id]["win"]
-	w.visible = not w.visible
-	wins[id]["min"] = not w.visible
-	if w.visible: _show(id)
-	else: _set_active("")
+	if w.visible and not wins[id]["min"]:
+		wins[id]["min"] = true; fx.minimize(id); _set_active("")
+	else: _show(id)
 
 func _toggle_max(id: String) -> void:
 	var d: Dictionary = wins[id]
@@ -868,7 +902,7 @@ func _toggle_max(id: String) -> void:
 
 func _close_win(id: String) -> void:
 	if id == "notepad": _save()
-	wins[id]["win"].queue_free(); wins[id]["task"].queue_free()
+	fx.reset_win(wins[id]); fx.close_win(wins[id]["win"]); wins[id]["task"].queue_free()
 	wins.erase(id)
 	_set_active("")
 	_save_layout()
@@ -968,6 +1002,8 @@ func _app_settings() -> void:
 		l.text = "%d" % int(x); set_cfg["font"] = int(x)
 		if edit and is_instance_valid(edit): edit.add_theme_font_size_override("font_size", int(x))
 		_save_settings()))
+
+	fx.appearance_card(page)
 
 	# --- Souris et pavé tactile
 	c = _s_card(page, "Souris et pavé tactile")
@@ -1552,13 +1588,18 @@ func _load_settings() -> void:
 		for k in ["icons", "layout"]:
 			var v = c.get_value("ui", k, {}); set_cfg[k] = v if v is Dictionary else {}
 		var o = c.get_value("ui", "open", []); set_cfg["open"] = o if o is Array else []
+		set_cfg["accent"] = str(c.get_value("ui", "accent", "5aa2ff")); set_cfg["anim"] = bool(c.get_value("ui", "anim", true))
+		set_cfg["wtrans"] = clampf(float(c.get_value("ui", "wtrans", 1.0)), 0.5, 1.0); set_cfg["radius"] = clampi(int(c.get_value("ui", "radius", 12)), 0, 28)
+		set_cfg["isize"] = clampi(int(c.get_value("ui", "isize", 56)), 32, 96); set_cfg["dock_hide"] = bool(c.get_value("ui", "dock_hide", false))
+		var pn = c.get_value("ui", "pins", set_cfg["pins"]); set_cfg["pins"] = pn if pn is Array else set_cfg["pins"]
+	ACCENT = Color.html(str(set_cfg["accent"])) if str(set_cfg["accent"]).is_valid_html_color() else Color("5aa2ff")
 
 func _save_settings() -> void:
 	var c := ConfigFile.new()
 	c.set_value("ui", "bg", set_cfg["bg"]); c.set_value("ui", "font", set_cfg["font"]); c.set_value("ui", "kb", set_cfg["kb"]); c.set_value("ui", "cursor", set_cfg["cursor"]); c.set_value("ui", "pad", set_cfg["pad"]); c.set_value("ui", "pad_speed", set_cfg["pad_speed"]); c.set_value("ui", "zoom", set_cfg["zoom"])
 	c.set_value("translate", "server", set_cfg["ollama"]); c.set_value("translate", "model", set_cfg["model"]); c.set_value("translate", "engine", set_cfg["engine"])
 	c.set_value("lang", "src", set_cfg["src"]); c.set_value("lang", "tgt", set_cfg["tgt"])
-	for k in ["light", "wall", "icons", "layout", "open"]: c.set_value("ui", k, set_cfg[k])
+	for k in ["light", "wall", "icons", "layout", "open", "accent", "anim", "wtrans", "radius", "isize", "pins", "dock_hide"]: c.set_value("ui", k, set_cfg[k])
 	c.set_value("ui", "nvd", n_vd)
 	c.save("user://settings.cfg")
 
@@ -1711,9 +1752,11 @@ func _real() -> bool:
 func _restyle() -> void:
 	_build_theme()
 	(bar_panel.get_theme_stylebox("panel") as StyleBoxFlat).bg_color = _p("bar")
-	menu.add_theme_stylebox_override("panel", _box(_p("menu"), 16, _p("edge"), 1, 28, 12))
-	for id in wins: wins[id]["win"].add_theme_stylebox_override("panel", _box(_p("win"), 12, _p("edge"), 1, 34))
-	_set_active(active)
+	menu.add_theme_stylebox_override("panel", _box(_p("menu"), _rad() + 4, _p("edge"), 1, 28, 12))
+	for k in ["icon_normal_color", "icon_hover_color"]: start_btn.add_theme_color_override(k, ACCENT)
+	if menu_hi: menu_hi.modulate = ACCENT
+	_restyle_icons()
+	_set_active(active)   # styles des fenêtres, barres de titre, tâches et dock
 
 func _set_light(on: bool) -> void:
 	set_cfg["light"] = on; _restyle(); _save_settings()
@@ -1772,6 +1815,7 @@ func _popup_menu(items: Array, at: Vector2, up := false) -> void:
 	ctx_menu.size = ctx_menu.get_combined_minimum_size()
 	var y := at.y - ctx_menu.size.y if up else at.y
 	ctx_menu.position = Vector2(clampf(at.x, 8, size.x - ctx_menu.size.x - 8), clampf(y, 8, maxf(8, size.y - ctx_menu.size.y - 8)))
+	fx.popup_in(ctx_menu, up)
 
 func _context_at(pos: Vector2) -> bool:
 	if not desk.get_global_rect().has_point(pos): return false
@@ -1868,7 +1912,8 @@ func _begin_resize(pos: Vector2) -> bool:
 func _do_resize(pos: Vector2) -> void:
 	var w: PanelContainer = rs["win"]
 	var r: Rect2 = rs["rect"]; var dp: Vector2 = pos - desk.global_position - rs["p0"]
-	var mn := w.get_combined_minimum_size()
+	if not rs.has("mn"): rs["mn"] = w.get_combined_minimum_size()   # calculé une seule fois par geste
+	var mn: Vector2 = rs["mn"]
 	var x0 := r.position.x; var x1 := r.end.x; var y1 := r.end.y
 	if rs["l"]: x0 = maxf(minf(r.position.x + dp.x, x1 - mn.x), 0.0)
 	if rs["r"]: x1 = minf(maxf(r.end.x + dp.x, x0 + mn.x), desk.size.x)
@@ -1909,12 +1954,14 @@ func _reset_icons() -> void:
 
 # --- Bureaux virtuels
 func _goto_vd(i: int) -> void:
+	var old_vd := cur_vd
 	cur_vd = clampi(i, 0, n_vd - 1)
 	for id in wins:
 		var d: Dictionary = wins[id]; var on: bool = int(d["vd"]) == cur_vd
 		d["win"].visible = on and not d["min"]; d["task"].visible = on
 	if vd_btn: vd_btn.text = "%d/%d" % [cur_vd + 1, n_vd]
 	_set_active("")
+	if fx != null and _real() and cur_vd != old_vd: fx.vd_slide(1 if cur_vd > old_vd else -1)
 
 func _move_to_vd(id: String, i: int) -> void:
 	wins[id]["vd"] = i; _goto_vd(cur_vd); _save_layout()
