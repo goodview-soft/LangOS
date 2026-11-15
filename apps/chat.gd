@@ -6,6 +6,7 @@ var scroll: ScrollContainer
 var box: VBoxContainer
 var input: LineEdit
 var model_opt: OptionButton
+var dl_btn: Button
 var status: Label
 var send_btn: Button
 
@@ -22,6 +23,8 @@ func _ready() -> void:
 	var pg := CheckButton.new(); pg.text = "Page web"; pg.focus_mode = Control.FOCUS_NONE; pg.tooltip_text = "Le modèle voit la page du navigateur et peut ouvrir un site"
 	pg.button_pressed = core.page_ctx; pg.toggled.connect(func(on: bool): core.page_ctx = on); top.add_child(pg)
 	core.changed.connect(func(): pg.set_pressed_no_signal(core.page_ctx))
+	dl_btn = Button.new(); dl_btn.text = "Télécharger le modèle (1,1 Go)"; dl_btn.theme_type_variation = "Flat"; dl_btn.focus_mode = Control.FOCUS_NONE
+	dl_btn.visible = false; dl_btn.pressed.connect(func(): core.download_device_model()); top.add_child(dl_btn)
 	var cw := Button.new(); cw.text = "Claude.ai"; cw.theme_type_variation = "Flat"; cw.focus_mode = Control.FOCUS_NONE
 	cw.tooltip_text = "Ouvre claude.ai dans le navigateur intégré : connecte-toi avec ton abonnement, sans clé API"
 	cw.pressed.connect(func(): get_tree().current_scene.open_browser("https://claude.ai/")); top.add_child(cw)
@@ -48,8 +51,9 @@ func _rebuild() -> void:
 	for m in core.messages: box.add_child(ChatCore.bubble(m["role"], str(m["content"]), w, 17, f))
 	if core.is_busy: box.add_child(ChatCore.bubble("assistant", "…", 120.0, 17, f))
 	model_opt.clear()
-	for n in core.available: model_opt.add_item(str(ChatCore.CLAUDE_MODELS.get(n, n)))
+	for n in core.available: model_opt.add_item(str(ChatCore.LABELS.get(n, n)))
 	if not core.is_busy: status.text = core.note
+	dl_btn.visible = core.model == ChatCore.DEVICE_MODEL and not core.device_ready() and core._dl == null
 	var i := core.available.find(core.model)
 	if i >= 0: model_opt.select(i)
 	await get_tree().process_frame

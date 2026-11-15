@@ -274,3 +274,53 @@ func get_page_text() -> String:
 func current_url() -> String: return last_url
 
 func open_url(u: String) -> void: _go(u)
+
+# ---------------------------------------------------------------- Outils pour l'agent (Chat IA + clé Claude)
+
+signal js_done(res: String, seq: int)
+var js_seq := 0
+
+## Appelée par la page (window.godotMethods.lang_js_result) : renvoie le résultat d'un script (Linux/CEF).
+func lang_js_result(data = "") -> void:
+	js_done.emit(str(data), js_seq)
+
+## Exécute `body` (corps de fonction JavaScript qui renvoie une chaîne) dans la page et renvoie le résultat.
+func run_js(body: String) -> String:
+	js_seq += 1
+	var my := js_seq
+	if wv:
+		wv.eval("(function(){try{" + body + "}catch(e){return 'ERREUR '+e}})()")
+		var r = await Signal(wv, "js_result")
+		var j = JSON.parse_string(str(r))
+		return str(j) if j != null else str(r)
+	if browser == null or not is_instance_valid(browser): return "Navigateur indisponible."
+	browser.register_method(Callable(self, "lang_js_result"))
+	browser.execute_javascript("(function(){var r;try{r=(function(){" + body + "})()}catch(e){r='ERREUR '+e} window.godotMethods.lang_js_result(String(r))})()")
+	get_tree().create_timer(5.0).timeout.connect(func(): if js_seq == my: js_done.emit("(pas de réponse de la page)", my))
+	while true:
+		var a = await js_done
+		if a[1] == my: return str(a[0])
+	return ""
+
+const JS_ELEMS := "var els=[].slice.call(document.querySelectorAll('a[href],button,input,textarea,select,[role=button],[onclick]')).filter(function(e){var r=e.getBoundingClientRect();return r.width>0&&r.height>0&&r.bottom>0&&r.top<innerHeight*1.5}).slice(0,60);return els.map(function(e,i){e.setAttribute('data-li',i);var t=(e.innerText||e.value||e.placeholder||e.getAttribute('aria-label')||e.title||'').trim().replace(/\\s+/g,' ').slice(0,60);return i+': <'+e.tagName.toLowerCase()+(e.type?' '+e.type:'')+'> '+t}).join('\\n')"
+
+func tool_read() -> String:
+	var txt: String = await run_js("return (document.body?document.body.innerText:'').replace(/\\s+/g,' ').slice(0,3500)")
+	var els: String = await run_js(JS_ELEMS)
+	return "Adresse : %s\nTexte :\n%s\n\nÉléments :\n%s" % [last_url, txt, els]
+
+func tool_click(i: int) -> String:
+	var r: String = await run_js("var e=document.querySelector('[data-li=\"%d\"]');if(!e)return 'élément introuvable : relis la page';e.scrollIntoView({block:'center'});e.click();return 'cliqué'" % i)
+	await get_tree().create_timer(1.8).timeout
+	return r
+
+func tool_type(i: int, text: String, submit: bool) -> String:
+	var js := "var e=document.querySelector('[data-li=\"%d\"]');if(!e)return 'champ introuvable : relis la page';e.focus();var d=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(e),'value');if(d&&d.set)d.set.call(e,%s);else e.value=%s;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));" % [i, JSON.stringify(text), JSON.stringify(text)]
+	if submit: js += "if(e.form){if(e.form.requestSubmit)e.form.requestSubmit();else e.form.submit()}else{e.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',keyCode:13,bubbles:true}))}"
+	js += "return 'saisi'"
+	var r: String = await run_js(js)
+	await get_tree().create_timer(1.8 if submit else 0.3).timeout
+	return r
+
+func tool_scroll(dir: String) -> String:
+	return await run_js("window.scrollBy(0,innerHeight*0.8*(%s));return 'défilé'" % ("-1" if dir == "haut" else "1"))
