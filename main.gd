@@ -751,6 +751,22 @@ func _app_settings() -> void:
 	var ke := LineEdit.new(); ke.text = set_cfg["claude_key"]; ke.secret = true; ke.virtual_keyboard_enabled = false; ke.placeholder_text = "sk-ant-…"
 	ke.text_changed.connect(func(t: String): set_cfg["claude_key"] = t.strip_edges(); _save_settings(); chat_core.api_key = set_cfg["claude_key"]; chat_core.refresh_models())
 	v.add_child(ke)
+	var kst := _mlbl("")
+	var kb_row := HBoxContainer.new(); kb_row.add_theme_constant_override("separation", 8); v.add_child(kb_row)
+	var b_open := _mk_btn("1. Obtenir une clé", 200, 44); b_open.pressed.connect(func(): OS.shell_open("https://console.anthropic.com/settings/keys")); kb_row.add_child(b_open)
+	var b_paste := _mk_btn("2. Coller", 120, 44); kb_row.add_child(b_paste)
+	var b_chk := _mk_btn("3. Vérifier", 130, 44); kb_row.add_child(b_chk)
+	b_paste.pressed.connect(func():
+		var t := DisplayServer.clipboard_get().strip_edges()
+		if t.begins_with("sk-ant-"): ke.text = t; ke.text_changed.emit(t); kst.text = "Clé collée."
+		else: kst.text = "Le presse-papiers ne contient pas de clé (sk-ant-…). Copie-la d'abord depuis la console.")
+	b_chk.pressed.connect(func():
+		kst.text = "Vérification…"
+		var h := HTTPRequest.new(); h.timeout = 10; add_child(h)
+		h.request("https://api.anthropic.com/v1/models", ["x-api-key: " + set_cfg["claude_key"], "anthropic-version: 2023-06-01"])
+		var r = await h.request_completed; h.queue_free()
+		kst.text = "✓ Clé valide : Chat IA utilisera Claude." if r[1] == 200 else ("✗ Clé refusée." if r[1] == 401 else "Pas de connexion à api.anthropic.com."))
+	v.add_child(kst)
 	v.add_child(_mlbl("Clé créée sur console.anthropic.com (facturation à l'usage, ≠ abonnement Claude.ai). Utilisée seulement pour api.anthropic.com ; les modèles « ☁ Claude » apparaissent dans Chat IA."))
 
 func _app_system() -> void:
