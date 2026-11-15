@@ -32,6 +32,10 @@ func toggle(anchor: Control) -> void:
 		if i == m.cur_vd: b.modulate = m.ACCENT.lightened(0.3)
 		b.pressed.connect(func(): m._goto_vd(i); close())
 		vd.add_child(b)
+	var pl := Label.new(); pl.text = "Profils"; pl.add_theme_font_size_override("font_size", 14); v.add_child(pl)
+	var pf := HFlowContainer.new(); pf.add_theme_constant_override("h_separation", 6); pf.add_theme_constant_override("v_separation", 6); v.add_child(pf)
+	for i in m.prof.all().size():
+		var pb: Button = m._mk_btn(str(m.prof.all()[i]["name"]), 0, 36); pb.pressed.connect(func(): close(); m.prof.activate(i)); pf.add_child(pb)
 	var tray = m.tray_node
 	if tray != null and int(tray.batt) >= 0:
 		var bl := Label.new(); bl.text = "Batterie : %d %%%s" % [int(tray.batt), " (en charge)" if tray.charging else ""]; v.add_child(bl)

@@ -45,6 +45,8 @@ var ACCENT := Color("5aa2ff")   # variable : couleur d'accent choisie dans Param
 var fx            # apps/fx.gd : animations, aperçu d'ancrage, réglages d'apparence
 var dock          # apps/dock.gd
 var ccenter       # apps/control_center.gd
+var prof          # apps/profiles.gd (logique)
+var srch          # apps/search.gd
 var tray_node: Control
 var menu_hi: TextureRect
 var cc_btn: Button
@@ -84,12 +86,13 @@ const APPS := {
 	"files": ["Fichiers", "res://icons/app_files.svg"],
 	"terminal": ["Terminal", "res://icons/app_terminal.svg"],
 	"code": ["Éditeur de code", "res://icons/app_code.svg"],
+	"profiles": ["Profils", "res://icons/app_profiles.svg"],
 }
 ## Dossiers du bureau : id -> applications contenues (affichées seulement dans le dossier).
 const FOLDERS := {
 	"f_lang": ["translate", "dict", "music"],
 	"f_games": ["chess", "hika"],
-	"f_soft": ["chromium", "files", "terminal", "code"],
+	"f_soft": ["chromium", "files", "terminal", "code", "profiles"],
 	"f_comm": ["messenger", "remote", "chat", "soundlink"],
 	"f_tools": ["calc", "units", "timer", "todo", "vault", "cards"],
 }
@@ -166,6 +169,8 @@ func _ready() -> void:
 # ---------------------------------------------------------------- Appui long : menu Copier / Coller
 
 func _input(ev: InputEvent) -> void:
+	if ev is InputEventKey and ev.pressed and not ev.echo and ev.ctrl_pressed and ev.keycode == KEY_SPACE and srch:
+		srch.toggle(); get_viewport().set_input_as_handled(); return
 	if ev is InputEventKey and ev.pressed and not ev.echo and ev.keycode == KEY_MINUS and chat_ov:
 		var fo := get_viewport().gui_get_focus_owner()
 		if not (fo is LineEdit or fo is TextEdit):
@@ -464,6 +469,7 @@ func _build_desktop() -> void:
 	var vs := VSeparator.new(); vs.modulate = Color(1, 1, 1, 0.4); bh.add_child(vs)
 	task_box = HBoxContainer.new(); task_box.add_theme_constant_override("separation", 4); bh.add_child(task_box)
 	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; bh.add_child(sp)
+	var sb_ := _icon_btn("search", "Flat", 48, 42, 22); sb_.tooltip_text = "Recherche (Ctrl+Espace)"; sb_.pressed.connect(func(): srch.toggle()); bh.add_child(sb_)
 	vd_btn = _mk_btn("1/%d" % n_vd, 64, 42); vd_btn.theme_type_variation = "Flat"; vd_btn.add_theme_font_size_override("font_size", 16)
 	vd_btn.tooltip_text = "Bureaux virtuels (Ctrl+Alt+←/→)"; vd_btn.pressed.connect(_vd_menu); bh.add_child(vd_btn)
 	bell_btn = _icon_btn("bell", "Flat", 56, 42, 22); bell_btn.tooltip_text = "Notifications"; bell_btn.pressed.connect(_toggle_notifs); bh.add_child(bell_btn)
@@ -491,6 +497,8 @@ func _build_desktop() -> void:
 	fx = load("res://apps/fx.gd").new(); fx.m = self; add_child(fx)
 	ccenter = load("res://apps/control_center.gd").new(); ccenter.m = self; add_child(ccenter)
 	dock = load("res://apps/dock.gd").new(); add_child(dock); dock.setup(self)
+	prof = load("res://apps/profiles.gd").new(); prof.m = self; prof.visible = false; add_child(prof)
+	srch = load("res://apps/search.gd").new(); srch.m = self; add_child(srch)
 	_restyle_icons()
 
 ## Range les icônes en colonnes ; passe à la colonne suivante quand la hauteur est atteinte.
@@ -571,6 +579,9 @@ func _build_menu() -> void:
 		v.add_child(b)
 	var sp2 := Control.new(); sp2.custom_minimum_size.y = 4; v.add_child(sp2)
 	v.add_child(HSeparator.new())
+	var pb := _mk_btn("Profils d'environnement…", 300, 46); pb.theme_type_variation = "Flat"; pb.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	pb.icon = load(APPS["profiles"][1]); pb.add_theme_constant_override("icon_max_width", 28); pb.add_theme_constant_override("h_separation", 14)
+	pb.pressed.connect(func(): _toggle_menu(); _profiles_menu()); v.add_child(pb)
 	var q := _mk_btn("Quitter", 300, 46); q.theme_type_variation = "Flat"; q.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	q.icon = _ico("power"); q.add_theme_constant_override("icon_max_width", 22)
 	q.add_theme_constant_override("h_separation", 14)
@@ -779,6 +790,7 @@ func _open_app(id: String) -> void:
 		"files": _app_files()
 		"terminal": _app_dev("terminal", Vector2(760, 480))
 		"code": _app_dev("code", Vector2(900, 620))
+		"profiles": _app_profiles()
 		"notepad": _app_notepad()
 		"settings": _app_settings()
 		"system": _app_system()
@@ -1474,6 +1486,13 @@ func _app_dev(id: String, sz: Vector2) -> void:
 	c.custom_minimum_size = Vector2(minf(520.0, maxf(280.0, desk.size.x - 16.0)), 360); c.clip_contents = true
 	wv.add_child(c)
 
+func _app_profiles() -> void:
+	var wv := _make_window("profiles", "", Vector2(620, 560), Vector2(220, 40))
+	var c := Control.new(); c.set_script(load("res://apps/profiles.gd")); c.m = self
+	c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c.custom_minimum_size = Vector2(minf(520.0, maxf(280.0, desk.size.x - 16.0)), 380); c.clip_contents = true
+	wv.add_child(c); c.build()
+
 func _app_chess() -> void:
 	var wv := _make_window("chess", "", Vector2(900, 680), Vector2(180, 10))
 	var ch := Control.new()
@@ -1623,6 +1642,8 @@ func _load_settings() -> void:
 		set_cfg["accent"] = str(c.get_value("ui", "accent", "5aa2ff")); set_cfg["anim"] = bool(c.get_value("ui", "anim", true))
 		set_cfg["wtrans"] = clampf(float(c.get_value("ui", "wtrans", 1.0)), 0.5, 1.0); set_cfg["radius"] = clampi(int(c.get_value("ui", "radius", 12)), 0, 28)
 		set_cfg["isize"] = clampi(int(c.get_value("ui", "isize", 56)), 32, 96); set_cfg["dock_hide"] = bool(c.get_value("ui", "dock_hide", false))
+		var pf = c.get_value("ui", "profiles", null)
+		if pf is Array: set_cfg["profiles"] = pf
 		var pn = c.get_value("ui", "pins", set_cfg["pins"]); set_cfg["pins"] = pn if pn is Array else set_cfg["pins"]
 	ACCENT = Color.html(str(set_cfg["accent"])) if str(set_cfg["accent"]).is_valid_html_color() else Color("5aa2ff")
 
@@ -1633,6 +1654,7 @@ func _save_settings() -> void:
 	c.set_value("lang", "src", set_cfg["src"]); c.set_value("lang", "tgt", set_cfg["tgt"])
 	for k in ["light", "wall", "icons", "layout", "open", "accent", "anim", "wtrans", "radius", "isize", "pins", "dock_hide"]: c.set_value("ui", k, set_cfg[k])
 	c.set_value("ui", "nvd", n_vd)
+	if set_cfg.has("profiles"): c.set_value("ui", "profiles", set_cfg["profiles"])
 	c.save("user://settings.cfg")
 
 func _type_key(r: int, c: int) -> void:
@@ -1873,7 +1895,15 @@ func _desk_menu(at: Vector2) -> void:
 		["Disposer les fenêtres", _tile_all],
 		["Nouveau bureau virtuel", _vd_add],
 		null,
+		["Profils…", _profiles_menu],
+		["Recherche", func(): srch.toggle()],
 		["Paramètres", func(): _open_app("settings")]], at)
+
+func _profiles_menu(at := Vector2(-1, -1)) -> void:
+	var it := []
+	for i in prof.all().size(): it.append([str(prof.all()[i]["name"]), prof.activate.bind(i)])
+	it.append(null); it.append(["Gérer les profils", func(): _open_app("profiles")])
+	_popup_menu(it, size / 2.0 - Vector2(115, 120) if at.x < 0 else at)
 
 func _icon_menu(id: String, at: Vector2) -> void:
 	_popup_menu([["Ouvrir", func(): _open_app(id)], null, ["Ranger les icônes", _reset_icons]], at)
