@@ -108,7 +108,7 @@ func _ready() -> void:
 		print("CTL fermé après 2e toggle: ", chat_ov != null and not chat_ov.is_open())
 		get_tree().quit()
 	if "--os-test" in OS.get_cmdline_user_args():
-		for id in APPS: if id != "chromium": _open_app(id)
+		for id in APPS: _open_app(id)
 		_toggle_menu(); _toggle_menu(); _toggle_kb()
 		await get_tree().create_timer(1.0).timeout
 		_dic_search("casa")
@@ -562,7 +562,7 @@ func _open_app(id: String) -> void:
 		_show(id); return
 	if FOLDERS.has(id): _app_folder(id); return
 	match id:
-		"chromium": _launch_browser()
+		"chromium": _app_browser()
 		"hika": _app_hika()
 		"chess": _app_chess()
 		"notepad": _app_notepad()
@@ -1107,6 +1107,13 @@ func _launch_browser() -> void:
 	if FileAccess.file_exists("/.flatpak-info"): cmd = "flatpak-spawn"; args = ["--host", "sh", "-c", sh]   # Godot lancé en Flatpak
 	if OS.create_process(cmd, args) < 0: status.text = "Impossible de lancer Chromium."
 	else: status.text = "Chromium lancé (s'il est installé : sudo apt install chromium)."
+
+func _app_browser() -> void:
+	var big := Vector2(minf(1100.0, desk.size.x - 24.0), minf(700.0, desk.size.y - 16.0))
+	var wv := _make_window("chromium", "", big, Vector2(20, 10))
+	var br := Control.new(); br.set_script(load("res://apps/browser.gd")); br.set("external", Callable(self, "_launch_browser"))
+	br.size_flags_vertical = Control.SIZE_EXPAND_FILL; br.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	br.custom_minimum_size = Vector2(700, 480); br.clip_contents = true; wv.add_child(br)
 
 func _app_hika() -> void:
 	var big := Vector2(minf(1100.0, desk.size.x - 24.0), minf(700.0, desk.size.y - 16.0))
