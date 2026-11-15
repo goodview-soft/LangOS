@@ -62,6 +62,13 @@ const APPS := {
 	"hika": ["Hikabrain", "res://icons/app_hika.svg"],
 	"chromium": ["Chromium", "res://icons/app_chromium.svg"],
 	"f_soft": ["Logiciels", "res://icons/app_f_soft.svg"],
+	"f_tools": ["Outils", "res://icons/app_f_tools.svg"],
+	"calc": ["Calculatrice", "res://icons/app_calc.svg"],
+	"units": ["Convertisseur", "res://icons/app_units.svg"],
+	"timer": ["Minuteur", "res://icons/app_timer.svg"],
+	"todo": ["Listes", "res://icons/app_todo.svg"],
+	"vault": ["Coffre-fort", "res://icons/app_vault.svg"],
+	"cards": ["Cartes mémoire", "res://icons/app_cards.svg"],
 }
 ## Dossiers du bureau : id -> applications contenues (affichées seulement dans le dossier).
 const FOLDERS := {
@@ -69,6 +76,7 @@ const FOLDERS := {
 	"f_games": ["chess", "hika"],
 	"f_soft": ["chromium"],
 	"f_comm": ["messenger", "remote", "chat", "soundlink"],
+	"f_tools": ["calc", "units", "timer", "todo", "vault", "cards"],
 }
 
 func _top_ids() -> Array:
@@ -597,6 +605,12 @@ func _open_app(id: String) -> void:
 		"chromium": _app_browser()
 		"hika": _app_hika()
 		"chess": _app_chess()
+		"calc": _app_tool("calc", Vector2(620, 520))
+		"units": _app_tool("units", Vector2(460, 560))
+		"timer": _app_tool("timer", Vector2(460, 600))
+		"todo": _app_tool("todo", Vector2(440, 600))
+		"vault": _app_tool("vault", Vector2(440, 520))
+		"cards": _app_tool("cards", Vector2(460, 640))
 		"notepad": _app_notepad()
 		"settings": _app_settings()
 		"system": _app_system()
@@ -1160,6 +1174,15 @@ func _app_hika() -> void:
 	var h := Control.new(); h.set_script(load("res://apps/hika_host.gd"))
 	h.size_flags_vertical = Control.SIZE_EXPAND_FILL; h.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.custom_minimum_size = Vector2(800, 520); wv.add_child(h)
+
+## Petits outils (dossier Outils) : un script apps/tool_<id>.gd par outil.
+func _app_tool(id: String, sz: Vector2) -> void:
+	var wv := _make_window(id, "", sz + Vector2(0, 60), Vector2(200 + randi() % 80, 20 + randi() % 40))
+	var c := Control.new()
+	c.set_script(load("res://apps/tool_%s.gd" % id))
+	c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c.custom_minimum_size = sz; c.clip_contents = true
+	wv.add_child(c)
 
 func _app_chess() -> void:
 	var wv := _make_window("chess", "", Vector2(900, 680), Vector2(180, 10))
