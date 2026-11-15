@@ -11,6 +11,8 @@ const PREFS := ["gemma3:4b", "llama3.1:8b", "qwen3:8b", "llama3.2:3b", "qwen3:14
 
 var ollama_url := "http://127.0.0.1:11434"
 var model := ""
+var api_key := ""                   # clé API Claude (optionnelle) : ajoute les modèles « claude:… » (Haiku par défaut, le moins cher)
+const CLAUDE_MODELS := {"claude:claude-haiku-5-5": "☁ Claude Haiku 5.5 (économique)", "claude:claude-sonnet-5-5": "☁ Claude Sonnet 5.5", "claude:claude-opus-5-5": "☁ Claude Opus 5.5 (cher)"}
 var available: Array = []
 var messages: Array = []     # {role: user|assistant, content}
 var is_busy := false
@@ -87,19 +89,21 @@ func _discover() -> String:
 
 func refresh_models() -> void:
 	var names: Array = await _tags(ollama_url)
-	if names.is_empty() and not _scanning and Time.get_ticks_msec() - _scan_t > 60000:
+	if names.is_empty() and api_key == "" and not _scanning and Time.get_ticks_msec() - _scan_t > 60000:
 		_scanning = true; _scan_t = Time.get_ticks_msec(); note = "Recherche d'Ollama sur le réseau local…"; changed.emit()
 		var u: String = await _discover()
 		_scanning = false
 		if u != "":
 			ollama_url = u; names = await _tags(u); server_found.emit(u)
-	available = names
+	available = names.duplicate()
+	if api_key != "": available.append_array(CLAUDE_MODELS.keys())
 	if model == "" or not model in available:
 		model = ""
 		for p in PREFS:
 			if p in available: model = p; break
-		if model == "" and not available.is_empty(): model = available[0]
-	note = "" if not available.is_empty() else "Aucun modèle sur %s. Ollama doit tourner sur un PC du réseau et écouter sur le réseau (OLLAMA_HOST=0.0.0.0), ou règle son adresse dans Paramètres." % ollama_url
+		if model == "" and not names.is_empty(): model = names[0]
+		if model == "" and api_key != "": model = "claude:claude-haiku-5-5"
+	note = "" if not available.is_empty() else "Aucun modèle sur %s. Ollama doit tourner sur un PC du réseau (OLLAMA_HOST=0.0.0.0), ou ajoute une clé API Claude dans Paramètres." % ollama_url
 	changed.emit()
 
 
@@ -123,6 +127,9 @@ func ask(text: String) -> void:
 	msgs.append_array(messages.slice(maxi(0, messages.size() - 20)))
 	var body := {"model": model, "stream": false, "think": false, "keep_alive": "3m",
 		"options": {"temperature": 0.4, "num_predict": 600}, "messages": msgs}
+	if model.begins_with("claude:"):
+		await _ask_claude(sys, messages.slice(maxi(0, messages.size() - 12)))
+		return
 	var http := HTTPRequest.new(); http.timeout = 180; add_child(http)
 	if http.request(ollama_url + "/api/chat", ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(body)) != OK:
 		http.queue_free(); _reply("⚠ Requête impossible."); return
@@ -133,11 +140,37 @@ func ask(text: String) -> void:
 	var d = JSON.parse_string(r[3].get_string_from_utf8())
 	var c := str(d.get("message", {}).get("content", "")) if d is Dictionary else ""
 	c = RegEx.create_from_string("(?s)<think>.*?</think>").sub(c, "", true).strip_edges()
+	_finish(c)
+
+
+## Fin de réponse : exécute l'éventuel [[OUVRIR url]] du navigateur puis affiche.
+func _finish(c: String) -> void:
 	if page_ctx and browser_hook != null and is_instance_valid(browser_hook):
 		var m := RegEx.create_from_string("\\[\\[OUVRIR\\s+([^\\]\\s]+)\\]\\]").search(c)
 		if m:
 			c = c.replace(m.get_string(), "").strip_edges() + "\n(ouverture de %s)" % m.get_string(1); browser_hook.open_url(m.get_string(1))
 	_reply(c if c != "" else "(réponse vide)")
+
+
+## API Claude (messages) : max_tokens bas, historique court.
+func _ask_claude(sys: String, hist: Array) -> void:
+	var body := {"model": model.substr(7), "max_tokens": 600, "system": sys, "messages": hist}
+	var http := HTTPRequest.new(); http.timeout = 90; add_child(http)
+	var hdr := ["content-type: application/json", "x-api-key: " + api_key, "anthropic-version: 2023-06-01"]
+	if http.request("https://api.anthropic.com/v1/messages", hdr, HTTPClient.METHOD_POST, JSON.stringify(body)) != OK:
+		http.queue_free(); _reply("⚠ Requête impossible."); return
+	var r = await http.request_completed
+	http.queue_free()
+	var d = JSON.parse_string(r[3].get_string_from_utf8()) if r[0] == HTTPRequest.RESULT_SUCCESS else null
+	if r[0] != HTTPRequest.RESULT_SUCCESS or r[1] != 200 or not (d is Dictionary):
+		var why := "pas de connexion"
+		if d is Dictionary and d.has("error"): why = str(d["error"].get("message", "erreur"))
+		elif r[1] == 401: why = "clé API refusée"
+		_reply("⚠ Claude : " + why); return
+	var txt := ""
+	for blk in d.get("content", []):
+		if blk.get("type", "") == "text": txt += str(blk.get("text", ""))
+	_finish(txt.strip_edges())
 
 
 func _reply(t: String) -> void:

@@ -76,7 +76,7 @@ func _top_ids() -> Array:
 	for f in FOLDERS: inside += FOLDERS[f]
 	return APPS.keys().filter(func(k): return not inside.has(k))
 var active := ""
-var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "model": "", "engine": -1, "src": "spa", "tgt": "fra"}
+var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "claude_key": "", "model": "", "engine": -1, "src": "spa", "tgt": "fra"}
 var kb: PanelContainer
 var upd_http: HTTPRequest
 var upd_btn: Button
@@ -747,6 +747,11 @@ func _app_settings() -> void:
 	le.text_changed.connect(func(t: String): set_cfg["ollama"] = t.strip_edges().rstrip("/"); _save_settings(); chat_core.ollama_url = set_cfg["ollama"])
 	v.add_child(le)
 	v.add_child(_mlbl("Sur téléphone : adresse du PC, ex. http://192.168.1.20:11434"))
+	v.add_child(_dlbl("Clé API Claude (Chat IA sans PC)"))
+	var ke := LineEdit.new(); ke.text = set_cfg["claude_key"]; ke.secret = true; ke.virtual_keyboard_enabled = false; ke.placeholder_text = "sk-ant-…"
+	ke.text_changed.connect(func(t: String): set_cfg["claude_key"] = t.strip_edges(); _save_settings(); chat_core.api_key = set_cfg["claude_key"]; chat_core.refresh_models())
+	v.add_child(ke)
+	v.add_child(_mlbl("Clé créée sur console.anthropic.com (facturation à l'usage, ≠ abonnement Claude.ai). Utilisée seulement pour api.anthropic.com ; les modèles « ☁ Claude » apparaissent dans Chat IA."))
 
 func _app_system() -> void:
 	var wv := _make_window("system", "🖥 Système", Vector2(520, 360), Vector2(260, 80))
@@ -1041,7 +1046,7 @@ var chat_ov: ChatOverlay
 var ctl := PacketPeerUDP.new()
 
 func _setup_chat() -> void:
-	chat_core = ChatCore.new(); chat_core.ollama_url = set_cfg["ollama"]; add_child(chat_core)
+	chat_core = ChatCore.new(); chat_core.ollama_url = set_cfg["ollama"]; chat_core.api_key = set_cfg["claude_key"]; add_child(chat_core)
 	chat_core.server_found.connect(func(u: String): set_cfg["ollama"] = u; _save_settings())
 	if OS.has_feature("mobile"): return
 	chat_ov = ChatOverlay.new(); chat_ov.core = chat_core; add_child(chat_ov)
@@ -1262,6 +1267,7 @@ func _load_settings() -> void:
 		set_cfg["font"] = clampi(int(c.get_value("ui", "font", 22)), 14, 40)
 		set_cfg["ollama"] = str(c.get_value("translate", "server", set_cfg["ollama"]))
 		set_cfg["model"] = str(c.get_value("translate", "model", ""))
+		set_cfg["claude_key"] = str(c.get_value("claude", "api_key", ""))
 		set_cfg["engine"] = int(c.get_value("translate", "engine", -1))
 		set_cfg["src"] = str(c.get_value("lang", "src", "spa")); set_cfg["tgt"] = str(c.get_value("lang", "tgt", "fra"))
 
@@ -1270,6 +1276,7 @@ func _save_settings() -> void:
 	c.set_value("ui", "bg", set_cfg["bg"]); c.set_value("ui", "font", set_cfg["font"])
 	c.set_value("translate", "server", set_cfg["ollama"]); c.set_value("translate", "model", set_cfg["model"]); c.set_value("translate", "engine", set_cfg["engine"])
 	c.set_value("lang", "src", set_cfg["src"]); c.set_value("lang", "tgt", set_cfg["tgt"])
+	c.set_value("claude", "api_key", set_cfg["claude_key"])
 	c.save("user://settings.cfg")
 
 func _type_key(r: int, c: int) -> void:

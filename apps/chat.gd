@@ -18,7 +18,7 @@ func _ready() -> void:
 	var top := HBoxContainer.new(); top.add_theme_constant_override("separation", 8); v.add_child(top)
 	var ttl := Label.new(); ttl.text = "Assistant IA local"; ttl.add_theme_font_size_override("font_size", 20); ttl.size_flags_horizontal = SIZE_EXPAND_FILL; top.add_child(ttl)
 	status = Label.new(); status.add_theme_color_override("font_color", Color("8f9bb3")); top.add_child(status)
-	model_opt = OptionButton.new(); model_opt.focus_mode = Control.FOCUS_NONE; model_opt.item_selected.connect(func(i: int): core.set_model(model_opt.get_item_text(i))); top.add_child(model_opt)
+	model_opt = OptionButton.new(); model_opt.focus_mode = Control.FOCUS_NONE; model_opt.item_selected.connect(func(i: int): core.set_model(str(core.available[i]))); top.add_child(model_opt)
 	var pg := CheckButton.new(); pg.text = "Page web"; pg.focus_mode = Control.FOCUS_NONE; pg.tooltip_text = "Le modèle voit la page du navigateur et peut ouvrir un site"
 	pg.button_pressed = core.page_ctx; pg.toggled.connect(func(on: bool): core.page_ctx = on); top.add_child(pg)
 	core.changed.connect(func(): pg.set_pressed_no_signal(core.page_ctx))
@@ -45,7 +45,7 @@ func _rebuild() -> void:
 	for m in core.messages: box.add_child(ChatCore.bubble(m["role"], str(m["content"]), w, 17, f))
 	if core.is_busy: box.add_child(ChatCore.bubble("assistant", "…", 120.0, 17, f))
 	model_opt.clear()
-	for n in core.available: model_opt.add_item(n)
+	for n in core.available: model_opt.add_item(str(ChatCore.CLAUDE_MODELS.get(n, n)))
 	if not core.is_busy: status.text = core.note
 	var i := core.available.find(core.model)
 	if i >= 0: model_opt.select(i)
