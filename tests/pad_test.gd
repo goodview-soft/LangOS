@@ -121,6 +121,10 @@ func test_deplacement() -> void:
 	var mr := InputEventMouseButton.new(); mr.button_index = MOUSE_BUTTON_LEFT; mr.pressed = false; mr.position = Vector2(640, 200); p._input(mr)
 	var mt := InputEventMouseMotion.new(); mt.position = Vector2(90, 90); p._input(mt)
 	check("curseur: suit un vrai toucher en haut après le relâchement", p.pos == Vector2(90, 90), str(p.pos))
+	# un événement injecté « en retard » (ancienne position) ne ramène jamais le curseur en arrière
+	p.move_to(Vector2(400, 150))
+	var late := InputEventMouseMotion.new(); late.device = 4242; late.position = Vector2(50, 50); p._input(late)
+	check("curseur: un ancien événement injecté ne le ramène pas en arrière", p.pos == Vector2(400, 150), str(p.pos))
 	# relâchement perdu : le curseur ne reste pas figé
 	p._input(mp); p._gesture_t = Time.get_ticks_msec() - 2000; p._swz_t = Time.get_ticks_msec() - 2000
 	var mt2 := InputEventMouseMotion.new(); mt2.position = Vector2(120, 120); p._input(mt2)

@@ -28,6 +28,7 @@ func _wanted() -> bool:
 
 func _input(ev: InputEvent) -> void:
 	if not _wanted() or not (ev is InputEventMouse): return
+	if ev.device == INJ: return      # les événements envoyés par le pavé viennent de pos : ils ne la modifient jamais (sinon un ancien événement en retard la ramènerait en arrière)
 	if swallow and ev.device != INJ and zone_fn.is_valid():
 		if _swz and Time.get_ticks_msec() - _swz_t > 1500: _swz = false          # un relâchement perdu ne fige pas le curseur
 		var inpad: bool = str(zone_fn.call(ev.position)) != ""
