@@ -1,2 +1,2 @@
 ## Version de l appli (mise à jour par release.sh).
-const VERSION := "1.9.0"
+const VERSION := "1.9.1"
