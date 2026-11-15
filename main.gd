@@ -76,8 +76,9 @@ func _top_ids() -> Array:
 	for f in FOLDERS: inside += FOLDERS[f]
 	return APPS.keys().filter(func(k): return not inside.has(k))
 var active := ""
-var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "model": "", "engine": -1, "src": "spa", "tgt": "fra"}
+var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "model": "", "engine": -1, "src": "spa", "tgt": "fra"}
 var kb: PanelContainer
+var kb_btn: Button
 var upd_http: HTTPRequest
 var upd_btn: Button
 var upd_info := {}
@@ -384,11 +385,13 @@ func _build_desktop() -> void:
 	var vs := VSeparator.new(); vs.modulate = Color(1, 1, 1, 0.4); bh.add_child(vs)
 	task_box = HBoxContainer.new(); task_box.add_theme_constant_override("separation", 4); bh.add_child(task_box)
 	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; bh.add_child(sp)
-	var kbb := _icon_btn("keyboard", "Flat", 48, 42, 24); kbb.pressed.connect(_toggle_kb); bh.add_child(kbb)
+	kb_btn = _icon_btn("keyboard", "Flat", 48, 42, 24); kb_btn.pressed.connect(_toggle_kb); bh.add_child(kb_btn)
 	clock = Label.new(); clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	clock.add_theme_font_size_override("font_size", 14); bh.add_child(clock)
 	bar_h = 54.0
 	_build_keyboard()
+	get_tree().node_added.connect(_on_node_added)
+	_apply_kb.call_deferred()
 	_build_menu()
 
 ## Range les icônes en colonnes ; passe à la colonne suivante quand la hauteur est atteinte.
@@ -540,6 +543,20 @@ func _clip_action(a: String) -> void:
 			"paste": f.menu_option(LineEdit.MENU_PASTE)
 			"home": f.caret_column = 0
 			"end": f.caret_column = f.text.length()
+
+## Clavier : « osk » = clavier visuel de LangOS (bouton de la barre), « system » = clavier normal du système, « none » = aucun (clavier physique ou secondaire).
+func _on_node_added(n: Node) -> void:
+	if n is LineEdit or n is TextEdit: n.virtual_keyboard_enabled = set_cfg["kb"] == "system"
+
+func _apply_kb() -> void:
+	var mode: String = set_cfg["kb"]
+	kb_btn.visible = mode == "osk"
+	if mode != "osk": kb.visible = false
+	var stack: Array = [self]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n is LineEdit or n is TextEdit: n.virtual_keyboard_enabled = mode == "system"
+		stack.append_array(n.get_children())
 
 func _toggle_kb() -> void:
 	kb.visible = not kb.visible
@@ -742,6 +759,13 @@ func _app_settings() -> void:
 		if edit and is_instance_valid(edit): edit.add_theme_font_size_override("font_size", int(val))
 		_save_settings())
 	v.add_child(sl)
+	v.add_child(_dlbl("Clavier"))
+	var ko := OptionButton.new(); ko.focus_mode = Control.FOCUS_NONE
+	var kmodes := ["osk", "system", "none"]
+	for t in ["Clavier visuel LangOS (bouton dans la barre)", "Clavier normal du système", "Aucun (clavier physique ou secondaire)"]: ko.add_item(t)
+	ko.select(maxi(0, kmodes.find(set_cfg["kb"])))
+	ko.item_selected.connect(func(i: int): set_cfg["kb"] = kmodes[i]; _save_settings(); _apply_kb())
+	v.add_child(ko)
 	v.add_child(_dlbl("Serveur de traduction (Ollama local)"))
 	var le := LineEdit.new(); le.text = set_cfg["ollama"]; le.virtual_keyboard_enabled = false
 	le.text_changed.connect(func(t: String): set_cfg["ollama"] = t.strip_edges().rstrip("/"); _save_settings())
@@ -1261,12 +1285,13 @@ func _load_settings() -> void:
 		set_cfg["font"] = clampi(int(c.get_value("ui", "font", 22)), 14, 40)
 		set_cfg["ollama"] = str(c.get_value("translate", "server", set_cfg["ollama"]))
 		set_cfg["model"] = str(c.get_value("translate", "model", ""))
+		set_cfg["kb"] = str(c.get_value("ui", "kb", "osk"))
 		set_cfg["engine"] = int(c.get_value("translate", "engine", -1))
 		set_cfg["src"] = str(c.get_value("lang", "src", "spa")); set_cfg["tgt"] = str(c.get_value("lang", "tgt", "fra"))
 
 func _save_settings() -> void:
 	var c := ConfigFile.new()
-	c.set_value("ui", "bg", set_cfg["bg"]); c.set_value("ui", "font", set_cfg["font"])
+	c.set_value("ui", "bg", set_cfg["bg"]); c.set_value("ui", "font", set_cfg["font"]); c.set_value("ui", "kb", set_cfg["kb"])
 	c.set_value("translate", "server", set_cfg["ollama"]); c.set_value("translate", "model", set_cfg["model"]); c.set_value("translate", "engine", set_cfg["engine"])
 	c.set_value("lang", "src", set_cfg["src"]); c.set_value("lang", "tgt", set_cfg["tgt"])
 	c.save("user://settings.cfg")
