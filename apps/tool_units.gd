@@ -73,4 +73,4 @@ func _calc() -> void:
 
 static func _f(v: float) -> String:
 	if v == floor(v) and absf(v) < 1e15: return str(int(v))
-	return "%.8g" % v
+	return String.num(v, 8) if absf(v) >= 1e-4 else String.num_scientific(v)

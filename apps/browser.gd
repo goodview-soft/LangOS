@@ -37,13 +37,15 @@ var shade: ColorRect                   # voile affiché à la place du WebView q
 func _android() -> bool: return OS.get_name() == "Android" and Engine.has_singleton("LangWebView")
 
 func _ready() -> void:
+	core = Core.new(); core.primary = str(get_meta("win_id", "chromium")) == "chromium"; core.load_all()
 	if _android(): _start_android()
 	elif _installed() and _supported(): _start()
 	else: _build_install()
 
 func _exit_tree() -> void:
+	if core: core.save()
 	if wv: wv.close()
-	if browser and is_instance_valid(browser): browser.close()
+	for b in brs.values(): if is_instance_valid(b): b.close()
 	if thread and thread.is_started(): thread.wait_to_finish()
 	OS.low_processor_usage_mode = true
 
@@ -85,9 +87,10 @@ func _process(_d: float) -> void:
 		bar.max_value = http.get_body_size(); bar.value = http.get_downloaded_bytes()
 		info.text = "Téléchargement : %d / %d Mo" % [http.get_downloaded_bytes() / 1048576, http.get_body_size() / 1048576]
 	if wv: _sync_wv()
+	if core: _poll_downloads()
 	if browser and is_instance_valid(browser):
 		var u: String = browser.get_url()
-		if u != last_url and not url_edit.has_focus(): last_url = u; url_edit.text = u
+		if u != last_url: _sync_url(u)
 
 func _fail(msg: String) -> void:
 	info.text = msg; inst_btn.disabled = false; if bar: bar.visible = false
@@ -122,7 +125,56 @@ func _after_extract(ok: bool) -> void:
 	if ok: _start()
 	else: _fail("Extraction impossible (la commande « unzip » est-elle installée ?).")
 
-# ---------------------------------------------------------------- Navigateur
+# ---------------------------------------------------------------- Navigateur (interface commune : onglets, favoris, menus)
+
+const Core := preload("res://apps/browser_core.gd")
+var core
+var tab_row: HBoxContainer
+var bm_bar: HBoxContainer
+var star: Button
+var panel: PanelContainer              # panneau modal (favoris, historique, téléchargements, mots de passe)
+var views := {}                        # id d'onglet -> TextureRect (Linux)
+var brs := {}                          # id d'onglet -> navigateur gdCEF (Linux)
+var dl_reqs := {}                      # id de téléchargement -> HTTPRequest
+var vault_pw := ""
+var vault_entries: Array = []
+
+func _main() -> Object: return get_tree().current_scene
+func _pal(k: String, d: Color) -> Color:
+	var m := _main()
+	return m._p(k) if m and m.has_method("_p") else d
+func _toast(t: String, x := "") -> void:
+	var m := _main()
+	if m and m.has_method("notify"): m.notify(t, x)
+
+func _build_ui(bh: int) -> void:
+	var v := VBoxContainer.new(); v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); v.add_theme_constant_override("separation", 0); add_child(v)
+	tab_row = HBoxContainer.new(); tab_row.add_theme_constant_override("separation", 2); v.add_child(tab_row)
+	var tb := HBoxContainer.new(); tb.add_theme_constant_override("separation", 4); v.add_child(tb)
+	var nav: Array = [["◀", func(): _nav("back")], ["▶", func(): _nav("fwd")], ["⟳", func(): _nav("reload")]]
+	for it in nav:
+		var b := Button.new(); b.text = it[0]; b.custom_minimum_size = Vector2(bh + 6, bh); b.focus_mode = Control.FOCUS_NONE; b.pressed.connect(it[1]); tb.add_child(b)
+	url_edit = LineEdit.new(); url_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL; url_edit.placeholder_text = "Adresse ou recherche"
+	url_edit.text_submitted.connect(_go); tb.add_child(url_edit)
+	star = Button.new(); star.text = "☆"; star.custom_minimum_size = Vector2(bh, bh); star.focus_mode = Control.FOCUS_NONE; star.tooltip_text = "Ajouter aux favoris"
+	star.pressed.connect(_toggle_bookmark); tb.add_child(star)
+	_hook_chat(tb)
+	var mb := Button.new(); mb.text = "⋮"; mb.custom_minimum_size = Vector2(bh, bh); mb.focus_mode = Control.FOCUS_NONE
+	mb.pressed.connect(func(): _menu(mb.get_global_rect().position + Vector2(0, bh))); tb.add_child(mb)
+	bm_bar = HBoxContainer.new(); bm_bar.add_theme_constant_override("separation", 2); v.add_child(bm_bar)
+	var body := HBoxContainer.new(); body.size_flags_vertical = Control.SIZE_EXPAND_FILL; body.add_theme_constant_override("separation", 0); v.add_child(body)
+	view = TextureRect.new(); view.size_flags_vertical = Control.SIZE_EXPAND_FILL; view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; view.clip_contents = true; body.add_child(view)
+
+func _nav(what: String) -> void:
+	if wv:
+		if what == "back": wv.back()
+		elif what == "fwd": wv.forward()
+		else: wv.reload()
+	elif browser and is_instance_valid(browser):
+		if what == "back": browser.previous_page()
+		elif what == "fwd": browser.next_page()
+		else: browser.reload()
 
 func _start() -> void:
 	_clear()
@@ -134,38 +186,128 @@ func _start() -> void:
 	else:
 		cef = ClassDB.instantiate("GdCEF"); get_tree().root.add_child(cef)
 		var L := _g(DIR + "/linux")
-		if not cef.initialize({"cache_path": _g("user://cef_cache"), "root_cache_path": _g("user://cef_cache"), "browser_subprocess_path": L + "/gdCefRenderProcess",
-				"log_file": _g(DIR + "/debug.log"), "log_severity": "error", "use_gpu": false, "locale": "fr-FR"}):
+		var cfg := {"cache_path": _g("user://cef_cache"), "root_cache_path": _g("user://cef_cache"), "browser_subprocess_path": L + "/gdCefRenderProcess",
+				"log_file": _g(DIR + "/debug.log"), "log_severity": "error", "use_gpu": false, "locale": "fr-FR"}
+		if core.desktop_mode: cfg["user_agent"] = Core.UA_DESKTOP
+		if not cef.initialize(cfg):
 			var e: String = cef.get_error(); cef.queue_free(); cef = null
 			_build_install(); info.text = "Chromium n'a pas démarré : " + e; return
 		Engine.set_meta("lang_cef", cef)
 	OS.low_processor_usage_mode = false
-	var v := VBoxContainer.new(); v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); v.add_theme_constant_override("separation", 0); add_child(v)
-	var tb := HBoxContainer.new(); tb.add_theme_constant_override("separation", 4); v.add_child(tb)
-	for it in [["◀", func(): if browser: browser.previous_page()], ["▶", func(): if browser: browser.next_page()], ["⟳", func(): if browser: browser.reload()]]:
-		var b := Button.new(); b.text = it[0]; b.custom_minimum_size = Vector2(44, 38); b.focus_mode = Control.FOCUS_NONE; b.pressed.connect(it[1]); tb.add_child(b)
-	url_edit = LineEdit.new(); url_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL; url_edit.placeholder_text = "Adresse ou recherche"
-	url_edit.text_submitted.connect(_go); tb.add_child(url_edit)
-	var body := HBoxContainer.new(); body.size_flags_vertical = Control.SIZE_EXPAND_FILL; body.add_theme_constant_override("separation", 0); v.add_child(body)
-	view = TextureRect.new(); view.size_flags_vertical = Control.SIZE_EXPAND_FILL; view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; view.focus_mode = Control.FOCUS_ALL; view.clip_contents = true
-	view.gui_input.connect(_view_input); view.resized.connect(func(): if browser: browser.resize(view.size)); body.add_child(view)
-	_hook_chat(tb)
+	_build_ui(38)
+	view.focus_mode = Control.FOCUS_ALL
+	view.gui_input.connect(_view_input); view.resized.connect(func(): for b in brs.values(): if is_instance_valid(b): b.resize(view.size))
 	await get_tree().process_frame
-	browser = cef.create_browser(HOME, view, {"javascript": true, "webgl": true, "enable_ad_block": true})
-	if browser == null: _build_install(); info.text = "Impossible de créer le navigateur : " + str(cef.get_error()); return
-	browser.resize(view.size)
+	_activate(core.active)
+
+## Affiche l'onglet i (crée son navigateur Chromium à la demande).
+func _activate(i: int) -> void:
+	if i < 0 or i >= core.tabs.size(): return
+	core.active = i
+	var t: Dictionary = core.tabs[i]
+	if wv:
+		wv_pending = str(t["url"])
+		if wv_opened: wv.load(wv_pending)
+	else:
+		for k in views: views[k].visible = false
+		var id: int = t["id"]
+		if not brs.has(id):
+			var tv := TextureRect.new(); tv.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; tv.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); tv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			view.add_child(tv); views[id] = tv
+			var b = cef.create_browser(str(t["url"]), tv, {"javascript": true, "webgl": true, "enable_ad_block": core.adblock, "incognito": bool(t["private"])})
+			if b == null: _build_install(); info.text = "Impossible de créer le navigateur : " + str(cef.get_error()); return
+			brs[id] = b; b.resize(view.size)
+			for sg in ["on_download_updated", "on_download_started"]:
+				if b.has_signal(sg): b.connect(sg, _on_cef_download)
+			for sg in ["on_before_resource_load", "on_resource_request"]:
+				if b.has_signal(sg): b.connect(sg, func(u = "", _a = null): core.should_block(str(u)))
+		views[id].visible = true
+		browser = brs[id]; last_url = ""
+		if browser.has_method("set_user_agent") and core.desktop_mode: browser.call("set_user_agent", Core.UA_DESKTOP)
+	_refresh_tabs(); _sync_url(str(t["url"]))
+
+func _new_tab(url := Core.HOME, priv := false) -> void:
+	core.open_tab(url, priv); _activate(core.active); core.save()
+
+func _close_tab(i: int) -> void:
+	var id: int = core.tabs[i]["id"]
+	if brs.has(id):
+		if is_instance_valid(brs[id]): brs[id].close()
+		brs.erase(id); views[id].queue_free(); views.erase(id); browser = null
+	core.close_tab(i); _activate(core.active); core.save()
+
+func _refresh_tabs() -> void:
+	for c in tab_row.get_children(): c.queue_free()
+	for i in core.tabs.size():
+		var t: Dictionary = core.tabs[i]
+		var b := Button.new(); b.toggle_mode = true; b.button_pressed = i == core.active; b.focus_mode = Control.FOCUS_NONE
+		var tt := str(t["title"]); b.text = ("🕶 " if t["private"] else "") + (tt.substr(0, 18) + "…" if tt.length() > 19 else tt)
+		b.custom_minimum_size.x = 120; b.tooltip_text = str(t["url"])
+		b.pressed.connect(func(): _activate(i))
+		b.gui_input.connect(func(ev: InputEvent):
+			if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_RIGHT: _tab_menu(i, ev.global_position)
+			elif ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_MIDDLE: _close_tab(i))
+		tab_row.add_child(b)
+		var x := Button.new(); x.text = "×"; x.flat = true; x.focus_mode = Control.FOCUS_NONE; x.pressed.connect(func(): _close_tab(i)); tab_row.add_child(x)
+	var nb := Button.new(); nb.text = "+"; nb.focus_mode = Control.FOCUS_NONE; nb.pressed.connect(func(): _new_tab()); tab_row.add_child(nb)
+	_refresh_bm()
+
+func _tab_menu(i: int, at: Vector2) -> void:
+	var m := _main()
+	if m == null or not m.has_method("_popup_menu"): return
+	var items: Array = [["Fermer l'onglet", func(): _close_tab(i)]]
+	if i > 0: items.append(["Déplacer à gauche", func(): core.move_tab(i, i - 1); _refresh_tabs(); core.save()])
+	if i < core.tabs.size() - 1: items.append(["Déplacer à droite", func(): core.move_tab(i, i + 1); _refresh_tabs(); core.save()])
+	m._popup_menu(items, at)
+
+func _refresh_bm() -> void:
+	for c in bm_bar.get_children(): c.queue_free()
+	for it in core.bookmarks:
+		var b := Button.new(); b.flat = true; b.focus_mode = Control.FOCUS_NONE
+		if it["t"] == "b":
+			b.text = str(it["name"]).substr(0, 16); b.pressed.connect(func(): _go(str(it["url"])))
+		else:
+			b.text = "📁 " + str(it["name"]).substr(0, 14)
+			b.pressed.connect(func():
+				var items := []
+				for s in it["items"]:
+					if s["t"] == "b": items.append([str(s["name"]), func(): _go(str(s["url"]))])
+				if not items.is_empty(): _main()._popup_menu(items, b.get_global_rect().position + Vector2(0, b.size.y)))
+		bm_bar.add_child(b)
+	bm_bar.visible = not core.bookmarks.is_empty()
+	if star: star.text = "★" if core.find_bookmark(current_url()) else "☆"
+
+func _sync_url(u: String) -> void:
+	last_url = u
+	if url_edit and not url_edit.has_focus(): url_edit.text = u
+	var i: int = core.active
+	if i < core.tabs.size():
+		var changed: bool = core.tabs[i]["url"] != u
+		core.navigated(i, u, _title_of(u) if changed else "")
+		if changed: _refresh_tabs()
+	if star: star.text = "★" if core.find_bookmark(u) else "☆"
+
+func _title_of(u: String) -> String:
+	var h: String = Core.host_of(u)
+	return h if h != "" else u
+
+func _toggle_bookmark() -> void:
+	var u := current_url()
+	if u == "": return
+	if core.find_bookmark(u): _toast("Déjà dans les favoris"); return
+	core.add_bookmark(str(core.current()["title"]), u); core.save(); _refresh_bm(); _toast("Favori ajouté", u)
 
 func _go(t: String) -> void:
 	t = t.strip_edges()
 	if t == "" or (browser == null and wv == null): return
 	if not (t.begins_with("http://") or t.begins_with("https://") or t.begins_with("file://")):
 		t = "https://" + t if (t.contains(".") and not t.contains(" ")) else "https://duckduckgo.com/?q=" + t.uri_encode()
+	if core.should_block(t): _toast("Adresse bloquée par le bloqueur de publicités"); return
 	if wv: wv.load(t)
 	else: browser.load_url(t); view.grab_focus()
 
 func _view_input(ev: InputEvent) -> void:
-	if browser == null: return
+	if browser == null or not is_instance_valid(browser): return
 	if ev is InputEventMouseMotion: browser.set_mouse_moved(int(ev.position.x), int(ev.position.y))
 	elif ev is InputEventMouseButton:
 		view.grab_focus()
@@ -178,32 +320,200 @@ func _view_input(ev: InputEvent) -> void:
 			MOUSE_BUTTON_WHEEL_DOWN: browser.set_mouse_wheel_vertical(-2, ev.shift_pressed, ev.ctrl_pressed, ev.alt_pressed)
 
 func _input(ev: InputEvent) -> void:
-	if browser == null or not (ev is InputEventKey) or get_viewport().gui_get_focus_owner() != view: return
+	if browser == null or not is_instance_valid(browser) or not (ev is InputEventKey) or get_viewport().gui_get_focus_owner() != view: return
 	browser.set_key_pressed(ev.unicode if ev.unicode != 0 else ev.keycode, ev.pressed, ev.shift_pressed, ev.alt_pressed, ev.is_command_or_control_pressed())
 	get_viewport().set_input_as_handled()
 
+# ---------------------------------------------------------------- Menu, fenêtres, impression
+
+func _can_print() -> bool: return browser != null and is_instance_valid(browser) and (browser.has_method("print_to_pdf") or browser.has_method("print"))
+
+func _menu(at: Vector2) -> void:
+	var m := _main()
+	if m == null or not m.has_method("_popup_menu"): return
+	var items: Array = [
+		["Nouvel onglet", func(): _new_tab()],
+		["Onglet privé", func(): _new_tab(Core.HOME, true)],
+		["Nouvelle fenêtre", _new_window],
+		null,
+		["Favoris…", func(): _show_panel("Favoris", _page_bookmarks)],
+		["Historique…", func(): _show_panel("Historique", _page_history)],
+		["Téléchargements…", func(): _show_panel("Téléchargements", _page_downloads)],
+		["Mots de passe…", func(): _show_panel("Mots de passe", _page_vault)],
+		null,
+		[("✓ " if core.desktop_mode else "") + "Mode ordinateur", _toggle_desktop],
+		[("✓ " if core.adblock else "") + "Bloqueur de pub (%d bloquées)" % core.blocked, func(): core.adblock = not core.adblock; core.save()],
+	]
+	if _can_print(): items.append(["Imprimer / PDF", _print_pdf])
+	m._popup_menu(items, at)
+
+func _toggle_desktop() -> void:
+	core.desktop_mode = not core.desktop_mode; core.save()
+	if wv and wv.has_method("setDesktopMode"): wv.setDesktopMode(core.desktop_mode)
+	elif browser and browser.has_method("set_user_agent"): browser.call("set_user_agent", Core.UA_DESKTOP if core.desktop_mode else "")
+	_nav("reload")
+
+func _new_window() -> void:
+	var m := _main()
+	if m and m.has_method("_open_browser_window"): m._open_browser_window()
+
+func _print_pdf() -> void:
+	var out := _g("user://downloads"); DirAccess.make_dir_recursive_absolute(out)
+	var f := out + "/page_%d.pdf" % int(Time.get_unix_time_from_system())
+	if browser.has_method("print_to_pdf"): browser.call("print_to_pdf", f)
+	else: browser.call("print", f)
+	_toast("Export PDF demandé", f)
+
+# ---------------------------------------------------------------- Panneaux modaux
+
+func _show_panel(title: String, builder: Callable) -> void:
+	if panel and is_instance_valid(panel): panel.queue_free()
+	panel = PanelContainer.new(); panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var sb := StyleBoxFlat.new(); sb.bg_color = _pal("popup", Color("1b1f2a")); sb.set_content_margin_all(12); panel.add_theme_stylebox_override("panel", sb)
+	add_child(panel)
+	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 8); panel.add_child(v)
+	var h := HBoxContainer.new(); v.add_child(h)
+	var l := Label.new(); l.text = title; l.add_theme_font_size_override("font_size", 22); l.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h.add_child(l)
+	var x := Button.new(); x.text = "Fermer"; x.pressed.connect(func(): panel.queue_free(); panel = null; core.save()); h.add_child(x)
+	var sc := ScrollContainer.new(); sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; v.add_child(sc)
+	var body := VBoxContainer.new(); body.size_flags_horizontal = Control.SIZE_EXPAND_FILL; body.add_theme_constant_override("separation", 4); sc.add_child(body)
+	builder.call(body)
+
+func _row(body: Control, text: String, buttons: Array, muted := false) -> void:
+	var h := HBoxContainer.new(); body.add_child(h)
+	var l := Label.new(); l.text = text; l.clip_text = true; l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if muted: l.add_theme_color_override("font_color", MUTED)
+	h.add_child(l)
+	for b in buttons:
+		var bt := Button.new(); bt.text = b[0]; bt.pressed.connect(b[1]); h.add_child(bt)
+
+func _redo(builder: Callable, body: Control) -> void:
+	for c in body.get_children(): c.queue_free()
+	builder.call(body)
+
+func _page_bookmarks(body: Control) -> void:
+	var h := HBoxContainer.new(); body.add_child(h)
+	var ne := LineEdit.new(); ne.placeholder_text = "Nom du dossier"; ne.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h.add_child(ne)
+	var nb := Button.new(); nb.text = "Créer un dossier"; h.add_child(nb)
+	nb.pressed.connect(func():
+		if ne.text.strip_edges() != "": core.add_folder(ne.text.strip_edges()); core.save(); _refresh_bm(); _redo(_page_bookmarks, body))
+	var cb := Button.new(); cb.text = "Ajouter la page actuelle"; h.add_child(cb)
+	cb.pressed.connect(func(): if current_url() != "": core.add_bookmark(str(core.current()["title"]), current_url()); core.save(); _refresh_bm(); _redo(_page_bookmarks, body))
+	_bm_list(body, core.bookmarks, [], 0)
+
+func _bm_list(body: Control, l: Array, path: Array, depth: int) -> void:
+	for i in l.size():
+		var it: Dictionary = l[i]; var pre := "      ".repeat(depth)
+		var del: Array = ["Supprimer", func(): core.remove_item(i, path); core.save(); _refresh_bm(); _redo(_page_bookmarks, body)]
+		if it["t"] == "f":
+			var np := path + [i]
+			_row(body, pre + "📁 " + str(it["name"]), [["Ajouter la page", func(): core.add_bookmark(str(core.current()["title"]), current_url(), np); core.save(); _redo(_page_bookmarks, body)], del])
+			_bm_list(body, it["items"], np, depth + 1)
+		else:
+			_row(body, pre + str(it["name"]) + "  " + str(it["url"]), [["Ouvrir", func(): _go(str(it["url"])); panel.queue_free(); panel = null], del])
+
+func _page_history(body: Control) -> void:
+	var h := HBoxContainer.new(); body.add_child(h)
+	var q := LineEdit.new(); q.placeholder_text = "Rechercher"; q.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h.add_child(q)
+	var cl := Button.new(); cl.text = "Tout effacer"; cl.pressed.connect(func(): core.history.clear(); core.save(); _redo(_page_history, body)); h.add_child(cl)
+	var lst := VBoxContainer.new(); body.add_child(lst)
+	var fill := func(t: String):
+		for c in lst.get_children(): c.queue_free()
+		for e in core.search_history(t).slice(0, 100):
+			_row(lst, "%s  %s" % [Time.get_datetime_string_from_unix_time(int(e["time"])).replace("T", " ").substr(0, 16), e["title"] if str(e["title"]) != "" else e["url"]],
+				[["Ouvrir", func(): _go(str(e["url"])); panel.queue_free(); panel = null]])
+	q.text_changed.connect(fill); fill.call("")
+
+func _page_downloads(body: Control) -> void:
+	var h := HBoxContainer.new(); body.add_child(h)
+	var ue := LineEdit.new(); ue.placeholder_text = "Adresse du fichier à télécharger"; ue.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h.add_child(ue)
+	var go := Button.new(); go.text = "Télécharger"; go.pressed.connect(func(): _download_url(ue.text.strip_edges()); _redo(_page_downloads, body)); h.add_child(go)
+	var fo := Button.new(); fo.text = "Ouvrir le dossier"; fo.pressed.connect(_open_dl_dir); h.add_child(fo)
+	for d in core.downloads:
+		var pb := ProgressBar.new(); pb.value = Core.dl_percent(d); pb.custom_minimum_size.y = 10; pb.show_percentage = false
+		_row(body, "%s  (%s, %d%%)" % [d["name"], {"run": "en cours", "done": "terminé", "fail": "échec"}[d["state"]], Core.dl_percent(d)], [])
+		body.add_child(pb)
+	if core.downloads.is_empty(): _row(body, "Aucun téléchargement.", [], true)
+
+func _dl_dir() -> String:
+	var d := _g("user://downloads"); DirAccess.make_dir_recursive_absolute(d); return d
+
+func _open_dl_dir() -> void: OS.shell_open(_dl_dir())
+
+func _download_url(u: String) -> void:
+	if not u.begins_with("http"): return
+	var name := u.get_file().get_slice("?", 0)
+	if name == "": name = "telechargement_%d" % int(Time.get_unix_time_from_system())
+	var path := _dl_dir() + "/" + name
+	var id: int = core.dl_start(u, path)
+	var r := HTTPRequest.new(); r.download_file = path; r.use_threads = true; r.max_redirects = 8; add_child(r); dl_reqs[id] = r
+	r.request_completed.connect(func(res: int, code: int, _h, _b):
+		var ok := res == HTTPRequest.RESULT_SUCCESS and code == 200
+		var fin: bool = core.dl_update(id, r.get_downloaded_bytes(), r.get_body_size(), ok, not ok)
+		if fin: _toast("Téléchargement terminé", name)
+		elif not ok: _toast("Échec du téléchargement", name)
+		dl_reqs.erase(id); r.queue_free())
+	if r.request(u) != OK: core.dl_update(id, 0, -1, false, true); dl_reqs.erase(id); r.queue_free()
+
+## Signal éventuel du moteur (si gdCEF l'expose) : mêmes mises à jour que ci-dessus.
+func _on_cef_download(a = null, b = null, c = null, d = null) -> void:
+	var name := str(a) if a is String else "fichier"
+	var id: int = core.dl_start("", _dl_dir() + "/" + name)
+	if c is int or c is float: core.dl_update(id, int(b) if b is int else 0, int(c), bool(d))
+
+func _poll_downloads() -> void:
+	for id in dl_reqs:
+		var r: HTTPRequest = dl_reqs[id]
+		if is_instance_valid(r): core.dl_update(id, r.get_downloaded_bytes(), r.get_body_size())
+
+func _page_vault(body: Control) -> void:
+	if vault_pw == "":
+		var l := Label.new(); body.add_child(l)
+		l.text = "Coffre chiffré (AES-256). Le mot de passe maître n'est jamais enregistré." if not core.vault_exists() else "Entre le mot de passe maître pour déverrouiller."
+		var pe := LineEdit.new(); pe.secret = true; pe.placeholder_text = "Mot de passe maître"; body.add_child(pe)
+		var ok := Button.new(); ok.text = "Créer le coffre" if not core.vault_exists() else "Déverrouiller"; body.add_child(ok)
+		var go := func():
+			if pe.text == "": return
+			if core.vault_exists():
+				var r = core.vault_load(pe.text)
+				if r == null: l.text = "Mot de passe maître incorrect."; return
+				vault_entries = r
+			else:
+				vault_entries = []; core.vault_save(vault_entries, pe.text)
+			vault_pw = pe.text; _redo(_page_vault, body)
+		ok.pressed.connect(go); pe.text_submitted.connect(func(_t): go.call()); return
+	var h := HBoxContainer.new(); body.add_child(h)
+	var fs := []
+	for ph in ["Site", "Identifiant", "Mot de passe"]:
+		var e := LineEdit.new(); e.placeholder_text = ph; e.size_flags_horizontal = Control.SIZE_EXPAND_FILL; e.secret = ph == "Mot de passe"; h.add_child(e); fs.append(e)
+	var ad := Button.new(); ad.text = "Ajouter"; h.add_child(ad)
+	ad.pressed.connect(func():
+		if fs[0].text != "": vault_entries.append({"site": fs[0].text, "user": fs[1].text, "pw": fs[2].text}); core.vault_save(vault_entries, vault_pw); _redo(_page_vault, body))
+	var lk := Button.new(); lk.text = "Verrouiller"; lk.pressed.connect(func(): vault_pw = ""; vault_entries = []; _redo(_page_vault, body)); h.add_child(lk)
+	for i in vault_entries.size():
+		var e: Dictionary = vault_entries[i]
+		_row(body, "%s  —  %s" % [e["site"], e["user"]], [["Copier le mot de passe", func(): DisplayServer.clipboard_set(str(e["pw"])); _toast("Mot de passe copié")],
+			["Supprimer", func(): vault_entries.remove_at(i); core.vault_save(vault_entries, vault_pw); _redo(_page_vault, body)]])
+
 # ---------------------------------------------------------------- Android : WebView natif superposé
+
+var wv_pending := ""
+var wv_opened := false
 
 func _start_android() -> void:
 	_clear()
 	wv = Engine.get_singleton("LangWebView")
-	wv.connect("url_changed", func(u: String): last_url = u; if url_edit and not url_edit.has_focus(): url_edit.text = u)
-	var v := VBoxContainer.new(); v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); v.add_theme_constant_override("separation", 0); add_child(v)
-	var tb := HBoxContainer.new(); tb.add_theme_constant_override("separation", 4); v.add_child(tb)
-	for it in [["◀", func(): wv.back()], ["▶", func(): wv.forward()], ["⟳", func(): wv.reload()]]:
-		var b := Button.new(); b.text = it[0]; b.custom_minimum_size = Vector2(52, 44); b.focus_mode = Control.FOCUS_NONE; b.pressed.connect(it[1]); tb.add_child(b)
-	url_edit = LineEdit.new(); url_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL; url_edit.placeholder_text = "Adresse ou recherche"
-	url_edit.text_submitted.connect(_go); tb.add_child(url_edit)
-	var body := HBoxContainer.new(); body.size_flags_vertical = Control.SIZE_EXPAND_FILL; body.add_theme_constant_override("separation", 0); v.add_child(body)
-	view = TextureRect.new(); view.size_flags_vertical = Control.SIZE_EXPAND_FILL; view.size_flags_horizontal = Control.SIZE_EXPAND_FILL; body.add_child(view)
-	_hook_chat(tb)
+	wv.connect("url_changed", func(u: String): _sync_url(u))
+	_build_ui(44)
 	shade = ColorRect.new(); shade.color = Color("1b1f2a"); shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); shade.visible = false; view.add_child(shade)
 	var sl := Label.new(); sl.text = "Navigateur en arrière-plan\nClique ici pour le remettre au premier plan"; sl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sl.add_theme_color_override("font_color", MUTED); sl.set_anchors_and_offsets_preset(Control.PRESET_CENTER); sl.grow_horizontal = Control.GROW_DIRECTION_BOTH; sl.grow_vertical = Control.GROW_DIRECTION_BOTH; shade.add_child(sl)
 	shade.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed: get_tree().current_scene._show("chromium"))
+	_refresh_tabs()
 	await get_tree().process_frame; await get_tree().process_frame
 	wv_rect = _screen_rect()
-	wv.open(HOME, wv_rect.position.x, wv_rect.position.y, wv_rect.size.x, wv_rect.size.y); wv_shown = true
+	wv.open(str(core.current()["url"]), wv_rect.position.x, wv_rect.position.y, wv_rect.size.x, wv_rect.size.y); wv_shown = true; wv_opened = true
+	if wv.has_method("setDesktopMode"): wv.setDesktopMode(core.desktop_mode)
 
 ## Zone de la page en pixels d'écran (la fenêtre Godot occupe tout l'écran sous Android).
 func _screen_rect() -> Rect2i:
@@ -219,7 +529,8 @@ func _sync_wv() -> void:
 	if main:
 		# Le WebView est une vue native toujours au-dessus de Godot : il ne doit apparaître que si cette fenêtre est au premier plan
 		# et qu'aucun menu (Démarrer, copier/coller) ne la recouvre.
-		if main.get("active") != "chromium": shown = false
+		if str(main.get("active")) != str(get_meta("win_id", "chromium")): shown = false
+		if panel and is_instance_valid(panel): shown = false
 		if main.get("menu") and main.menu.visible: shown = false
 		var cm = main.get("ctx_menu")
 		if cm != null and is_instance_valid(cm) and cm.visible: shown = false

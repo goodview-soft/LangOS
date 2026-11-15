@@ -74,6 +74,8 @@ const APPS := {
 	"f_comm": ["Communication", "res://icons/app_f_comm.svg"],
 	"hika": ["Hikabrain", "res://icons/app_hika.svg"],
 	"chromium": ["Chromium", "res://icons/app_chromium.svg"],
+	"chromium2": ["Chromium 2", "res://icons/app_chromium.svg"],
+	"chromium3": ["Chromium 3", "res://icons/app_chromium.svg"],
 	"android_apps": ["Applis Android", "res://icons/app_android.svg"],
 	"f_soft": ["Logiciels", "res://icons/app_f_soft.svg"],
 	"f_tools": ["Outils", "res://icons/app_f_tools.svg"],
@@ -778,6 +780,8 @@ func _open_app(id: String) -> void:
 	if FOLDERS.has(id): _app_folder(id); return
 	match id:
 		"chromium": _app_browser()
+		"chromium2": _app_browser("chromium2")
+		"chromium3": _app_browser("chromium3")
 		"android_apps": _app_android_apps()
 		"hika": _app_hika()
 		"chess": _app_chess()
@@ -1449,10 +1453,16 @@ func _app_android_apps() -> void:
 	c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	c.custom_minimum_size = Vector2(320, 360); c.clip_contents = true; wv.add_child(c)
 
-func _app_browser() -> void:
+## Nouvelle fenêtre de navigation (jusqu'à 3 fenêtres) ; sous Android un seul WebView existe : un onglet est ouvert à la place.
+func _open_browser_window() -> void:
+	for id in ["chromium2", "chromium3"]:
+		if not wins.has(id): _app_browser(id); return
+	notify("Navigateur", "Nombre maximal de fenêtres atteint")
+
+func _app_browser(id := "chromium") -> void:
 	var big := Vector2(minf(1100.0, desk.size.x - 24.0), minf(700.0, desk.size.y - 16.0))
-	var wv := _make_window("chromium", "", big, Vector2(20, 10))
-	var br := Control.new(); br.set_script(load("res://apps/browser.gd")); br.set("external", Callable(self, "_launch_browser"))
+	var wv := _make_window(id, "", big, Vector2(20 + (0 if id == "chromium" else 40), 10 + (0 if id == "chromium" else 30)))
+	var br := Control.new(); br.set_script(load("res://apps/browser.gd")); br.set("external", Callable(self, "_launch_browser")); br.set_meta("win_id", id)
 	br.size_flags_vertical = Control.SIZE_EXPAND_FILL; br.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	br.custom_minimum_size = Vector2(320, 360); br.clip_contents = true; wv.add_child(br)
 
@@ -1798,7 +1808,7 @@ var np_catcher: Control
 var rs := {}       # redimensionnement en cours
 var idrag := {}    # glisser d'une icône en cours
 const GRID := 108.0
-const NO_RESTORE := ["hika", "chromium", "update"]
+const NO_RESTORE := ["hika", "chromium", "chromium2", "chromium3", "update"]
 
 func _real() -> bool:
 	return get_tree().current_scene == self
