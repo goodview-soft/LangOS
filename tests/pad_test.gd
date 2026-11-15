@@ -1,6 +1,7 @@
 extends SceneTree
 ## Tests logiques du pavé tactile, du curseur et de la détection du mode Flex.
-## Lancer : flatpak run org.godotengine.Godot --headless --path . --script res://tests/pad_test.gd
+## Lancer (sans fenêtre, c'est le mode normal) : flatpak run org.godotengine.Godot --headless --path . --script res://tests/pad_test.gd
+## Les vérifications qui exigent une vraie fenêtre (zoom, survol) sont ignorées en mode sans fenêtre.
 ## Sortie : « PAD-TEST OK » si tout passe, sinon la liste des échecs et un code de sortie 1.
 
 var fails: Array = []
@@ -18,6 +19,11 @@ class Spy extends Node:
 				MOUSE_BUTTON_LEFT: left += 1; left_pos.append(ev.position)
 				MOUSE_BUTTON_RIGHT: right += 1
 				_: wheel.append(ev.button_index)
+
+class MotionSpy extends Node:
+	var cnt: Dictionary
+	func _input(ev: InputEvent) -> void:
+		if ev is InputEventMouseMotion and ev.device == 4242: cnt["n"] += 1
 
 func check(name: String, cond: bool, info := "") -> void:
 	checks += 1
@@ -38,7 +44,7 @@ func make_rig() -> Dictionary:
 	host.add_child(flex)
 	flex.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	flex.offset_left = 0.0; flex.offset_right = 0.0; flex.offset_top = -320.0; flex.offset_bottom = 0.0
-	flex.set("top_h", 480.0); flex.set("touch_mode", true); flex.set("px_scale", 1.0)
+	flex.set("top_h", 480.0); flex.set("px_scale", 1.0); flex.call("set_touch_mode", true)
 	pointer.set("pad_active", true); pointer.set("pad_top", 480.0)
 	var spy := Spy.new(); root.add_child(spy)
 	return {"host": host, "pointer": pointer, "flex": flex, "spy": spy, "zooms": zooms}
@@ -62,6 +68,7 @@ func _init() -> void:
 	await test_annulation_et_nettoyage()
 	await test_fuzz()
 	await test_echelle()
+	await test_survol()
 	await test_zoom_stable()
 	print("PAD-TEST %s : %d vérifications, %d échec(s)" % ["OK" if fails.is_empty() else "ECHEC", checks, fails.size()])
 	for f in fails: print("  ✗ ", f)
@@ -115,7 +122,7 @@ func test_deplacement() -> void:
 	var mt := InputEventMouseMotion.new(); mt.position = Vector2(90, 90); p._input(mt)
 	check("curseur: suit un vrai toucher en haut après le relâchement", p.pos == Vector2(90, 90), str(p.pos))
 	# relâchement perdu : le curseur ne reste pas figé
-	p._input(mp); p._gesture_t = Time.get_ticks_msec() - 2000
+	p._input(mp); p._gesture_t = Time.get_ticks_msec() - 2000; p._swz_t = Time.get_ticks_msec() - 2000
 	var mt2 := InputEventMouseMotion.new(); mt2.position = Vector2(120, 120); p._input(mt2)
 	check("curseur: un relâchement perdu ne fige pas", p.pos == Vector2(120, 120), str(p.pos))
 	await create_timer(0.4).timeout; rig["host"].queue_free(); rig["spy"].queue_free()
@@ -126,17 +133,21 @@ func test_clics() -> void:
 	await settle()
 	var warm := InputEventMouseMotion.new(); warm.position = Vector2(5, 5); Input.parse_input_event(warm); await settle()   # le tout premier événement injecté d'une fenêtre neuve peut être ignoré
 	p.move_to(Vector2(200, 200))
+	var L := func() -> int: return f.sent.filter(func(x): return x[0] == MOUSE_BUTTON_LEFT and x[1]).size()
+	var R := func() -> int: return f.sent.filter(func(x): return x[0] == MOUSE_BUTTON_RIGHT and x[1]).size()
 	f._input(tch(padpos(), true)); await create_timer(0.1).timeout; f._input(tch(padpos(), false)); await settle()
-	check("clic: appui bref = 1 clic gauche", spy.left == 1 and spy.right == 0, "g=%d d=%d" % [spy.left, spy.right])
+	check("clic: appui bref = 1 clic gauche", L.call() == 1 and R.call() == 0, "g=%d d=%d" % [L.call(), R.call()])
 	f._input(tch(padpos(), true)); await create_timer(0.7).timeout; f._input(tch(padpos(), false)); await settle()
-	check("clic: appui long = 1 clic droit", spy.right == 1 and spy.left == 1, "g=%d d=%d" % [spy.left, spy.right])
+	check("clic: appui long = 1 clic droit", R.call() == 1 and L.call() == 1, "g=%d d=%d" % [L.call(), R.call()])
 	f._input(tch(padpos(), true)); f._input(drg(padpos(40, 0), Vector2(40, 0))); f._input(tch(padpos(40, 0), false)); await settle()
-	check("clic: un glissé ne clique pas", spy.left == 1 and spy.right == 1, "g=%d d=%d" % [spy.left, spy.right])
+	check("clic: un glissé ne clique pas", L.call() == 1 and R.call() == 1, "g=%d d=%d" % [L.call(), R.call()])
 	for i in 3: f._input(tch(padpos(), true)); f._input(tch(padpos(), false))
 	await create_timer(0.6).timeout
-	check("clic: 3 appuis rapides = 3 clics (sans mélange)", spy.left == 4, "g=%d" % spy.left)
+	check("clic: 3 appuis rapides = 3 clics (sans mélange)", L.call() == 4, "g=%d" % L.call())
+	var seq: Array = f.sent.filter(func(x): return x[0] == MOUSE_BUTTON_LEFT).map(func(x): return x[1])
+	check("clic: appuis et relâchements alternent", seq == [true, false, true, false, true, false, true, false], str(seq))
 	f._input(tch(padpos(), true)); await create_timer(0.1).timeout; f._input(tch(padpos(), false, 0, true)); await settle()
-	check("clic: une annulation ne clique pas", spy.left == 4, "g=%d" % spy.left)
+	check("clic: une annulation ne clique pas", L.call() == 4, "g=%d" % L.call())
 	await create_timer(0.4).timeout; rig["host"].queue_free(); spy.queue_free()
 
 # ------------------------------------------------------------------ roulettes
@@ -146,17 +157,17 @@ func test_roulettes() -> void:
 	var wv: Rect2 = f._wv.get_global_rect(); var wh: Rect2 = f._wh.get_global_rect()
 	var c := wv.get_center()
 	f._input(tch(c, true)); f._input(drg(c + Vector2(0, 60), Vector2(0, 60))); f._input(tch(c + Vector2(0, 60), false)); await settle()
-	check("roulette V: 60 px bas = 2 crans bas", spy.wheel == [MOUSE_BUTTON_WHEEL_DOWN, MOUSE_BUTTON_WHEEL_DOWN], str(spy.wheel))
-	spy.wheel.clear()
+	check("roulette V: 60 px bas = 2 crans bas", f.sent.map(func(x): return x[0]) == [MOUSE_BUTTON_WHEEL_DOWN, MOUSE_BUTTON_WHEEL_DOWN], str(f.sent))
+	f.sent.clear()
 	f._input(tch(c, true)); f._input(drg(c + Vector2(0, -53), Vector2(0, -53))); f._input(tch(c, false)); await settle()
-	check("roulette V: 53 px haut = 2 crans haut", spy.wheel == [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_UP], str(spy.wheel))
-	spy.wheel.clear()
+	check("roulette V: 53 px haut = 2 crans haut", f.sent.map(func(x): return x[0]) == [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_UP], str(f.sent))
+	f.sent.clear()
 	var h := wh.get_center()
 	f._input(tch(h, true)); f._input(drg(h + Vector2(-27, 0), Vector2(-27, 0))); f._input(tch(h, false)); await settle()
-	check("roulette H: gauche = WHEEL_LEFT", spy.wheel == [MOUSE_BUTTON_WHEEL_LEFT], str(spy.wheel))
-	spy.wheel.clear()
+	check("roulette H: gauche = WHEEL_LEFT", f.sent.map(func(x): return x[0]) == [MOUSE_BUTTON_WHEEL_LEFT], str(f.sent))
+	f.sent.clear()
 	f._input(tch(h, true)); f._input(drg(h + Vector2(30, 0), Vector2(30, 0))); f._input(tch(h, false)); await settle()
-	check("roulette H: droite = WHEEL_RIGHT", spy.wheel == [MOUSE_BUTTON_WHEEL_RIGHT], str(spy.wheel))
+	check("roulette H: droite = WHEEL_RIGHT", f.sent.map(func(x): return x[0]) == [MOUSE_BUTTON_WHEEL_RIGHT], str(f.sent))
 	await create_timer(0.4).timeout; rig["host"].queue_free(); spy.queue_free()
 
 # ------------------------------------------------------------------ pincement
@@ -264,3 +275,45 @@ func test_echelle() -> void:
 		check("échelle %.1f: le curseur ne saute pas à cause de ses propres clics" % sc, p.pos.distance_to(target) < 1.5, str(p.pos))
 		await create_timer(0.4).timeout; rig["host"].queue_free(); spy.queue_free()
 	root.content_scale_factor = 1.0
+
+# ------------------------------------------------------------------ la surbrillance sous le curseur reste quand on lève le doigt du pavé
+func test_survol() -> void:
+	if DisplayServer.get_name() == "headless": return
+	rig = make_rig(); var f = rig["flex"]; var p = rig["pointer"]; var host: Control = rig["host"]
+	await settle()
+	var btn := Button.new(); btn.text = "dossier"; btn.position = Vector2(100, 100); btn.size = Vector2(120, 60); host.add_child(btn)
+	host.move_child(btn, 0)
+	await settle()
+	var warm := InputEventMouseMotion.new(); warm.position = Vector2(5, 5); Input.parse_input_event(warm); await settle()
+	var c: Vector2 = f._pad.get_global_rect().get_center()
+	p.move_to(Vector2(130, 120))
+	# le doigt se pose, glisse un peu, se lève : les vrais événements (toucher + souris émulée) arrivent à l'endroit du doigt
+	var t := InputEventScreenTouch.new(); t.index = 0; t.pressed = true; t.position = c; Input.parse_input_event(t); await create_timer(0.1).timeout
+	var d := InputEventScreenDrag.new(); d.index = 0; d.position = c + Vector2(8, 0); d.relative = Vector2(8, 0); Input.parse_input_event(d); await create_timer(0.1).timeout
+	check("survol: le bouton est survolé pendant le glissé", btn.is_hovered() or p.pos.x > 100)
+	var u := InputEventScreenTouch.new(); u.index = 0; u.pressed = false; u.position = c + Vector2(8, 0); Input.parse_input_event(u)
+	# Android envoie aussi les événements souris « émulés » à l'endroit du doigt (device -1)
+	var em_mv := InputEventMouseMotion.new(); em_mv.position = c + Vector2(8, 0); em_mv.global_position = em_mv.position; em_mv.device = -1; em_mv.button_mask = 1; Input.parse_input_event(em_mv)
+	var em_up := InputEventMouseButton.new(); em_up.button_index = MOUSE_BUTTON_LEFT; em_up.pressed = false; em_up.position = c + Vector2(8, 0); em_up.global_position = em_up.position; em_up.device = -1; Input.parse_input_event(em_up)
+	await create_timer(0.5).timeout
+	# le curseur a bougé de 8 * gain : il reste au-dessus du bouton (100..220 x 100..160)
+	var over: bool = p.pos.x > 100 and p.pos.x < 220 and p.pos.y > 100 and p.pos.y < 160
+	check("survol: le curseur est toujours sur le bouton", over, str(p.pos))
+	check("survol: la surbrillance reste après le relâchement", btn.is_hovered(), "hover=%s pos=%s" % [str(btn.is_hovered()), str(p.pos)])
+	await create_timer(1.0).timeout
+	check("survol: et reste ensuite sans bouger", btn.is_hovered())
+	# un événement souris émulé qui retombe sur le pavé (le doigt) ne doit pas retirer la surbrillance
+	var stray := InputEventMouseMotion.new(); stray.position = c; stray.global_position = c; stray.device = -1; Input.parse_input_event(stray)
+	await create_timer(0.1).timeout
+	check("survol: un événement parasite sur le pavé ne retire pas la surbrillance", btn.is_hovered())
+	# réaffirmation périodique : au repos, la position du curseur est renvoyée à l'interface (la surbrillance se répare seule)
+	var cnt := {"n": 0}
+	var spy2 := MotionSpy.new(); spy2.cnt = cnt; root.add_child(spy2)
+	await create_timer(1.0).timeout
+	check("survol: la position est réaffirmée au repos", cnt["n"] >= 2, "n=%d" % cnt["n"])
+	var tt := InputEventScreenTouch.new(); tt.index = 0; tt.pressed = true; tt.position = c; Input.parse_input_event(tt); await create_timer(0.1).timeout
+	cnt["n"] = 0; await create_timer(0.7).timeout
+	check("survol: pas de réaffirmation pendant un geste du pavé", cnt["n"] == 0, "n=%d" % cnt["n"])
+	var tu := InputEventScreenTouch.new(); tu.index = 0; tu.pressed = false; tu.position = c; Input.parse_input_event(tu); await create_timer(0.2).timeout
+	spy2.queue_free()
+	await create_timer(0.3).timeout; host.queue_free(); rig["spy"].queue_free()
