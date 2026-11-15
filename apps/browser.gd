@@ -79,7 +79,7 @@ func _fail(msg: String) -> void:
 	info.text = msg; inst_btn.disabled = false; if bar: bar.visible = false
 
 func _on_downloaded(result: int, code: int, _h: PackedStringArray, _b: PackedByteArray) -> void:
-	if result != HTTPRequest.RESULT_SUCCESS or code != 200: _fail("Échec du téléchargement (code %d). Réessaie." % code); DirAccess.remove_absolute(_zip()); return
+	if result != HTTPRequest.RESULT_SUCCESS or code != 200: _fail("Échec du téléchargement (résultat %d, code HTTP %d). Réessaie." % [result, code]); DirAccess.remove_absolute(_zip()); return
 	info.text = "Installation (extraction, un instant)…"; bar.value = bar.max_value
 	thread = Thread.new(); thread.start(_extract)
 
@@ -112,13 +112,13 @@ func _after_extract(ok: bool) -> void:
 
 func _start() -> void:
 	_clear()
-	if not ClassDB.class_exists("GDCEF"):
+	if not ClassDB.class_exists("GdCEF"):
 		var r := GDExtensionManager.load_extension(_g(DIR + "/gdcef.gdextension"))
-		if r != GDExtensionManager.LOAD_STATUS_OK and r != GDExtensionManager.LOAD_STATUS_ALREADY_LOADED or not ClassDB.class_exists("GDCEF"):
-			_build_install(); info.text = "Impossible de charger l'extension Chromium (code %d). Supprime user://cef pour réinstaller." % r; return
+		if not ClassDB.class_exists("GdCEF"):
+			_build_install(); info.text = "Impossible de charger l'extension Chromium (statut %d). Supprime le dossier « cef » des données de LangOS pour réinstaller." % r; return
 	if Engine.has_meta("lang_cef"): cef = Engine.get_meta("lang_cef")
 	else:
-		cef = ClassDB.instantiate("GDCEF"); get_tree().root.add_child(cef)
+		cef = ClassDB.instantiate("GdCEF"); get_tree().root.add_child(cef)
 		var L := _g(DIR + "/linux")
 		if not cef.initialize({"cache_path": _g("user://cef_cache"), "root_cache_path": _g("user://cef_cache"), "browser_subprocess_path": L + "/gdCefRenderProcess",
 				"log_file": _g(DIR + "/debug.log"), "log_severity": "error", "use_gpu": false, "locale": "fr-FR"}):
