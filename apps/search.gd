@@ -109,7 +109,8 @@ func open_file(p: String) -> void:
 	if e in CODE:
 		m._open_app("code")
 		for n in m.wins["code"]["win"].find_children("*", "Control", true, false): if n.has_method("open_path"): n.open_path(p); return
-	elif e in IMG: if m._set_wallpaper(p): m.notify("Fond d'écran", "Image appliquée : " + p.get_file())
+	elif e in IMG: m.open_with("imgview", p)
+	elif e == "pdf": m.open_with("pdf", p)
 	elif m._real(): OS.shell_open(p)
 
 # ------------------------------------------------------------------ interface

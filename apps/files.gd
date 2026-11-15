@@ -275,7 +275,9 @@ func _open_item(p: P, i: int) -> void:
 func open_file(f: String) -> void:
 	var e := f.get_extension().to_lower()
 	if not main: return
-	if e in IMG: if main._set_wallpaper(f): main.notify("Fond d'écran", "Image appliquée : " + f.get_file())
+	if e in IMG: main.open_with("imgview", f)
+	elif e == "pdf": main.open_with("pdf", f)
+	elif e == "ics": main.open_with("calendar", f)
 	elif e in TXT: main._open_app("notepad"); main.edit.text = FileAccess.get_file_as_string(f); main.notify("Bloc-notes", f.get_file() + " ouvert")
 	elif e == "zip": _do_unzip(f)
 

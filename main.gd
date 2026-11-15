@@ -47,6 +47,7 @@ var dock          # apps/dock.gd
 var ccenter       # apps/control_center.gd
 var prof          # apps/profiles.gd (logique)
 var srch          # apps/search.gd
+var cal           # apps/calendar.gd (agenda + rappels)
 var clip          # apps/clipboard.gd (historique du presse-papiers)
 var keysc         # apps/shortcuts.gd (raccourcis clavier / manette)
 var tray_node: Control
@@ -93,6 +94,11 @@ const APPS := {
 	"profiles": ["Profils", "res://icons/app_profiles.svg"],
 	"clipboard": ["Presse-papiers", "res://icons/app_clipboard.svg"],
 	"devices": ["Périphériques", "res://icons/app_devices.svg"],
+	"f_office": ["Bureautique", "res://icons/app_f_office.svg"],
+	"sheet": ["Tableur", "res://icons/app_sheet.svg"],
+	"imgview": ["Images", "res://icons/app_imgview.svg"],
+	"pdf": ["Lecteur PDF", "res://icons/app_pdf.svg"],
+	"calendar": ["Agenda", "res://icons/app_calendar.svg"],
 }
 ## Dossiers du bureau : id -> applications contenues (affichées seulement dans le dossier).
 const FOLDERS := {
@@ -100,6 +106,7 @@ const FOLDERS := {
 	"f_games": ["chess", "hika"],
 	"f_soft": ["chromium", "files", "terminal", "code", "profiles", "clipboard", "devices"],
 	"f_comm": ["messenger", "remote", "chat", "soundlink"],
+	"f_office": ["sheet", "imgview", "pdf", "calendar"],
 	"f_tools": ["calc", "units", "timer", "todo", "vault", "cards"],
 }
 
@@ -508,6 +515,7 @@ func _build_desktop() -> void:
 	srch = load("res://apps/search.gd").new(); srch.m = self; add_child(srch)
 	keysc = load("res://apps/shortcuts.gd").new(); keysc.m = self; add_child(keysc)
 	clip = load("res://apps/clipboard.gd").new(); clip.m = self; add_child(clip)
+	cal = load("res://apps/calendar.gd").new(); cal.m = self; add_child(cal); cal.start_timer()
 	_restyle_icons()
 
 ## Range les icônes en colonnes ; passe à la colonne suivante quand la hauteur est atteinte.
@@ -807,6 +815,10 @@ func _open_app(id: String) -> void:
 		"profiles": _app_profiles()
 		"clipboard": _app_clipboard()
 		"devices": _app_devices()
+		"sheet": _app_office("sheet", Vector2(900, 620))
+		"imgview": _app_office("imgview", Vector2(860, 640))
+		"pdf": _app_office("pdf", Vector2(820, 680))
+		"calendar": _app_office("calendar", Vector2(860, 640))
 		"notepad": _app_notepad()
 		"settings": _app_settings()
 		"system": _app_system()
@@ -1520,6 +1532,20 @@ func _app_clipboard() -> void:
 	var c := Control.new(); c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	c.custom_minimum_size = Vector2(minf(420.0, maxf(280.0, desk.size.x - 16.0)), 440); c.clip_contents = true
 	wv.add_child(c); clip.build_ui(c)
+
+func _app_office(id: String, sz: Vector2) -> void:
+	var wv := _make_window(id, "", sz + Vector2(0, 60), Vector2(160 + randi() % 80, 20 + randi() % 30))
+	var c := Control.new(); c.set_script(load("res://apps/%s.gd" % {"sheet": "sheet", "imgview": "image_viewer", "pdf": "pdf_viewer", "calendar": "calendar_ui"}[id])); c.m = self
+	c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c.custom_minimum_size = Vector2(minf(sz.x, maxf(280.0, desk.size.x - 16.0)), sz.y); c.clip_contents = true
+	wv.add_child(c); c.build()
+
+## Ouvre un fichier dans une appli bureautique (imgview, pdf, sheet).
+func open_with(id: String, path: String) -> void:
+	_open_app(id)
+	if not wins.has(id): return
+	for n in wins[id]["win"].find_children("*", "Control", true, false):
+		if n.has_method("open_path"): n.open_path(path); return
 
 func _app_devices() -> void:
 	var wv := _make_window("devices", "", Vector2(680, 640), Vector2(200, 30))
