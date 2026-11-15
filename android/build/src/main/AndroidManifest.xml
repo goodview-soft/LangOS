@@ -59,14 +59,37 @@
             android:configChanges="layoutDirection|locale|orientation|keyboardHidden|screenSize|smallestScreenSize|density|keyboard|navigation|screenLayout|uiMode"
             android:resizeableActivity="false"
             tools:ignore="UnusedAttribute" />
+        <activity
+            android:name="fr.goodview.blocnote.EntryActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:taskAffinity="fr.goodview.blocnote.entry"
+            android:excludeFromRecents="true"
+            android:noHistory="true" />
+
+        <!-- L'alias généré par Godot reste mais désactivé : l'icône et l'accueil passent par EntryActivity -->
         <activity-alias
             android:name=".GodotAppLauncher"
             android:targetActivity=".GodotApp"
+            android:enabled="false"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name="fr.goodview.blocnote.EntryLauncher"
+            android:targetActivity="fr.goodview.blocnote.EntryActivity"
+            android:label="@string/godot_project_name_string"
+            android:icon="@mipmap/icon"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.HOME" />
             </intent-filter>
         </activity-alias>
 

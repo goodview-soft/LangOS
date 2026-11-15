@@ -792,6 +792,10 @@ func _app_settings() -> void:
 		if edit and is_instance_valid(edit): edit.add_theme_font_size_override("font_size", int(val))
 		_save_settings())
 	v.add_child(sl)
+	if OS.get_name() == "Android" and Engine.has_singleton("LangLauncher"):
+		v.add_child(_dlbl("Écran d'accueil"))
+		var hb := _mk_btn("Choisir l'écran d'accueil (LangOS ou l'ancien)", 460, 46); hb.pressed.connect(func(): Engine.get_singleton("LangLauncher").chooseHome()); v.add_child(hb)
+		v.add_child(_mlbl("Android affiche la liste des écrans d'accueil : choisis LangOS pour l'utiliser, ou ton ancien pour y revenir (Réglages Android > Applications > Applications par défaut > Application d'accueil)."))
 	v.add_child(_dlbl("Clavier"))
 	var ko := OptionButton.new(); ko.focus_mode = Control.FOCUS_NONE
 	var kmodes := ["osk", "system", "none"]
