@@ -403,7 +403,7 @@ func _build_desktop() -> void:
 	desk = Control.new(); desk.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	desk.clip_contents = true; root.add_child(desk)
 	for id in _top_ids(): _desk_icon(id, Vector2.ZERO)
-	desk.resized.connect(_layout_icons); _layout_icons.call_deferred()
+	desk.resized.connect(_layout_icons); desk.resized.connect(_clamp_windows); _layout_icons.call_deferred()
 	# Barre des tâches
 	var bar := PanelContainer.new()
 	var bs := _box(Color(0.07, 0.08, 0.11, 0.9), 0); bs.border_width_top = 1; bs.border_color = Color(1, 1, 1, 0.08)
@@ -438,6 +438,15 @@ func _build_desktop() -> void:
 	_build_menu()
 
 ## Range les icônes en colonnes ; passe à la colonne suivante quand la hauteur est atteinte.
+## Après une rotation ou un changement de zone (mode Flex) : les fenêtres restent dans le bureau, les fenêtres agrandies le remplissent.
+func _clamp_windows() -> void:
+	for id in wins:
+		var d: Dictionary = wins[id]
+		var w: PanelContainer = d["win"]
+		if d["maxed"]: w.position = Vector2.ZERO; w.size = desk.size; continue
+		w.size = Vector2(minf(w.size.x, desk.size.x - 8.0), minf(w.size.y, desk.size.y - 8.0))
+		w.position = Vector2(clampf(w.position.x, 0.0, maxf(0.0, desk.size.x - w.size.x)), clampf(w.position.y, 0.0, maxf(0.0, desk.size.y - w.size.y)))
+
 func _layout_icons() -> void:
 	var per_col := maxi(1, int((desk.size.y - 16.0) / 108.0))
 	for i in desk_icons.size():

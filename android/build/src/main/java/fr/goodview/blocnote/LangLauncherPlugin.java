@@ -135,7 +135,7 @@ public class LangLauncherPlugin extends GodotPlugin {
 	/** Niveau de la partie native de cette APK (comparé à version.json « native » pour proposer de réinstaller l'APK). */
 	@UsedByGodot
 	public int nativeLevel() {
-		return 7;
+		return 8;
 	}
 
 	/** JSON d'état système : {"battery":%, "charging":bool, "net":"wifi|cell|eth|none", "level":0..3} (barre des tâches). */
