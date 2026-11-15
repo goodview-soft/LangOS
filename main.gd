@@ -47,6 +47,8 @@ var dock          # apps/dock.gd
 var ccenter       # apps/control_center.gd
 var prof          # apps/profiles.gd (logique)
 var srch          # apps/search.gd
+var clip          # apps/clipboard.gd (historique du presse-papiers)
+var keysc         # apps/shortcuts.gd (raccourcis clavier / manette)
 var tray_node: Control
 var menu_hi: TextureRect
 var cc_btn: Button
@@ -89,12 +91,14 @@ const APPS := {
 	"terminal": ["Terminal", "res://icons/app_terminal.svg"],
 	"code": ["Éditeur de code", "res://icons/app_code.svg"],
 	"profiles": ["Profils", "res://icons/app_profiles.svg"],
+	"clipboard": ["Presse-papiers", "res://icons/app_clipboard.svg"],
+	"devices": ["Périphériques", "res://icons/app_devices.svg"],
 }
 ## Dossiers du bureau : id -> applications contenues (affichées seulement dans le dossier).
 const FOLDERS := {
 	"f_lang": ["translate", "dict", "music"],
 	"f_games": ["chess", "hika"],
-	"f_soft": ["chromium", "files", "terminal", "code", "profiles"],
+	"f_soft": ["chromium", "files", "terminal", "code", "profiles", "clipboard", "devices"],
 	"f_comm": ["messenger", "remote", "chat", "soundlink"],
 	"f_tools": ["calc", "units", "timer", "todo", "vault", "cards"],
 }
@@ -105,7 +109,7 @@ func _top_ids() -> Array:
 	var android := OS.get_name() == "Android"
 	return APPS.keys().filter(func(k): return not inside.has(k) and (k != "android_apps" or android))
 var active := ""
-var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "cursor": "auto", "pad": false, "pad_speed": 0.7, "zoom": 1.0, "model": "", "engine": -1, "src": "spa", "tgt": "fra", "light": false, "wall": false, "icons": {}, "layout": {}, "open": [], "accent": "5aa2ff", "anim": true, "wtrans": 1.0, "radius": 12, "isize": 56, "pins": ["notepad", "settings", "calc", "music"], "dock_hide": false}
+var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "cursor": "auto", "pad": false, "pad_speed": 0.7, "zoom": 1.0, "model": "", "engine": -1, "src": "spa", "tgt": "fra", "light": false, "wall": false, "icons": {}, "layout": {}, "open": [], "accent": "5aa2ff", "anim": true, "wtrans": 1.0, "radius": 12, "isize": 56, "pins": ["notepad", "settings", "calc", "music"], "dock_hide": false, "keys": {}, "padmap": {}, "clip_save": true, "clip_nopw": true}
 var kb: PanelContainer
 var ui_root: VBoxContainer
 var pointer: Control
@@ -171,6 +175,7 @@ func _ready() -> void:
 # ---------------------------------------------------------------- Appui long : menu Copier / Coller
 
 func _input(ev: InputEvent) -> void:
+	if keysc != null and keysc.handle(ev): get_viewport().set_input_as_handled(); return
 	if ev is InputEventKey and ev.pressed and not ev.echo and ev.ctrl_pressed and ev.keycode == KEY_SPACE and srch:
 		srch.toggle(); get_viewport().set_input_as_handled(); return
 	if ev is InputEventKey and ev.pressed and not ev.echo and ev.keycode == KEY_MINUS and chat_ov:
@@ -251,7 +256,7 @@ func _ctx_do(a: String) -> void:
 		t.grab_focus()
 		if t is RichTextLabel and a == "copy":
 			var s: String = t.get_selected_text()
-			DisplayServer.clipboard_set(s if s != "" else t.get_parsed_text())
+			DisplayServer.clipboard_set(s if s != "" else t.get_parsed_text()); _clip_seen()
 		else: _clip_action(a)
 	_hide_ctx()
 
@@ -501,6 +506,8 @@ func _build_desktop() -> void:
 	dock = load("res://apps/dock.gd").new(); add_child(dock); dock.setup(self)
 	prof = load("res://apps/profiles.gd").new(); prof.m = self; prof.visible = false; add_child(prof)
 	srch = load("res://apps/search.gd").new(); srch.m = self; add_child(srch)
+	keysc = load("res://apps/shortcuts.gd").new(); keysc.m = self; add_child(keysc)
+	clip = load("res://apps/clipboard.gd").new(); clip.m = self; add_child(clip)
 	_restyle_icons()
 
 ## Range les icônes en colonnes ; passe à la colonne suivante quand la hauteur est atteinte.
@@ -660,18 +667,21 @@ func _bs() -> void:
 	if f is TextEdit: f.backspace()
 	elif f is LineEdit and f.caret_column > 0: f.delete_text(f.caret_column - 1, f.caret_column)
 
+func _clip_seen() -> void:
+	if clip != null: clip.capture()
+
 ## Actions presse-papiers / curseur du clavier visuel (utile sur tablette, sans Ctrl+C / Ctrl+V).
 func _clip_action(a: String) -> void:
 	var f := get_viewport().gui_get_focus_owner()
 	if f is RichTextLabel:
 		if a == "all": f.select_all()
-		elif a == "copy" and f.get_selected_text() != "": DisplayServer.clipboard_set(f.get_selected_text())
+		elif a == "copy" and f.get_selected_text() != "": DisplayServer.clipboard_set(f.get_selected_text()); _clip_seen()
 		return
 	if f is TextEdit:
 		match a:
 			"all": f.select_all()
-			"copy": f.copy()
-			"cut": if f.editable: f.cut()
+			"copy": f.copy(); _clip_seen()
+			"cut": if f.editable: f.cut(); _clip_seen()
 			"paste": if f.editable: f.paste()
 			"up": f.set_caret_line(maxi(0, f.get_caret_line() - 1))
 			"down": f.set_caret_line(mini(f.get_line_count() - 1, f.get_caret_line() + 1))
@@ -680,8 +690,8 @@ func _clip_action(a: String) -> void:
 	elif f is LineEdit:
 		match a:
 			"all": f.select_all()
-			"copy": f.menu_option(LineEdit.MENU_COPY)
-			"cut": f.menu_option(LineEdit.MENU_CUT)
+			"copy": f.menu_option(LineEdit.MENU_COPY); _clip_seen()
+			"cut": f.menu_option(LineEdit.MENU_CUT); _clip_seen()
 			"paste": f.menu_option(LineEdit.MENU_PASTE)
 			"home": f.caret_column = 0
 			"end": f.caret_column = f.text.length()
@@ -795,6 +805,8 @@ func _open_app(id: String) -> void:
 		"terminal": _app_dev("terminal", Vector2(760, 480))
 		"code": _app_dev("code", Vector2(900, 620))
 		"profiles": _app_profiles()
+		"clipboard": _app_clipboard()
+		"devices": _app_devices()
 		"notepad": _app_notepad()
 		"settings": _app_settings()
 		"system": _app_system()
@@ -1503,6 +1515,19 @@ func _app_profiles() -> void:
 	c.custom_minimum_size = Vector2(minf(520.0, maxf(280.0, desk.size.x - 16.0)), 380); c.clip_contents = true
 	wv.add_child(c); c.build()
 
+func _app_clipboard() -> void:
+	var wv := _make_window("clipboard", "", Vector2(460, 600), Vector2(240, 40))
+	var c := Control.new(); c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c.custom_minimum_size = Vector2(minf(420.0, maxf(280.0, desk.size.x - 16.0)), 440); c.clip_contents = true
+	wv.add_child(c); clip.build_ui(c)
+
+func _app_devices() -> void:
+	var wv := _make_window("devices", "", Vector2(680, 640), Vector2(200, 30))
+	var c := Control.new(); c.set_script(load("res://apps/devices.gd")); c.m = self
+	c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c.custom_minimum_size = Vector2(minf(520.0, maxf(280.0, desk.size.x - 16.0)), 420); c.clip_contents = true
+	wv.add_child(c); c.build()
+
 func _app_chess() -> void:
 	var wv := _make_window("chess", "", Vector2(900, 680), Vector2(180, 10))
 	var ch := Control.new()
@@ -1646,7 +1671,8 @@ func _load_settings() -> void:
 		set_cfg["engine"] = int(c.get_value("translate", "engine", -1))
 		set_cfg["src"] = str(c.get_value("lang", "src", "spa")); set_cfg["tgt"] = str(c.get_value("lang", "tgt", "fra"))
 		set_cfg["light"] = bool(c.get_value("ui", "light", false)); set_cfg["wall"] = bool(c.get_value("ui", "wall", false)); set_cfg["nvd"] = int(c.get_value("ui", "nvd", 2))
-		for k in ["icons", "layout"]:
+		set_cfg["clip_save"] = bool(c.get_value("ui", "clip_save", true)); set_cfg["clip_nopw"] = bool(c.get_value("ui", "clip_nopw", true))
+		for k in ["icons", "layout", "keys", "padmap"]:
 			var v = c.get_value("ui", k, {}); set_cfg[k] = v if v is Dictionary else {}
 		var o = c.get_value("ui", "open", []); set_cfg["open"] = o if o is Array else []
 		set_cfg["accent"] = str(c.get_value("ui", "accent", "5aa2ff")); set_cfg["anim"] = bool(c.get_value("ui", "anim", true))
@@ -1662,7 +1688,7 @@ func _save_settings() -> void:
 	c.set_value("ui", "bg", set_cfg["bg"]); c.set_value("ui", "font", set_cfg["font"]); c.set_value("ui", "kb", set_cfg["kb"]); c.set_value("ui", "cursor", set_cfg["cursor"]); c.set_value("ui", "pad", set_cfg["pad"]); c.set_value("ui", "pad_speed", set_cfg["pad_speed"]); c.set_value("ui", "zoom", set_cfg["zoom"])
 	c.set_value("translate", "server", set_cfg["ollama"]); c.set_value("translate", "model", set_cfg["model"]); c.set_value("translate", "engine", set_cfg["engine"])
 	c.set_value("lang", "src", set_cfg["src"]); c.set_value("lang", "tgt", set_cfg["tgt"])
-	for k in ["light", "wall", "icons", "layout", "open", "accent", "anim", "wtrans", "radius", "isize", "pins", "dock_hide"]: c.set_value("ui", k, set_cfg[k])
+	for k in ["light", "wall", "icons", "layout", "open", "accent", "anim", "wtrans", "radius", "isize", "pins", "dock_hide", "keys", "padmap", "clip_save", "clip_nopw"]: c.set_value("ui", k, set_cfg[k])
 	c.set_value("ui", "nvd", n_vd)
 	if set_cfg.has("profiles"): c.set_value("ui", "profiles", set_cfg["profiles"])
 	c.save("user://settings.cfg")
@@ -1907,6 +1933,7 @@ func _desk_menu(at: Vector2) -> void:
 		null,
 		["Profils…", _profiles_menu],
 		["Recherche", func(): srch.toggle()],
+		["Presse-papiers", func(): clip.toggle()],
 		["Paramètres", func(): _open_app("settings")]], at)
 
 func _profiles_menu(at := Vector2(-1, -1)) -> void:

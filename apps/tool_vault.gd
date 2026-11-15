@@ -128,7 +128,7 @@ func _edit_screen(idx: int) -> void:
 		else: entries.append(ne)
 		_save(); _list_screen())
 	ok.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(ok)
-	var cp := _btn("Copier le mot de passe", func(): DisplayServer.clipboard_set(f.p.text)); cp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(cp)
+	var cp := _btn("Copier le mot de passe", func(): preload("res://apps/clipboard.gd").secret = f.p.text; DisplayServer.clipboard_set(f.p.text)); cp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(cp)
 	var row2 := HBoxContainer.new(); row2.add_theme_constant_override("separation", 6); ui.add_child(row2)
 	var back := _btn("Retour", _list_screen); back.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row2.add_child(back)
 	if idx >= 0:
