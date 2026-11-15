@@ -1,4 +1,5 @@
 extends Control
+const UI = preload("res://apps/ui.gd")
 ## Cartes mémoire à répétition espacée (système de Leitner), plusieurs paquets.
 
 const PATH := "user://cards.json"
@@ -90,7 +91,7 @@ func _card() -> void:
 	if not shown:
 		ui.add_child(_btn("Afficher la réponse", func(): shown = true; _card()))
 	else:
-		var b := _lbl(c.b, 32); b.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; b.modulate = Color("5aa2ff"); ui.add_child(b)
+		var b := _lbl(c.b, 32); b.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; b.modulate = UI.accent_text(); ui.add_child(b)
 		var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 8); ui.add_child(row)
 		var no := _btn("À revoir", func(): _ans(false)); no.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(no)
 		var yes := _btn("Je savais", func(): _ans(true)); yes.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(yes)

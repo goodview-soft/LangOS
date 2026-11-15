@@ -1,12 +1,11 @@
 extends Control
+const UI = preload("res://apps/ui.gd")
 ## RemoteDesk : voir et piloter le LangOS d'un autre appareil du réseau local.
 ## L'hôte capture l'image de sa fenêtre LangOS (JPEG) ; le client renvoie souris, clavier et toucher, rejoués dans l'hôte.
 ## Accès protégé par un code à 6 chiffres affiché sur l'hôte. Flux non chiffré : réseau de confiance seulement.
 
 const BEACON := "RD1"
 const MAX_W := 1280
-const ACCENT := Color("5aa2ff")
-const MUTED := Color("8f9bb3")
 
 var udp_port := 4353
 var tcp_port := 4352
@@ -89,26 +88,26 @@ func _build_ui() -> void:
 	for k in ["left", "right", "top", "bottom"]: m.add_theme_constant_override("margin_" + k, 14)
 	add_child(m)
 	var root := VBoxContainer.new(); root.add_theme_constant_override("separation", 10); m.add_child(root)
-	status = Label.new(); status.add_theme_font_size_override("font_size", 14); status.add_theme_color_override("font_color", MUTED); root.add_child(status)
+	status = Label.new(); status.add_theme_font_size_override("font_size", 14); status.theme_type_variation = "Muted"; root.add_child(status)
 	home = HBoxContainer.new(); home.size_flags_vertical = SIZE_EXPAND_FILL; home.add_theme_constant_override("separation", 14); root.add_child(home)
 	# Carte hôte
-	var c1 := PanelContainer.new(); c1.size_flags_horizontal = SIZE_EXPAND_FILL; c1.add_theme_stylebox_override("panel", _sb(Color("1d2330"))); home.add_child(c1)
+	var c1 := PanelContainer.new(); c1.size_flags_horizontal = SIZE_EXPAND_FILL; c1.add_theme_stylebox_override("panel", _sb(UI.p("card"), UI.rad(), 16)); home.add_child(c1)
 	var v1 := VBoxContainer.new(); v1.add_theme_constant_override("separation", 12); c1.add_child(v1)
 	var t1 := Label.new(); t1.text = "Partager cet écran"; t1.add_theme_font_size_override("font_size", 22); v1.add_child(t1)
 	var d1 := Label.new(); d1.text = "Un autre appareil pourra voir et piloter LangOS ici, avec le code ci-dessous."
-	d1.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; d1.add_theme_color_override("font_color", MUTED); v1.add_child(d1)
+	d1.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; d1.theme_type_variation = "Muted"; v1.add_child(d1)
 	code_lbl = Label.new(); code_lbl.text = "— — —   — — —"; code_lbl.add_theme_font_size_override("font_size", 40)
-	code_lbl.add_theme_color_override("font_color", ACCENT); code_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; v1.add_child(code_lbl)
-	host_state = Label.new(); host_state.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; host_state.add_theme_color_override("font_color", MUTED); v1.add_child(host_state)
+	code_lbl.add_theme_color_override("font_color", UI.accent()); code_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; v1.add_child(code_lbl)
+	host_state = Label.new(); host_state.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; host_state.theme_type_variation = "Muted"; v1.add_child(host_state)
 	share_btn = _btn("Activer le partage", _toggle_share, "Accent", 0, 48); v1.add_child(share_btn)
 	# Carte client
-	var c2 := PanelContainer.new(); c2.size_flags_horizontal = SIZE_EXPAND_FILL; c2.add_theme_stylebox_override("panel", _sb(Color("1d2330"))); home.add_child(c2)
+	var c2 := PanelContainer.new(); c2.size_flags_horizontal = SIZE_EXPAND_FILL; c2.add_theme_stylebox_override("panel", _sb(UI.p("card"), UI.rad(), 16)); home.add_child(c2)
 	var v2 := VBoxContainer.new(); v2.add_theme_constant_override("separation", 10); c2.add_child(v2)
 	var t2 := Label.new(); t2.text = "Se connecter à un appareil"; t2.add_theme_font_size_override("font_size", 22); v2.add_child(t2)
 	found_box = VBoxContainer.new(); found_box.add_theme_constant_override("separation", 4); v2.add_child(found_box)
-	var l3 := Label.new(); l3.text = "ou adresse IP"; l3.add_theme_color_override("font_color", MUTED); v2.add_child(l3)
+	var l3 := Label.new(); l3.text = "ou adresse IP"; l3.theme_type_variation = "Muted"; v2.add_child(l3)
 	ip_edit = LineEdit.new(); ip_edit.placeholder_text = "192.168.1.20"; ip_edit.virtual_keyboard_enabled = false; v2.add_child(ip_edit)
-	var l4 := Label.new(); l4.text = "Code à 6 chiffres affiché sur l'appareil"; l4.add_theme_color_override("font_color", MUTED); v2.add_child(l4)
+	var l4 := Label.new(); l4.text = "Code à 6 chiffres affiché sur l'appareil"; l4.theme_type_variation = "Muted"; v2.add_child(l4)
 	code_edit = LineEdit.new(); code_edit.placeholder_text = "123456"; code_edit.max_length = 6; code_edit.virtual_keyboard_enabled = false
 	code_edit.add_theme_font_size_override("font_size", 26); v2.add_child(code_edit)
 	conn_btn = _btn("Se connecter", _connect_pressed, "Accent", 0, 48); v2.add_child(conn_btn)
@@ -116,7 +115,7 @@ func _build_ui() -> void:
 	view_box = VBoxContainer.new(); view_box.size_flags_vertical = SIZE_EXPAND_FILL; view_box.visible = false; root.add_child(view_box)
 	var tb := HBoxContainer.new(); tb.add_theme_constant_override("separation", 8); view_box.add_child(tb)
 	var tl := Label.new(); tl.text = "Contrôle à distance"; tl.size_flags_horizontal = SIZE_EXPAND_FILL; tb.add_child(tl)
-	tb.add_child(_btn("Déconnecter", _client_close, "Close", 140, 38))
+	tb.add_child(_btn("Déconnecter", _client_close, "Close", 140, 40))
 	var pc := PanelContainer.new(); pc.size_flags_vertical = SIZE_EXPAND_FILL; pc.add_theme_stylebox_override("panel", _sb(Color.BLACK, 8, 2)); view_box.add_child(pc)
 	viewer = TextureRect.new(); viewer.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; viewer.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	viewer.focus_mode = Control.FOCUS_ALL; viewer.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -134,7 +133,7 @@ func _rebuild_found() -> void:
 		var b := _btn("🖥  %s   (%s)" % [f["name"], f["ip"]], func(): ip_edit.text = f["ip"]; code_edit.grab_focus(), "Flat")
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT; found_box.add_child(b)
 	if found.is_empty():
-		var l := Label.new(); l.text = "Aucun appareil en partage trouvé."; l.add_theme_color_override("font_color", MUTED); found_box.add_child(l)
+		var l := Label.new(); l.text = "Aucun appareil en partage trouvé."; l.theme_type_variation = "Muted"; found_box.add_child(l)
 
 
 # ---------------------------------------------------------------- Hôte
@@ -176,11 +175,11 @@ func _show_overlay(name: String) -> void:
 	overlay = Control.new(); overlay.set_anchors_preset(Control.PRESET_FULL_RECT); overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	overlay.z_index = 4000
 	host.add_child(overlay)
-	var bar := PanelContainer.new(); bar.add_theme_stylebox_override("panel", _sb(Color("b3261e"), 10, 8))
-	overlay.add_child(bar)
+	var bar := PanelContainer.new(); bar.add_theme_stylebox_override("panel", _sb(Color("b3261e"), UI.rad(), 8))
+	bar.theme = UI.bubble_theme(true); overlay.add_child(bar)
 	var h := HBoxContainer.new(); bar.add_child(h)
 	var l := Label.new(); l.text = "🔴  Contrôlé à distance par %s" % name; h.add_child(l)
-	h.add_child(_btn("Couper", _host_drop, "Flat", 90, 32))
+	h.add_child(_btn("Couper", _host_drop, "Flat", 90, 40))
 	bar.position = Vector2(20, 8)
 	overlay.draw.connect(func():
 		var p := cursor_pos

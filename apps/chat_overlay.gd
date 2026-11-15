@@ -1,5 +1,6 @@
 class_name ChatOverlay
 extends Node
+const UI = preload("res://apps/ui.gd")
 ## Overlay chat IA : petite fenêtre en haut à droite de l'écran, par-dessus les jeux. Bascule avec « - » (ou le raccourci global).
 
 var core: ChatCore
@@ -26,13 +27,13 @@ func _ready() -> void:
 	win.window_input.connect(_win_input)
 	add_child(win)
 	var root := PanelContainer.new(); root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	var sb := StyleBoxFlat.new(); sb.bg_color = Color(0.07, 0.08, 0.12, 0.93); sb.set_corner_radius_all(16)
-	sb.set_border_width_all(1); sb.border_color = Color(1, 1, 1, 0.14); sb.set_content_margin_all(12)
+	var sb := StyleBoxFlat.new(); sb.bg_color = Color(UI.p("menu"), 0.95); sb.set_corner_radius_all(UI.rad(4))
+	sb.set_border_width_all(1); sb.border_color = UI.p("edge"); sb.set_content_margin_all(12)
 	root.add_theme_stylebox_override("panel", sb); win.add_child(root)
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 8); root.add_child(v)
 	var head := HBoxContainer.new(); v.add_child(head)
-	var t := Label.new(); t.text = "💬 IA locale"; t.add_theme_font_size_override("font_size", 14); t.add_theme_color_override("font_color", Color("5aa2ff")); t.size_flags_horizontal = Control.SIZE_EXPAND_FILL; head.add_child(t)
-	status = Label.new(); status.add_theme_font_size_override("font_size", 12); status.add_theme_color_override("font_color", Color("8f9bb3")); head.add_child(status)
+	var t := Label.new(); t.text = "💬 IA locale"; t.add_theme_font_size_override("font_size", 14); t.add_theme_color_override("font_color", UI.accent_text()); t.size_flags_horizontal = Control.SIZE_EXPAND_FILL; head.add_child(t)
+	status = Label.new(); status.add_theme_font_size_override("font_size", 12); status.theme_type_variation = "Muted"; head.add_child(status)
 	var x := Button.new(); x.text = "✕"; x.flat = true; x.focus_mode = Control.FOCUS_NONE; x.pressed.connect(hide_chat); head.add_child(x)
 	scroll = ScrollContainer.new(); scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL; scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; v.add_child(scroll)
 	msgs_box = VBoxContainer.new(); msgs_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL; msgs_box.add_theme_constant_override("separation", 6); scroll.add_child(msgs_box)

@@ -1,4 +1,5 @@
 extends Control
+const UI = preload("res://apps/ui.gd")
 ## Terminal : onglets, historique, cd. Linux : bash -c via OS.execute_with_pipe (non bloquant, Ctrl+C, timeout).
 ## Android (ou builtins_only) : commandes intégrées seulement. Pas de TTY interactif complet.
 
@@ -96,11 +97,11 @@ func builtin(s: Dictionary, line: String, force := false) -> bool:
 		"cd":
 			var t := home() if pa.is_empty() else resolve(s, pa[0])
 			if DirAccess.dir_exists_absolute(t): s["cwd"] = t
-			else: println(s, "cd: %s : dossier introuvable\n" % t, Color("f87171"))
+			else: println(s, "cd: %s : dossier introuvable\n" % t, UI.err())
 		"ls":
 			var d := resolve(s, pa[0]) if not pa.is_empty() else str(s["cwd"])
 			if FileAccess.file_exists(d): println(s, d.get_file() + "\n"); return true
-			if not DirAccess.dir_exists_absolute(d): println(s, "ls: %s : introuvable\n" % d, Color("f87171")); return true
+			if not DirAccess.dir_exists_absolute(d): println(s, "ls: %s : introuvable\n" % d, UI.err()); return true
 			var names: Array = []
 			for x in DirAccess.get_directories_at(d): names.append(x + "/")
 			for x in DirAccess.get_files_at(d): names.append(x)
@@ -112,7 +113,7 @@ func builtin(s: Dictionary, line: String, force := false) -> bool:
 			for p in pa:
 				var f := resolve(s, p)
 				if FileAccess.file_exists(f): println(s, FileAccess.get_file_as_string(f) + ("" if FileAccess.get_file_as_string(f).ends_with("\n") else "\n"))
-				else: println(s, "cat: %s : fichier introuvable\n" % p, Color("f87171"))
+				else: println(s, "cat: %s : fichier introuvable\n" % p, UI.err())
 		"mkdir":
 			for p in pa: DirAccess.make_dir_recursive_absolute(resolve(s, p))
 		"rm":
@@ -122,19 +123,19 @@ func builtin(s: Dictionary, line: String, force := false) -> bool:
 				var f := resolve(s, p)
 				if DirAccess.dir_exists_absolute(f):
 					if rec: _rmr(f)
-					else: println(s, "rm: %s est un dossier (utiliser -r)\n" % p, Color("f87171"))
+					else: println(s, "rm: %s est un dossier (utiliser -r)\n" % p, UI.err())
 				elif FileAccess.file_exists(f): DirAccess.remove_absolute(f)
-				else: println(s, "rm: %s : introuvable\n" % p, Color("f87171"))
+				else: println(s, "rm: %s : introuvable\n" % p, UI.err())
 		"cp", "mv":
-			if pa.size() != 2: println(s, "%s : usage : %s source destination\n" % [c, c], Color("f87171")); return true
+			if pa.size() != 2: println(s, "%s : usage : %s source destination\n" % [c, c], UI.err()); return true
 			var src := resolve(s, pa[0]); var dst := resolve(s, pa[1])
 			if DirAccess.dir_exists_absolute(dst): dst = dst.path_join(src.get_file())
-			if not (FileAccess.file_exists(src) or DirAccess.dir_exists_absolute(src)): println(s, "%s: %s : introuvable\n" % [c, pa[0]], Color("f87171")); return true
+			if not (FileAccess.file_exists(src) or DirAccess.dir_exists_absolute(src)): println(s, "%s: %s : introuvable\n" % [c, pa[0]], UI.err()); return true
 			var ok := _cpr(src, dst)
 			if ok and c == "mv": _rmr(src)
-			if not ok: println(s, "%s : échec\n" % c, Color("f87171"))
+			if not ok: println(s, "%s : échec\n" % c, UI.err())
 		_:
-			println(s, "%s : commande inconnue (tapez help)\n" % c, Color("f87171"))
+			println(s, "%s : commande inconnue (tapez help)\n" % c, UI.err())
 	return true
 
 # ------------------------------------------------------------------ exécution bash
@@ -172,7 +173,7 @@ func run_line(s: Dictionary, line: String) -> void:
 	var j := Job.new()
 	var r := OS.execute_with_pipe("bash", ["-c", "cd \"$0\" && eval \"$1\"", ProjectSettings.globalize_path(str(s["cwd"])), line], false)
 	if r.is_empty() or int(r.get("pid", 0)) <= 0:
-		println(s, "Impossible de lancer bash\n", Color("f87171")); return
+		println(s, "Impossible de lancer bash\n", UI.err()); return
 	j.pid = int(r["pid"]); j.io = r["stdio"]; j.err = r["stderr"]; j.t0 = Time.get_ticks_msec() / 1000.0
 	for pr in [[j.io, false], [j.err, true]]:
 		var t := Thread.new(); t.start(j.pump.bind(pr[0], pr[1])); j.th.append(t)
@@ -183,7 +184,7 @@ func cancel(s: Dictionary, why := "^C") -> void:
 	if j == null: return
 	OS.execute("pkill", ["-TERM", "-P", str(j.pid)])
 	OS.kill(j.pid)
-	println(s, why + "\n", Color("fbbf24"))
+	println(s, why + "\n", UI.warn())
 
 func _clean(b: PackedByteArray) -> String:
 	if _ansi.get_group_count() == 0 and _ansi.get_pattern() == "": _ansi.compile("\u001b\\[[0-9;?]*[ -/]*[@-~]")
@@ -195,7 +196,7 @@ func _process(_d: float) -> void:
 		if j == null: continue
 		j.mtx.lock(); var b := j.buf; var e := j.ebuf; j.buf = PackedByteArray(); j.ebuf = PackedByteArray(); var dn := j.done; j.mtx.unlock()
 		if b.size() > 0: println(s, _clean(b))
-		if e.size() > 0: println(s, _clean(e), Color("f87171"))
+		if e.size() > 0: println(s, _clean(e), UI.err())
 		if dn >= 2 and not OS.is_process_running(j.pid):
 			for t in j.th: (t as Thread).wait_to_finish()
 			s["run"] = null
@@ -222,12 +223,12 @@ func _ready() -> void:
 	pc.add_theme_stylebox_override("panel", sb); vb.add_child(pc)
 	stack = Control.new(); stack.clip_contents = true; pc.add_child(stack)
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 6); vb.add_child(row)
-	plbl = Label.new(); plbl.add_theme_font_override("font", mono); plbl.add_theme_color_override("font_color", Color("4ade80")); row.add_child(plbl)
+	plbl = Label.new(); plbl.add_theme_font_override("font", mono); plbl.add_theme_color_override("font_color", UI.ok()); row.add_child(plbl)
 	inp = LineEdit.new(); inp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; inp.custom_minimum_size.y = 40
 	inp.add_theme_font_override("font", mono); inp.placeholder_text = "Commande (help)"
 	inp.text_submitted.connect(_submit); inp.gui_input.connect(_key); row.add_child(inp)
 	var s := new_session()
-	println(s, "Terminal LangOS : tapez help.\n", Color("8f9bb3"))
+	println(s, "Terminal LangOS : tapez help.\n", UI.muted_c())
 	_rebuild_tabs(); inp.grab_focus()
 
 func _rebuild_tabs() -> void:

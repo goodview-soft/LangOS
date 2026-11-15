@@ -1,4 +1,5 @@
 extends Control
+const UI = preload("res://apps/ui.gd")
 ## Listes de tâches et de courses (plusieurs listes, enregistrées sur l'appareil).
 
 const PATH := "user://todo.json"
@@ -59,9 +60,9 @@ func _rebuild() -> void:
 		var r := HBoxContainer.new(); r.add_theme_constant_override("separation", 4); box.add_child(r)
 		var cb := CheckBox.new(); cb.text = e.t; cb.button_pressed = e.d; cb.custom_minimum_size.y = 48; cb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		cb.add_theme_font_size_override("font_size", 20); cb.focus_mode = Control.FOCUS_NONE
-		if e.d: cb.modulate = Color(1, 1, 1, 0.45)
+		if e.d: cb.modulate = Color(1, 1, 1, 0.5)
 		cb.toggled.connect(func(on): e.d = on; _save(); cb.modulate = Color(1, 1, 1, 0.45 if on else 1.0)); r.add_child(cb)
 		var x := Button.new(); x.text = "✕"; x.custom_minimum_size = Vector2(48, 48); x.focus_mode = Control.FOCUS_NONE
 		x.pressed.connect(func(): items.erase(e); _save(); _rebuild()); r.add_child(x)
 	if items.is_empty():
-		var l := Label.new(); l.text = "Liste vide."; l.modulate = Color(1, 1, 1, 0.5); box.add_child(l)
+		var l := Label.new(); l.text = "Liste vide."; l.theme_type_variation = "Muted"; box.add_child(l)

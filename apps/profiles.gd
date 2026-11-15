@@ -102,20 +102,20 @@ func build() -> void:
 	sv.pressed.connect(func(): save_current("", inc_theme.button_pressed, mode_btn.selected); _fill())
 	var sc := ScrollContainer.new(); sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; v.add_child(sc)
 	list = VBoxContainer.new(); list.add_theme_constant_override("separation", 8); list.size_flags_horizontal = Control.SIZE_EXPAND_FILL; sc.add_child(list)
-	var rs: Button = m._mk_btn("Restaurer les profils par défaut", 0, 38); rs.pressed.connect(func(): reset_defaults(); _fill()); v.add_child(rs)
+	var rs: Button = m._mk_btn("Restaurer les profils par défaut", 0, 40); rs.pressed.connect(func(): reset_defaults(); _fill()); v.add_child(rs)
 	_fill()
 
 func _fill() -> void:
 	for c in list.get_children(): list.remove_child(c); c.queue_free()
 	for i in all().size():
 		var p: Dictionary = all()[i]
-		var card := PanelContainer.new(); card.add_theme_stylebox_override("panel", m._box(m._p("field"), 10, m._p("edge"), 1, 0, 10)); list.add_child(card)
+		var card := PanelContainer.new(); card.add_theme_stylebox_override("panel", m._box(m._p("field"), m._rad(), m._p("edge"), 1, 0, 10)); list.add_child(card)
 		var cv := VBoxContainer.new(); cv.add_theme_constant_override("separation", 6); card.add_child(cv)
 		var r := HBoxContainer.new(); r.add_theme_constant_override("separation", 6); cv.add_child(r)
 		var le := LineEdit.new(); le.text = str(p["name"]); le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		le.text_submitted.connect(func(s): rename(i, s)); le.focus_exited.connect(func(): rename(i, le.text)); r.add_child(le)
-		var ba: Button = m._mk_btn("Activer", 0, 38); ba.pressed.connect(func(): activate(i)); r.add_child(ba)
-		var bd: Button = m._mk_btn("Supprimer", 0, 38); bd.pressed.connect(func(): remove(i); _fill()); r.add_child(bd)
+		var ba: Button = m._mk_btn("Activer", 0, 40); ba.pressed.connect(func(): activate(i)); r.add_child(ba)
+		var bd: Button = m._mk_btn("Supprimer", 0, 40); bd.pressed.connect(func(): remove(i); _fill()); r.add_child(bd)
 		var names := []
 		for e in p["apps"]: if m.APPS.has(e["id"]): names.append("%s (%d)" % [m.APPS[e["id"]][0], int(e.get("vd", 0)) + 1])
 		var l: Label = m._mlbl(", ".join(names) + "  ·  " + MODES[clampi(int(p.get("mode", 0)), 0, 2)], 14); l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; cv.add_child(l)

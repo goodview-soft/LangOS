@@ -53,12 +53,13 @@ var keysc         # apps/shortcuts.gd (raccourcis clavier / manette)
 var tray_node: Control
 var menu_hi: TextureRect
 var cc_btn: Button
-const PAL_D := {"win": Color("232834"), "tb_on": Color("1f2432"), "tb_off": Color("171a23"), "field": Color("171b25"), "popup": Color("1b1f2a"), "bar": Color(0.07, 0.08, 0.11, 0.9), "menu": Color(0.11, 0.13, 0.18, 0.97), "text": Color("e5e9f0"), "ov": Color(1, 1, 1), "edge": Color(1, 1, 1, 0.1)}
-const PAL_L := {"win": Color("f3f5f9"), "tb_on": Color("e2e7f0"), "tb_off": Color("edf0f6"), "field": Color("ffffff"), "popup": Color("ffffff"), "bar": Color(0.93, 0.94, 0.97, 0.94), "menu": Color(0.97, 0.98, 1.0, 0.97), "text": Color("1b2230"), "ov": Color(0, 0, 0), "edge": Color(0, 0, 0, 0.14)}
+const PAL_D := {"win": Color("232834"), "tb_on": Color("1f2432"), "tb_off": Color("171a23"), "field": Color("171b25"), "popup": Color("1b1f2a"), "bar": Color(0.07, 0.08, 0.11, 0.9), "menu": Color(0.11, 0.13, 0.18, 0.97), "text": Color("e5e9f0"), "ov": Color(1, 1, 1), "edge": Color(1, 1, 1, 0.1), "card": Color("1c2131"), "muted": Color("9aa6bf"), "ok": Color("4ade80"), "warn": Color("fbbf24"), "err": Color("f87171"), "bub_me": Color("2b5fb8"), "bub_you": Color("2a3040"), "pop": Color(0.12, 0.14, 0.2, 0.98), "kb": Color(0.09, 0.1, 0.14, 0.97)}
+const PAL_L := {"win": Color("f3f5f9"), "tb_on": Color("e2e7f0"), "tb_off": Color("edf0f6"), "field": Color("ffffff"), "popup": Color("ffffff"), "bar": Color(0.93, 0.94, 0.97, 0.94), "menu": Color(0.97, 0.98, 1.0, 0.97), "text": Color("1b2230"), "ov": Color(0, 0, 0), "edge": Color(0, 0, 0, 0.14), "card": Color("ffffff"), "muted": Color("586277"), "ok": Color("15803d"), "warn": Color("b45309"), "err": Color("b91c1c"), "bub_me": Color("2563eb"), "bub_you": Color("e3e8f1"), "pop": Color(0.98, 0.99, 1.0, 0.98), "kb": Color(0.93, 0.94, 0.97, 0.97)}
 func _p(k: String):
 	return (PAL_L if set_cfg.get("light", false) else PAL_D)[k]
 const TEXT := Color("e5e9f0")
-const MUTED := Color("8f9bb3")
+const UI = preload("res://apps/ui.gd")
+var MUTED := Color("8f9bb3")   # mis à jour selon le thème (clair : plus foncé)
 const APPS := {
 	"notepad": ["Bloc-notes", "res://icons/app_notepad.svg"],
 	"settings": ["Paramètres", "res://icons/app_settings.svg"],
@@ -242,7 +243,7 @@ func _show_ctx(t: Control, at: Vector2) -> void:
 	ctx_catcher.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed: _hide_ctx())
 	add_child(ctx_catcher)
 	ctx_menu = PanelContainer.new()
-	ctx_menu.add_theme_stylebox_override("panel", _box(Color(0.12, 0.14, 0.2, 0.98), 12, Color(1, 1, 1, 0.14), 1, 18, 6))
+	ctx_menu.add_theme_stylebox_override("panel", _box(_p("pop"), _rad(), _p("edge"), 1, 18, 6))
 	add_child(ctx_menu)
 	var h := HBoxContainer.new(); h.add_theme_constant_override("separation", 2); ctx_menu.add_child(h)
 	var items := []
@@ -364,6 +365,7 @@ func _grad_tex(i: int, w := 512, h := 288) -> GradientTexture2D:
 	return t
 
 func _build_theme() -> void:
+	UI.m = self; MUTED = _p("muted")
 	var th := Theme.new()
 	var f := SystemFont.new()
 	f.font_names = PackedStringArray(["Inter", "Noto Sans", "Ubuntu", "Cantarell", "Roboto", "DejaVu Sans"])
@@ -374,13 +376,13 @@ func _build_theme() -> void:
 	# Boutons (touches) : remplis
 	for st in [["normal", w.call(0.08)], ["hover", w.call(0.16)], ["pressed", ACCENT], ["disabled", w.call(0.04)]]:
 		var sb := _box(st[1], 10); sb.content_margin_left = 12; sb.content_margin_right = 12
-		sb.content_margin_top = 6; sb.content_margin_bottom = 6
+		sb.content_margin_top = 9; sb.content_margin_bottom = 9
 		th.set_stylebox(st[0], "Button", sb)
 	th.set_stylebox("focus", "Button", StyleBoxEmpty.new())
 	th.set_color("font_color", "Button", tx); th.set_color("font_hover_color", "Button", tx)
-	th.set_color("font_pressed_color", "Button", Color.WHITE)
+	th.set_color("font_pressed_color", "Button", UI.on(ACCENT))
 	th.set_color("icon_normal_color", "Button", tx); th.set_color("icon_hover_color", "Button", tx)
-	th.set_color("icon_pressed_color", "Button", Color.WHITE)
+	th.set_color("icon_pressed_color", "Button", UI.on(ACCENT))
 	th.set_font_size("font_size", "Button", 19)
 	th.set_constant("icon_max_width", "Button", 22); th.set_constant("h_separation", "Button", 10)
 	for st in ["normal", "hover", "pressed", "disabled"]:
@@ -402,26 +404,32 @@ func _build_theme() -> void:
 	th.set_type_variation("Flat", "Button")
 	for st in [["normal", 0.0], ["hover", 0.09], ["pressed", 0.16]]:
 		var sb := _box(w.call(st[1]), 8); sb.content_margin_left = 12; sb.content_margin_right = 12
-		sb.content_margin_top = 5; sb.content_margin_bottom = 5
+		sb.content_margin_top = 9; sb.content_margin_bottom = 9
 		th.set_stylebox(st[0], "Flat", sb)
 	th.set_type_variation("Close", "Button")
 	for st in [["normal", Color(0, 0, 0, 0)], ["hover", Color("e5484d")], ["pressed", Color("c0363b")]]:
-		var sb := _box(st[1], 6); sb.content_margin_left = 8; sb.content_margin_right = 8
+		var sb := _box(st[1], 6); sb.content_margin_left = 8; sb.content_margin_right = 8; sb.content_margin_top = 4; sb.content_margin_bottom = 4
 		th.set_stylebox(st[0], "Close", sb)
 	th.set_type_variation("Accent", "Button")
 	for st in [["normal", ACCENT], ["hover", ACCENT.lightened(0.15)], ["pressed", ACCENT.darkened(0.2)], ["disabled", ACCENT.darkened(0.5)]]:
 		var sb := _box(st[1], 10); sb.content_margin_left = 16; sb.content_margin_right = 16
-		sb.content_margin_top = 8; sb.content_margin_bottom = 8
+		sb.content_margin_top = 9; sb.content_margin_bottom = 9
 		th.set_stylebox(st[0], "Accent", sb)
-	th.set_color("font_color", "Accent", Color("0b1220")); th.set_color("font_hover_color", "Accent", Color("0b1220"))
-	th.set_color("font_pressed_color", "Accent", Color("0b1220")); th.set_color("font_disabled_color", "Accent", Color(0.04, 0.07, 0.12, 0.6))
+	var onacc: Color = UI.on(ACCENT)
+	th.set_color("font_color", "Accent", onacc); th.set_color("font_hover_color", "Accent", onacc.lerp(ACCENT.lightened(0.15), 0.0))
+	th.set_color("font_pressed_color", "Accent", UI.on(ACCENT.darkened(0.2))); th.set_color("font_disabled_color", "Accent", Color(onacc, 0.6))
+	th.set_color("icon_normal_color", "Accent", onacc); th.set_color("icon_hover_color", "Accent", onacc); th.set_color("icon_pressed_color", "Accent", UI.on(ACCENT.darkened(0.2)))
+	for ty in ["CheckBox", "CheckButton", "LinkButton"]:
+		th.set_color("font_color", ty, tx); th.set_color("font_hover_color", ty, tx); th.set_color("font_pressed_color", ty, tx)
+		th.set_color("font_hover_pressed_color", ty, tx); th.set_color("font_focus_color", ty, tx)
+	th.set_color("font_color", "ProgressBar", tx)
 	# Texte
 	th.set_color("font_color", "Label", tx)
 	th.set_font_size("font_size", "Label", 16)
 	var te := _box(_p("field"), 10, w.call(0.07), 1, 0, 14)
 	th.set_stylebox("normal", "TextEdit", te); th.set_stylebox("focus", "TextEdit", _box(_p("field"), 10, ACCENT.darkened(0.3), 1, 0, 14))
 	th.set_color("font_color", "TextEdit", tx); th.set_color("caret_color", "TextEdit", ACCENT)
-	th.set_color("font_placeholder_color", "TextEdit", Color(0.56, 0.61, 0.7, 0.6))
+	th.set_color("font_placeholder_color", "TextEdit", Color(_p("muted"), 0.75)); th.set_color("font_placeholder_color", "LineEdit", Color(_p("muted"), 0.75))
 	th.set_color("selection_color", "TextEdit", Color(ACCENT, 0.35)); th.set_color("current_line_color", "TextEdit", w.call(0.03))
 	th.set_font_size("font_size", "TextEdit", 22)
 	th.set_stylebox("normal", "LineEdit", _box(_p("field"), 8, w.call(0.07), 1, 0, 10))
@@ -433,6 +441,7 @@ func _build_theme() -> void:
 	th.set_stylebox("grabber_area", "HSlider", _box(ACCENT, 4)); th.set_stylebox("grabber_area_highlight", "HSlider", _box(ACCENT.lightened(0.2), 4))
 	var sl := StyleBoxLine.new(); sl.color = w.call(0.1); sl.thickness = 1
 	th.set_stylebox("separator", "HSeparator", sl)
+	UI.extend_theme(th)
 	theme = th
 
 func _mk_btn(txt: String, w := 56, h := 56) -> Button:
@@ -470,7 +479,7 @@ func _build_desktop() -> void:
 	# Barre des tâches
 	var bar := PanelContainer.new()
 	bar_panel = bar
-	var bs := _box(_p("bar"), 0); bs.border_width_top = 1; bs.border_color = Color(1, 1, 1, 0.08)
+	var bs := _box(_p("bar"), 0); bs.border_width_top = 1; bs.border_color = _p("edge")
 	bs.content_margin_left = 8; bs.content_margin_right = 12; bs.content_margin_top = 5; bs.content_margin_bottom = 5
 	bar.add_theme_stylebox_override("panel", bs)
 	root.add_child(bar)
@@ -480,7 +489,7 @@ func _build_desktop() -> void:
 	start_btn.add_theme_color_override("icon_normal_color", ACCENT); start_btn.add_theme_color_override("icon_hover_color", ACCENT)
 	start_btn.add_theme_font_size_override("font_size", 18)
 	start_btn.pressed.connect(_toggle_menu); bh.add_child(start_btn)
-	var vs := VSeparator.new(); vs.modulate = Color(1, 1, 1, 0.4); bh.add_child(vs)
+	var vs := VSeparator.new(); vs.modulate = Color(_p("ov"), 0.4); bh.add_child(vs)
 	task_box = HBoxContainer.new(); task_box.add_theme_constant_override("separation", 4); bh.add_child(task_box)
 	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; bh.add_child(sp)
 	var sb_ := _icon_btn("search", "Flat", 48, 42, 22); sb_.tooltip_text = "Recherche (Ctrl+Espace)"; sb_.pressed.connect(func(): srch.toggle()); bh.add_child(sb_)
@@ -578,14 +587,14 @@ func _build_menu() -> void:
 	catcher.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed: _toggle_menu())
 	add_child(catcher)
 	menu = PanelContainer.new(); menu.visible = false
-	menu.add_theme_stylebox_override("panel", _box(_p("menu"), 16, Color(1, 1, 1, 0.1), 1, 28, 12))
+	menu.add_theme_stylebox_override("panel", _box(_p("menu"), _rad() + 4, _p("edge"), 1, 28, 12))
 	add_child(menu)
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 4); menu.add_child(v)
 	var head := HBoxContainer.new(); v.add_child(head)
 	var hi := TextureRect.new(); hi.texture = _ico("start"); hi.modulate = ACCENT; hi.custom_minimum_size = Vector2(22, 22); menu_hi = hi
 	hi.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; hi.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED; head.add_child(hi)
 	var ht := Label.new(); ht.text = " LangOS"; ht.add_theme_font_size_override("font_size", 20); ht.size_flags_horizontal = Control.SIZE_EXPAND_FILL; head.add_child(ht)
-	var hv := Label.new(); hv.text = "v" + VERSION; hv.add_theme_color_override("font_color", MUTED); hv.add_theme_font_size_override("font_size", 14); head.add_child(hv)
+	var hv := Label.new(); hv.text = "v" + VERSION; hv.theme_type_variation = "Muted"; hv.add_theme_font_size_override("font_size", 14); head.add_child(hv)
 	var sp := Control.new(); sp.custom_minimum_size.y = 6; v.add_child(sp)
 	for id in _top_ids():
 		var b := _mk_btn(APPS[id][0], 300, 50); b.theme_type_variation = "Flat"; b.alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -621,7 +630,7 @@ func _quit() -> void:
 
 func _build_keyboard() -> void:
 	kb = PanelContainer.new()
-	var ks := _box(Color(0.09, 0.1, 0.14, 0.97), 16, Color(1, 1, 1, 0.1), 1, 24, 12); ks.corner_radius_bottom_left = 0; ks.corner_radius_bottom_right = 0
+	var ks := _box(_p("kb"), _rad() + 4, _p("edge"), 1, 24, 12); ks.corner_radius_bottom_left = 0; ks.corner_radius_bottom_right = 0
 	kb.add_theme_stylebox_override("panel", ks)
 	kb.visible = false
 	add_child(kb)
@@ -789,7 +798,7 @@ func _dlbl(t: String, sz := 17) -> Label:
 	return l
 
 func _mlbl(t: String, sz := 14) -> Label:
-	var l := _dlbl(t, sz); l.add_theme_color_override("font_color", MUTED)
+	var l := _dlbl(t, sz); l.theme_type_variation = "Muted"
 	return l
 
 func _open_app(id: String) -> void:
@@ -856,7 +865,7 @@ func _set_active(id: String) -> void:
 		if set_cfg.get("light", false): wins[k]["title"].modulate = Color.WHITE if on else Color(1, 1, 1, 0.6)
 		var t: Button = wins[k]["task"]
 		if on:
-			var sb := _box(Color(1, 1, 1, 0.12), 8); sb.border_width_bottom = 3; sb.border_color = ACCENT
+			var sb := _box(Color(_p("ov"), 0.12), 8); sb.border_width_bottom = 3; sb.border_color = ACCENT
 			sb.content_margin_left = 12; sb.content_margin_right = 12; sb.content_margin_top = 5; sb.content_margin_bottom = 5
 			t.add_theme_stylebox_override("normal", sb)
 		else:
@@ -889,9 +898,9 @@ func _make_window(id: String, _title: String, sz: Vector2, pos: Vector2) -> VBox
 	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL; tl.add_theme_font_size_override("font_size", 15)
 	tl.mouse_filter = Control.MOUSE_FILTER_PASS
 	tbh.add_child(tl)
-	var mn := _icon_btn("minimize", "Flat", 34, 26, 13); mn.pressed.connect(_toggle_win.bind(id)); tbh.add_child(mn)
-	var mx := _icon_btn("maximize", "Flat", 34, 26, 13); mx.pressed.connect(_toggle_max.bind(id)); tbh.add_child(mx)
-	var cl := _icon_btn("close", "Close", 34, 26, 13); cl.pressed.connect(_close_win.bind(id)); tbh.add_child(cl)
+	var mn := _icon_btn("minimize", "Flat", 40, 30, 14); mn.pressed.connect(_toggle_win.bind(id)); tbh.add_child(mn)
+	var mx := _icon_btn("maximize", "Flat", 40, 30, 14); mx.pressed.connect(_toggle_max.bind(id)); tbh.add_child(mx)
+	var cl := _icon_btn("close", "Close", 40, 30, 14); cl.pressed.connect(_close_win.bind(id)); tbh.add_child(cl)
 	var tk := _mk_btn(title, 150, 42); tk.theme_type_variation = "Flat"
 	tk.icon = load(APPS[id][1]); tk.add_theme_constant_override("icon_max_width", 24)
 	tk.add_theme_color_override("icon_normal_color", Color.WHITE); tk.add_theme_color_override("icon_hover_color", Color.WHITE)
@@ -975,7 +984,7 @@ func _app_notepad() -> void:
 	wv.add_child(mm)
 	var mb := HBoxContainer.new(); mm.add_child(mb)
 	for e in [["Nouveau", "new", _new], ["Enregistrer", "save", _save]]:
-		var bn := _mk_btn(e[0], 100, 36); bn.theme_type_variation = "Flat"; bn.icon = _ico(e[1])
+		var bn := _mk_btn(e[0], 100, 40); bn.theme_type_variation = "Flat"; bn.icon = _ico(e[1])
 		bn.add_theme_constant_override("icon_max_width", 18); bn.add_theme_font_size_override("font_size", 16)
 		bn.pressed.connect(e[2]); mb.add_child(bn)
 	edit = TextEdit.new(); edit.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -988,7 +997,7 @@ func _app_notepad() -> void:
 	for k in ["left", "right", "top"]: em.add_theme_constant_override("margin_" + k, 10)
 	em.add_child(edit); wv.add_child(em)
 	status = Label.new(); status.add_theme_font_size_override("font_size", 13)
-	status.add_theme_color_override("font_color", MUTED)
+	status.theme_type_variation = "Muted"
 	var sm := MarginContainer.new()
 	for k in ["left", "right"]: sm.add_theme_constant_override("margin_" + k, 14)
 	for k in ["top", "bottom"]: sm.add_theme_constant_override("margin_" + k, 7)
@@ -1002,10 +1011,10 @@ func _app_notepad() -> void:
 ## ---- Paramètres : sections en cartes, lignes « libellé | réglage » qui passent à la ligne sur petit écran, défilement vertical.
 func _s_card(parent: Control, title: String) -> VBoxContainer:
 	var pc := PanelContainer.new(); pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var sb := _box(Color("1c2131"), 14, Color(1, 1, 1, 0.07), 1); sb.content_margin_left = 16; sb.content_margin_right = 16; sb.content_margin_top = 14; sb.content_margin_bottom = 14
+	var sb := _box(_p("card"), _rad() + 2, _p("edge"), 1); sb.content_margin_left = 16; sb.content_margin_right = 16; sb.content_margin_top = 14; sb.content_margin_bottom = 14
 	pc.add_theme_stylebox_override("panel", sb); parent.add_child(pc)
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 12); pc.add_child(v)
-	var h := Label.new(); h.text = title.to_upper(); h.add_theme_font_size_override("font_size", 13); h.add_theme_color_override("font_color", ACCENT); v.add_child(h)
+	var h := Label.new(); h.text = title.to_upper(); h.add_theme_font_size_override("font_size", 13); h.add_theme_color_override("font_color", UI.accent_text()); v.add_child(h)
 	return v
 
 ## Une ligne de réglage : le libellé à gauche, le contrôle à droite ; s'il manque de place, le contrôle passe dessous.
@@ -1028,7 +1037,7 @@ func _s_slider(lo: float, hi: float, step: float, val: float, cb: Callable) -> H
 	var hb := HBoxContainer.new(); hb.add_theme_constant_override("separation", 10)
 	var s := HSlider.new(); s.min_value = lo; s.max_value = hi; s.step = step; s.value = val; s.focus_mode = Control.FOCUS_NONE
 	s.custom_minimum_size = Vector2(110, 32); s.size_flags_horizontal = Control.SIZE_EXPAND_FILL; s.size_flags_vertical = Control.SIZE_SHRINK_CENTER; hb.add_child(s)
-	var v := Label.new(); v.custom_minimum_size.x = 56; v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT; v.add_theme_color_override("font_color", MUTED); hb.add_child(v)
+	var v := Label.new(); v.custom_minimum_size.x = 56; v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT; v.theme_type_variation = "Muted"; hb.add_child(v)
 	s.value_changed.connect(func(x: float): cb.call(x, v)); cb.call(val, v)
 	return hb
 
@@ -1214,7 +1223,7 @@ func _app_translate() -> void:
 	var le := LineEdit.new(); le.text = set_cfg["ollama"]; le.virtual_keyboard_enabled = false
 	le.placeholder_text = "http://IP-du-PC:11434"; le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	srv.add_child(le)
-	var cn := _mk_btn("Connecter", 120, 38); cn.theme_type_variation = "Flat"
+	var cn := _mk_btn("Connecter", 120, 40); cn.theme_type_variation = "Flat"
 	cn.pressed.connect(func():
 		var t := le.text.strip_edges().rstrip("/")
 		if not t.begins_with("http"): t = "http://" + t
@@ -1609,12 +1618,12 @@ func _app_dict() -> void:
 	dic_list = ItemList.new(); dic_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	dic_list.item_selected.connect(_dic_show); left.add_child(dic_list)
 	var pg := HBoxContainer.new(); pg.add_theme_constant_override("separation", 6); left.add_child(pg)
-	var pv := _mk_btn("◀", 48, 36); pv.pressed.connect(_dic_page.bind(-1)); pg.add_child(pv)
+	var pv := _mk_btn("◀", 48, 40); pv.pressed.connect(_dic_page.bind(-1)); pg.add_child(pv)
 	dic_info = _mlbl("", 13); dic_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	dic_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; pg.add_child(dic_info)
-	var nx := _mk_btn("▶", 48, 36); nx.pressed.connect(_dic_page.bind(1)); pg.add_child(nx)
+	var nx := _mk_btn("▶", 48, 40); nx.pressed.connect(_dic_page.bind(1)); pg.add_child(nx)
 	var pc := PanelContainer.new(); pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	pc.add_theme_stylebox_override("panel", _box(Color("171b25"), 10, Color(1, 1, 1, 0.07), 1, 0, 16)); hb.add_child(pc)
+	pc.add_theme_stylebox_override("panel", _box(_p("field"), _rad(), _p("edge"), 1, 0, 16)); hb.add_child(pc)
 	dic_def = RichTextLabel.new(); dic_def.bbcode_enabled = true; dic_def.selection_enabled = true; dic_def.context_menu_enabled = true
 	dic_def.add_theme_font_size_override("normal_font_size", 20); dic_def.add_theme_font_size_override("bold_font_size", 28)
 	pc.add_child(dic_def)
@@ -1792,7 +1801,7 @@ func _apk_prompt() -> void:
 	if apk_prompted: return
 	apk_prompted = true
 	var cc := CenterContainer.new(); cc.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); add_child(cc)
-	var pc := PanelContainer.new(); pc.add_theme_stylebox_override("panel", _box(Color(0.11, 0.13, 0.18, 0.99), 16, Color(1, 1, 1, 0.15), 1, 30, 18)); cc.add_child(pc)
+	var pc := PanelContainer.new(); pc.add_theme_stylebox_override("panel", _box(_p("pop"), _rad() + 4, _p("edge"), 1, 30, 18)); cc.add_child(pc)
 	var v := VBoxContainer.new(); v.custom_minimum_size.x = 420; v.add_theme_constant_override("separation", 12); pc.add_child(v)
 	v.add_child(_dlbl("Nouvelle APK à installer", 22))
 	var l := _mlbl("Cette version de LangOS apporte des fonctions Android (navigateur, applis, écran d'accueil) qui demandent de réinstaller l'APK. La mise à jour légère ne suffit pas.", 15)
@@ -1871,6 +1880,7 @@ func _restyle() -> void:
 	menu.add_theme_stylebox_override("panel", _box(_p("menu"), _rad() + 4, _p("edge"), 1, 28, 12))
 	for k in ["icon_normal_color", "icon_hover_color"]: start_btn.add_theme_color_override(k, ACCENT)
 	if menu_hi: menu_hi.modulate = ACCENT
+	if kb != null: var ks := _box(_p("kb"), _rad() + 4, _p("edge"), 1, 24, 12); ks.corner_radius_bottom_left = 0; ks.corner_radius_bottom_right = 0; kb.add_theme_stylebox_override("panel", ks)
 	_restyle_icons()
 	_set_active(active)   # styles des fenêtres, barres de titre, tâches et dock
 
@@ -2165,11 +2175,11 @@ func _toggle_notifs() -> void:
 	np_catcher = Control.new(); np_catcher.set_anchors_preset(Control.PRESET_FULL_RECT)
 	np_catcher.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed: _close_notifs())
 	add_child(np_catcher)
-	np_panel = PanelContainer.new(); np_panel.add_theme_stylebox_override("panel", _box(_p("menu"), 14, _p("edge"), 1, 24, 12)); add_child(np_panel)
+	np_panel = PanelContainer.new(); np_panel.add_theme_stylebox_override("panel", _box(_p("menu"), _rad() + 4, _p("edge"), 1, 28, 14)); add_child(np_panel)
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 8); np_panel.add_child(v)
 	var h := HBoxContainer.new(); v.add_child(h)
 	var t := Label.new(); t.text = "Notifications"; t.add_theme_font_size_override("font_size", 19); t.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h.add_child(t)
-	var clr := _mk_btn("Tout effacer", 0, 34); clr.theme_type_variation = "Flat"; clr.add_theme_font_size_override("font_size", 15)
+	var clr := _mk_btn("Tout effacer", 0, 40); clr.theme_type_variation = "Flat"; clr.add_theme_font_size_override("font_size", 15)
 	clr.pressed.connect(func(): notifs.clear(); _close_notifs()); h.add_child(clr)
 	var sc := ScrollContainer.new(); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	var lw := minf(330.0, size.x - 40.0)

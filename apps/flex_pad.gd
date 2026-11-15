@@ -1,4 +1,5 @@
 extends PanelContainer
+const UI = preload("res://apps/ui.gd")
 ## Pavé tactile du bas de l'écran (mode Flex d'un pliable, ou réglage « pavé tactile »).
 ## - un doigt qui glisse : déplace le curseur dans la moitié haute ; appui bref = clic ; appui long = clic droit
 ## - roulette verticale (à droite) et horizontale (en dessous) : défilement
@@ -53,16 +54,16 @@ class Wheel extends Control:
 		if ev is InputEventMouse: _last_pos = ev.position
 	var _last_pos := Vector2.ZERO
 	func _draw() -> void:
-		draw_rect(Rect2(Vector2.ZERO, size), Color("1d2230"), true)
-		draw_rect(Rect2(Vector2.ZERO, size), Color(1, 1, 1, 0.1), false, 1.0)
+		draw_rect(Rect2(Vector2.ZERO, size), UI.p("card"), true)
+		draw_rect(Rect2(Vector2.ZERO, size), UI.p("edge"), false, 1.0)
 		var n := int((size.x if horizontal else size.y) / 14.0) + 2
 		for i in n:
 			var o := fposmod(_off, 14.0) + i * 14.0 - 14.0
-			if horizontal: draw_line(Vector2(o, 8), Vector2(o, size.y - 8), Color(1, 1, 1, 0.25), 2.0)
-			else: draw_line(Vector2(8, o), Vector2(size.x - 8, o), Color(1, 1, 1, 0.25), 2.0)
+			if horizontal: draw_line(Vector2(o, 8), Vector2(o, size.y - 8), Color(UI.p("ov"), 0.25), 2.0)
+			else: draw_line(Vector2(8, o), Vector2(size.x - 8, o), Color(UI.p("ov"), 0.25), 2.0)
 
 func _ready() -> void:
-	var sb := StyleBoxFlat.new(); sb.bg_color = Color("141824"); sb.border_color = Color(1, 1, 1, 0.12); sb.border_width_top = 1
+	var sb := StyleBoxFlat.new(); sb.bg_color = UI.p("bar"); sb.border_color = UI.p("edge"); sb.border_width_top = 1
 	add_theme_stylebox_override("panel", sb)
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 8); add_child(v)
 	var m := MarginContainer.new(); m.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -71,10 +72,10 @@ func _ready() -> void:
 	v.add_child(m)
 	var top := HBoxContainer.new(); top.add_theme_constant_override("separation", 8); m.add_child(top)
 	_pad = PanelContainer.new(); _pad.size_flags_horizontal = Control.SIZE_EXPAND_FILL; _pad.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	var ps := StyleBoxFlat.new(); ps.bg_color = Color("1d2230"); ps.set_corner_radius_all(14); ps.border_color = Color(1, 1, 1, 0.1); ps.set_border_width_all(1)
+	var ps := StyleBoxFlat.new(); ps.bg_color = UI.p("card"); ps.set_corner_radius_all(UI.rad(2)); ps.border_color = UI.p("edge"); ps.set_border_width_all(1)
 	_pad.add_theme_stylebox_override("panel", ps); top.add_child(_pad)
 	var l := Label.new(); l.text = "Pavé tactile\nglisse · touche = clic · appui long = clic droit\n2 doigts = zoom"; l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; l.add_theme_color_override("font_color", Color(1, 1, 1, 0.3)); l.mouse_filter = Control.MOUSE_FILTER_IGNORE; _pad.add_child(l)
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; l.add_theme_color_override("font_color", Color(UI.p("muted"), 0.7)); l.mouse_filter = Control.MOUSE_FILTER_IGNORE; _pad.add_child(l)
 	_pad.gui_input.connect(_pad_input)
 	var wv := Wheel.new(); _wv = wv; wv.custom_minimum_size.x = 60; wv.step.connect(func(d: int): _wheel(MOUSE_BUTTON_WHEEL_DOWN if d > 0 else MOUSE_BUTTON_WHEEL_UP)); top.add_child(wv)
 	var hr := HBoxContainer.new(); hr.add_theme_constant_override("separation", 8); hr.custom_minimum_size.y = 52; v.add_child(hr)

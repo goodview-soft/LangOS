@@ -119,7 +119,7 @@ func toggle() -> void:
 	catcher = Control.new(); catcher.set_anchors_preset(Control.PRESET_FULL_RECT)
 	catcher.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed: close())
 	m.add_child(catcher)
-	panel = PanelContainer.new(); panel.add_theme_stylebox_override("panel", m._box(m._p("menu"), m._rad() + 4, m.ACCENT, 1, 28, 14))
+	panel = PanelContainer.new(); panel.add_theme_stylebox_override("panel", m._box(m._p("menu"), m._rad() + 4, m._p("edge"), 1, 28, 14))
 	m.add_child(panel)
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 6); panel.add_child(v)
 	field = LineEdit.new(); field.placeholder_text = "Rechercher apps, fichiers, notes, commandes…"; field.custom_minimum_size = Vector2(minf(560.0, m.size.x - 40.0), 46)
@@ -158,7 +158,7 @@ func _show_results(r: Array) -> void:
 	res = r.slice(0, 9); sel = clampi(sel, 0, maxi(0, res.size() - 1))
 	for c in box.get_children(): box.remove_child(c); c.queue_free()
 	for i in res.size():
-		var b: Button = m._mk_btn("%s   ·  %s   %s" % [res[i][0], res[i][1], res[i][2]], 0, 38); b.theme_type_variation = "Flat"; b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		var b: Button = m._mk_btn("%s   ·  %s   %s" % [res[i][0], res[i][1], res[i][2]], 0, 40); b.theme_type_variation = "Flat"; b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.add_theme_font_size_override("font_size", 16); b.clip_text = true; b.pressed.connect(run.bind(i)); b.focus_mode = Control.FOCUS_NONE; box.add_child(b)
 	_paint()
 	panel.size = panel.get_combined_minimum_size()

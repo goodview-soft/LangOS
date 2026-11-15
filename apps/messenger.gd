@@ -1,12 +1,11 @@
 extends Control
+const UI = preload("res://apps/ui.gd")
 ## Messenger : discussion et échange de fichiers (images, vidéos, musique…) entre appareils du réseau local.
 ## Découverte : balises UDP en broadcast (port 4350). Échanges : TCP direct (port 4351), sans serveur ni compte.
 ## Les fichiers reçus demandent toujours une acceptation. Les échanges ne sont pas chiffrés : réseau de confiance seulement.
 
 const BEACON := "LM1"
 const CHUNK := 524288
-const ACCENT := Color("5aa2ff")
-const MUTED := Color("8f9bb3")
 const STATUS := [["En ligne", "#34d399"], ["Absent", "#fbbf24"], ["Occupé", "#f87171"], ["Invisible", "#6b7488"]]
 const IMG_EXT := ["png", "jpg", "jpeg", "webp", "bmp", "gif"]
 
@@ -98,7 +97,7 @@ func _build_ui() -> void:
 	var root := HBoxContainer.new(); root.add_theme_constant_override("separation", 12); m.add_child(root)
 	# Gauche : profil + contacts
 	var left := VBoxContainer.new(); left.custom_minimum_size.x = 250; left.add_theme_constant_override("separation", 8); root.add_child(left)
-	var prof := PanelContainer.new(); prof.add_theme_stylebox_override("panel", _sb(Color("1d2330"), 12, 10)); left.add_child(prof)
+	var prof := PanelContainer.new(); prof.add_theme_stylebox_override("panel", _sb(UI.p("card"), UI.rad(), 10)); left.add_child(prof)
 	var pv := VBoxContainer.new(); pv.add_theme_constant_override("separation", 6); prof.add_child(pv)
 	name_edit = LineEdit.new(); name_edit.text = my_name; name_edit.virtual_keyboard_enabled = false
 	name_edit.max_length = 24; name_edit.text_changed.connect(func(t: String): my_name = t.strip_edges() if t.strip_edges() != "" else _device_name(); _save_profile())
@@ -108,17 +107,17 @@ func _build_ui() -> void:
 	status_opt.select(my_status)
 	status_opt.item_selected.connect(func(i: int): my_status = i; _save_profile(); beacon_t = 0.0; _broadcast_status())
 	pv.add_child(status_opt)
-	var cs := Label.new(); cs.text = "Contacts"; cs.add_theme_color_override("font_color", MUTED); left.add_child(cs)
+	var cs := Label.new(); cs.text = "Contacts"; cs.theme_type_variation = "Muted"; left.add_child(cs)
 	var sc := ScrollContainer.new(); sc.size_flags_vertical = SIZE_EXPAND_FILL; sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; left.add_child(sc)
 	contacts_box = VBoxContainer.new(); contacts_box.size_flags_horizontal = SIZE_EXPAND_FILL; contacts_box.add_theme_constant_override("separation", 2); sc.add_child(contacts_box)
 	left.add_child(_btn("📂 Dossier reçu", func(): OS.shell_show_in_file_manager(ProjectSettings.globalize_path(recv_dir)), "Flat"))
 	# Droite : conversation
 	var right := VBoxContainer.new(); right.size_flags_horizontal = SIZE_EXPAND_FILL; right.add_theme_constant_override("separation", 8); root.add_child(right)
 	head_lbl = Label.new(); head_lbl.add_theme_font_size_override("font_size", 20); head_lbl.text = "Choisis un contact"; right.add_child(head_lbl)
-	var pc := PanelContainer.new(); pc.size_flags_vertical = SIZE_EXPAND_FILL; pc.add_theme_stylebox_override("panel", _sb(Color("171b25"), 12, 8)); right.add_child(pc)
+	var pc := PanelContainer.new(); pc.size_flags_vertical = SIZE_EXPAND_FILL; pc.add_theme_stylebox_override("panel", _sb(UI.p("field"), UI.rad(), 8)); right.add_child(pc)
 	scroll = ScrollContainer.new(); scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; pc.add_child(scroll)
 	chat_box = VBoxContainer.new(); chat_box.size_flags_horizontal = SIZE_EXPAND_FILL; chat_box.add_theme_constant_override("separation", 6); scroll.add_child(chat_box)
-	note = Label.new(); note.add_theme_font_size_override("font_size", 13); note.add_theme_color_override("font_color", MUTED); right.add_child(note)
+	note = Label.new(); note.add_theme_font_size_override("font_size", 13); note.theme_type_variation = "Muted"; right.add_child(note)
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 6); right.add_child(row)
 	row.add_child(_btn("📎", _pick_files, "", 48))
 	input = LineEdit.new(); input.placeholder_text = "Écrire un message…"; input.size_flags_horizontal = SIZE_EXPAND_FILL
@@ -138,7 +137,7 @@ func _sb(c: Color, r: int, m: int) -> StyleBoxFlat:
 
 func _status_color(id: String) -> Color:
 	if peers.has(id): return Color(STATUS[clampi(peers[id]["status"], 0, 2)][1])
-	return Color("4b5263")
+	return UI.p("muted")
 
 
 func _rebuild_contacts() -> void:
@@ -155,12 +154,12 @@ func _rebuild_contacts() -> void:
 		b.add_theme_color_override("font_color", _status_color(id)); b.add_theme_color_override("font_hover_color", _status_color(id))
 		b.add_theme_font_size_override("font_size", 17)
 		if id == cur:
-			var sb := _sb(Color(1, 1, 1, 0.1), 8, 8); b.add_theme_stylebox_override("normal", sb)
+			var sb := _sb(Color(UI.p("ov"), 0.1), 8, 8); b.add_theme_stylebox_override("normal", sb)
 		b.pressed.connect(_select.bind(id))
 		contacts_box.add_child(b)
 	if arr.is_empty():
 		var l := Label.new(); l.text = "Aucun appareil trouvé sur le réseau.\nL'autre appareil doit aussi ouvrir Messenger."
-		l.add_theme_color_override("font_color", MUTED); l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; contacts_box.add_child(l)
+		l.theme_type_variation = "Muted"; l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; contacts_box.add_child(l)
 
 
 func _nm(id: String) -> String:
@@ -227,12 +226,12 @@ func _add_bubble(m: Dictionary) -> void:
 	var kind: String = m.get("kind", "text")
 	var row := HBoxContainer.new(); chat_box.add_child(row)
 	if kind == "sys":
-		var l := Label.new(); l.text = str(m.get("text", "")); l.add_theme_color_override("font_color", MUTED); l.add_theme_font_size_override("font_size", 13)
+		var l := Label.new(); l.text = str(m.get("text", "")); l.theme_type_variation = "Muted"; l.add_theme_font_size_override("font_size", 13)
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; l.size_flags_horizontal = SIZE_EXPAND_FILL; row.add_child(l); return
 	if mine:
 		var sp := Control.new(); sp.size_flags_horizontal = SIZE_EXPAND_FILL; row.add_child(sp)
 	var bub := PanelContainer.new()
-	bub.add_theme_stylebox_override("panel", _sb(Color("2b5fb8") if mine else Color("2a3040"), 14, 10))
+	bub.add_theme_stylebox_override("panel", _sb(UI.bubble_bg(mine), UI.rad(2), 10)); bub.theme = UI.bubble_theme(mine)
 	row.add_child(bub)
 	if not mine:
 		var sp2 := Control.new(); sp2.size_flags_horizontal = SIZE_EXPAND_FILL; row.add_child(sp2)
@@ -245,7 +244,7 @@ func _add_bubble(m: Dictionary) -> void:
 	elif kind == "file":
 		_file_bubble(v, m, mine)
 	var tl := Label.new(); tl.text = "%02d:%02d" % [ts["hour"], ts["minute"]]; tl.add_theme_font_size_override("font_size", 11)
-	tl.add_theme_color_override("font_color", Color(1, 1, 1, 0.5)); tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT; v.add_child(tl)
+	tl.add_theme_color_override("font_color", Color(UI.bubble_theme(mine).get_color("font_color", "Label"), 0.65)); tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT; v.add_child(tl)
 
 
 func _wrap_label(t: String) -> RichTextLabel:
@@ -269,7 +268,7 @@ func _file_bubble(v: VBoxContainer, m: Dictionary, mine: bool) -> void:
 			var tr := TextureRect.new(); tr.texture = ImageTexture.create_from_image(img); tr.stretch_mode = TextureRect.STRETCH_KEEP; v.add_child(tr)
 	var icon := "🖼" if ext in IMG_EXT else ("🎵" if ext in ["mp3", "ogg", "wav", "flac", "m4a"] else ("🎬" if ext in ["mp4", "mkv", "webm", "avi", "mov"] else "📄"))
 	var l := _wrap_label("%s %s  (%s)" % [icon, name, _human(int(m.get("size", 0)))]); v.add_child(l)
-	var st := Label.new(); st.add_theme_font_size_override("font_size", 13); st.add_theme_color_override("font_color", Color(1, 1, 1, 0.65)); v.add_child(st)
+	var st := Label.new(); st.add_theme_font_size_override("font_size", 13); st.theme_type_variation = "Muted"; v.add_child(st)
 	m["_lbl"] = st
 	var state: String = m.get("state", "")
 	match state:

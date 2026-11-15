@@ -1,4 +1,5 @@
 extends Control
+const UI = preload("res://apps/ui.gd")
 ## Périphériques et raccourcis : écrans, manettes (test en direct), audio, clavier/souris, disques, imprimantes, performances, raccourcis clavier.
 ## Les sections indisponibles (Android, pas de /proc, pas de lpstat…) sont masquées. Les fonctions statiques servent aussi aux tests.
 var m
@@ -98,7 +99,7 @@ func build() -> void:
 	if has_lp: list.append(["print", "Imprimantes"])
 	list.append(["perf", "Performances"]); list.append(["keys", "Raccourcis"])
 	for e in list:
-		var b: Button = m._mk_btn(e[1], 0, 38); b.name = e[0]; b.pressed.connect(show_tab.bind(e[0])); tabs.add_child(b)
+		var b: Button = m._mk_btn(e[1], 0, 40); b.name = e[0]; b.pressed.connect(show_tab.bind(e[0])); tabs.add_child(b)
 	show_tab(tab)
 
 func show_tab(t: String) -> void:
@@ -109,7 +110,7 @@ func show_tab(t: String) -> void:
 
 func _lbl(t: String, sz := 15, dim := false) -> Label:
 	var l := Label.new(); l.text = t; l.add_theme_font_size_override("font_size", sz); l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	if dim: l.add_theme_color_override("font_color", m.MUTED)
+	if dim: l.theme_type_variation = "Muted"
 	body.add_child(l); return l
 
 func _card() -> VBoxContainer:
@@ -120,7 +121,7 @@ func _card() -> VBoxContainer:
 
 func _line(c: Control, t: String, dim := false) -> Label:
 	var l := Label.new(); l.text = t; l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	if dim: l.add_theme_color_override("font_color", m.MUTED)
+	if dim: l.theme_type_variation = "Muted"
 	c.add_child(l); return l
 
 # --- Écrans
@@ -131,7 +132,7 @@ func _t_screens() -> void:
 		_line(c, "Écran %d%s" % [i + 1, "  (fenêtre ici)" if i == cur else ""])
 		_line(c, "%d x %d px%s, échelle %.1f" % [sz.x, sz.y, (", %.0f Hz" % hz) if hz > 0 else "", DisplayServer.screen_get_scale(i)], true)
 		if DisplayServer.get_screen_count() > 1 and i != cur:
-			var b: Button = m._mk_btn("Placer la fenêtre ici", 0, 34); b.pressed.connect(func(): DisplayServer.window_set_current_screen(i); show_tab("screens")); c.add_child(b)
+			var b: Button = m._mk_btn("Placer la fenêtre ici", 0, 40); b.pressed.connect(func(): DisplayServer.window_set_current_screen(i); show_tab("screens")); c.add_child(b)
 
 # --- Manettes (test en direct)
 func _t_pads() -> void:
@@ -187,7 +188,7 @@ func _t_disks() -> void:
 		var da := DirAccess.open(str(e["mp"]))
 		if da != null and da.get_space_left() > 0: free = ", %.1f Go libres" % (da.get_space_left() / 1073741824.0)
 		_line(c, "%s, %s%s" % [e["dev"], e["fs"], free], true)
-		var b: Button = m._mk_btn("Ouvrir dans Fichiers", 0, 34); b.pressed.connect(open_in_files.bind(str(e["mp"]))); c.add_child(b)
+		var b: Button = m._mk_btn("Ouvrir dans Fichiers", 0, 40); b.pressed.connect(open_in_files.bind(str(e["mp"]))); c.add_child(b)
 
 func open_in_files(p: String) -> void:
 	m._open_app("files")
@@ -207,7 +208,7 @@ func _t_perf() -> void:
 	var g := Control.new(); g.custom_minimum_size = Vector2(0, 110); g.size_flags_horizontal = Control.SIZE_EXPAND_FILL; c.add_child(g)
 	g.draw.connect(func():
 		g.draw_rect(Rect2(Vector2.ZERO, g.size), Color(0, 0, 0, 0.15))
-		for pair in [[hist_cpu, m.ACCENT, 100.0], [hist_tmp, Color("fbbf24"), 100.0]]:
+		for pair in [[hist_cpu, m.ACCENT, 100.0], [hist_tmp, UI.warn(), 100.0]]:
 			var pts := PackedVector2Array(); var h: Array = pair[0]
 			for i in h.size(): pts.append(Vector2(g.size.x * i / 59.0, g.size.y * (1.0 - clampf(float(h[i]) / pair[2], 0, 1))))
 			if pts.size() > 1: g.draw_polyline(pts, pair[1], 2.0, true))
@@ -237,10 +238,10 @@ func _t_keys() -> void:
 	var cur_group := ""
 	for a in d:
 		var grp: String = "Fixes" if d[a][2] else ("Applications" if a.begins_with("app:") else ("Profils" if a.begins_with("prof:") else "Actions"))
-		if grp != cur_group: cur_group = grp; var h := _lbl(grp.to_upper(), 13); h.add_theme_color_override("font_color", m.ACCENT)
+		if grp != cur_group: cur_group = grp; var h := _lbl(grp.to_upper(), 13); h.add_theme_color_override("font_color", UI.accent_text())
 		var row := HFlowContainer.new(); row.add_theme_constant_override("h_separation", 8); body.add_child(row)
 		var n := Label.new(); n.text = d[a][0]; n.custom_minimum_size.x = 200; row.add_child(n)
-		var b: Button = m._mk_btn(K.binding(a) if K.binding(a) != "" else "(aucune)", 190, 34); row.add_child(b)
+		var b: Button = m._mk_btn(K.binding(a) if K.binding(a) != "" else "(aucune)", 190, 40); row.add_child(b)
 		if d[a][2]: b.disabled = true; continue
 		b.pressed.connect(func():
 			b.text = "Appuyez sur une touche…"; msg.text = ""
@@ -250,9 +251,9 @@ func _t_keys() -> void:
 				var c: String = K.assign(a, s)
 				if c != "": _msg("Déjà utilisée par : " + str(d[c][0]) + " (non modifié)")
 				show_tab("keys"))
-		var r: Button = m._mk_btn("Défaut", 70, 34); r.pressed.connect(func(): K.reset(a); show_tab("keys")); row.add_child(r)
-		var x: Button = m._mk_btn("Aucune", 70, 34); x.pressed.connect(func(): K.assign(a, ""); show_tab("keys")); row.add_child(x)
-	_lbl("MANETTE", 13).add_theme_color_override("font_color", m.ACCENT)
+		var r: Button = m._mk_btn("Défaut", 70, 40); r.pressed.connect(func(): K.reset(a); show_tab("keys")); row.add_child(r)
+		var x: Button = m._mk_btn("Aucune", 70, 40); x.pressed.connect(func(): K.assign(a, ""); show_tab("keys")); row.add_child(x)
+	_lbl("MANETTE", 13).add_theme_color_override("font_color", UI.accent_text())
 	var acts := [["", "(aucune)"]]
 	for a in d: acts.append([a, d[a][0]])
 	var pm: Dictionary = m.set_cfg["padmap"]

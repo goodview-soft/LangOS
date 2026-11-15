@@ -32,7 +32,7 @@ func _ready() -> void:
 		b.focus_mode = Control.FOCUS_NONE; b.pressed.connect(_set_mode.bind(i)); tabs.add_child(b)
 	big = Label.new(); big.add_theme_font_size_override("font_size", 64); big.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; big.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	big.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; vb.add_child(big)
-	info = Label.new(); info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; info.add_theme_color_override("font_color", Color("8f9bb3")); vb.add_child(info)
+	info = Label.new(); info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; info.theme_type_variation = "Muted"; vb.add_child(info)
 	presets = HBoxContainer.new(); presets.add_theme_constant_override("separation", 6); vb.add_child(presets)
 	for m in [1, 5, 10, 15, 30]:
 		var b := Button.new(); b.text = "%d min" % m; b.custom_minimum_size.y = 48; b.size_flags_horizontal = Control.SIZE_EXPAND_FILL; b.focus_mode = Control.FOCUS_NONE

@@ -2,7 +2,6 @@ extends Control
 ## Lanceur Android : grille des applications installées (icônes + recherche). Un appui lance l'application.
 ## Utilise le plugin natif « LangLauncher » (absent sur PC : un message l'indique).
 
-const MUTED := Color("8f9bb3")
 var lp: Object
 var flow: HFlowContainer
 var search: LineEdit
@@ -12,7 +11,7 @@ func _ready() -> void:
 	var v := VBoxContainer.new(); v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); v.add_theme_constant_override("separation", 8); add_child(v)
 	if not (OS.get_name() == "Android" and Engine.has_singleton("LangLauncher")):
 		var l := Label.new(); l.text = "Les applications Android ne sont disponibles que sur Android\n(avec l'APK récente de LangOS)."; l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		l.size_flags_vertical = Control.SIZE_EXPAND_FILL; l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; l.add_theme_color_override("font_color", MUTED); v.add_child(l); return
+		l.size_flags_vertical = Control.SIZE_EXPAND_FILL; l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; l.theme_type_variation = "Muted"; v.add_child(l); return
 	lp = Engine.get_singleton("LangLauncher")
 	search = LineEdit.new(); search.placeholder_text = "Rechercher une application…"; search.text_changed.connect(_filter); v.add_child(search)
 	var sc := ScrollContainer.new(); sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; v.add_child(sc)

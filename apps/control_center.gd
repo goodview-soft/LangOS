@@ -11,7 +11,7 @@ func toggle(anchor: Control) -> void:
 	catcher = Control.new(); catcher.set_anchors_preset(Control.PRESET_FULL_RECT)
 	catcher.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed: close())
 	m.add_child(catcher)
-	panel = PanelContainer.new(); panel.add_theme_stylebox_override("panel", m._box(m._p("menu"), m._rad() + 4, m._p("edge"), 1, 22, 14))
+	panel = PanelContainer.new(); panel.add_theme_stylebox_override("panel", m._box(m._p("menu"), m._rad() + 4, m._p("edge"), 1, 28, 14))
 	m.add_child(panel)
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 10); panel.add_child(v)
 	var t := Label.new(); t.text = "Centre de contrôle"; t.add_theme_font_size_override("font_size", 18); v.add_child(t)
@@ -28,14 +28,14 @@ func toggle(anchor: Control) -> void:
 	var dl := Label.new(); dl.text = "Bureaux"; dl.add_theme_font_size_override("font_size", 14); v.add_child(dl)
 	var vd := HBoxContainer.new(); vd.add_theme_constant_override("separation", 6); v.add_child(vd)
 	for i in m.n_vd:
-		var b: Button = m._mk_btn(str(i + 1), 44, 38)
+		var b: Button = m._mk_btn(str(i + 1), 44, 40)
 		if i == m.cur_vd: b.modulate = m.ACCENT.lightened(0.3)
 		b.pressed.connect(func(): m._goto_vd(i); close())
 		vd.add_child(b)
 	var pl := Label.new(); pl.text = "Profils"; pl.add_theme_font_size_override("font_size", 14); v.add_child(pl)
 	var pf := HFlowContainer.new(); pf.add_theme_constant_override("h_separation", 6); pf.add_theme_constant_override("v_separation", 6); v.add_child(pf)
 	for i in m.prof.all().size():
-		var pb: Button = m._mk_btn(str(m.prof.all()[i]["name"]), 0, 36); pb.pressed.connect(func(): close(); m.prof.activate(i)); pf.add_child(pb)
+		var pb: Button = m._mk_btn(str(m.prof.all()[i]["name"]), 0, 40); pb.pressed.connect(func(): close(); m.prof.activate(i)); pf.add_child(pb)
 	var tray = m.tray_node
 	if tray != null and int(tray.batt) >= 0:
 		var bl := Label.new(); bl.text = "Batterie : %d %%%s" % [int(tray.batt), " (en charge)" if tray.charging else ""]; v.add_child(bl)

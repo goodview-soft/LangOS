@@ -49,7 +49,7 @@ func _ready() -> void:
 	row.add_child(from_opt); row.add_child(sw); row.add_child(to_opt)
 	out = Label.new(); out.add_theme_font_size_override("font_size", 30); out.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; vb.add_child(out)
 	var sc := ScrollContainer.new(); sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; vb.add_child(sc)
-	all = Label.new(); all.size_flags_horizontal = Control.SIZE_EXPAND_FILL; all.add_theme_color_override("font_color", Color("8f9bb3")); sc.add_child(all)
+	all = Label.new(); all.size_flags_horizontal = Control.SIZE_EXPAND_FILL; all.theme_type_variation = "Muted"; sc.add_child(all)
 	_fill_units()
 
 func _fill_units() -> void:

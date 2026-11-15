@@ -3,6 +3,7 @@ extends Node
 ## Chat IA : modèles locaux qui tournent sur l'appareil (llama.cpp via GDLlama), sans réseau ni compte.
 ## Historique partagé entre l'application « Chat IA » et l'overlay. Option « Page web » : le modèle voit la page du navigateur.
 
+const UI = preload("res://apps/ui.gd")
 signal changed
 signal busy_changed(on: bool)
 
@@ -161,8 +162,8 @@ static func bubble(role: String, text: String, maxw: float, fs: int, font: Font)
 	if mine:
 		var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; row.add_child(sp)
 	var pc := PanelContainer.new()
-	var sb := StyleBoxFlat.new(); sb.bg_color = Color("2b5fb8") if mine else Color("2a3040"); sb.set_corner_radius_all(12); sb.set_content_margin_all(9)
-	pc.add_theme_stylebox_override("panel", sb); row.add_child(pc)
+	var sb := StyleBoxFlat.new(); sb.bg_color = UI.bubble_bg(mine); sb.set_corner_radius_all(UI.rad(2)); sb.set_content_margin_all(9)
+	pc.add_theme_stylebox_override("panel", sb); pc.theme = UI.bubble_theme(mine); row.add_child(pc)
 	var l := RichTextLabel.new(); l.text = text; l.fit_content = true; l.scroll_active = false; l.selection_enabled = true; l.context_menu_enabled = true
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; l.add_theme_font_size_override("normal_font_size", fs)
 	var w := font.get_string_size(text.get_slice("\n", 0), HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x if font else maxw

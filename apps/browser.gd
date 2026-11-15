@@ -7,8 +7,7 @@ extends Control
 const URL_ZIP := "https://github.com/Lecrapouille/gdcef/releases/download/v0.21.0-godot4/gdcef-0.21.0_godot-4.7.zip"
 const DIR := "user://cef"
 const HOME := "https://duckduckgo.com/"
-const ACCENT := Color("5aa2ff")
-const MUTED := Color("8f9bb3")
+const UI = preload("res://apps/ui.gd")
 
 var external: Callable                 # ouvre le navigateur du système (donné par le bureau)
 var cef: Object
@@ -60,7 +59,7 @@ func _build_install() -> void:
 	box = VBoxContainer.new(); box.custom_minimum_size.x = 420; box.add_theme_constant_override("separation", 12); cc.add_child(box)
 	var t := Label.new(); t.text = "Navigateur Chromium"; t.add_theme_font_size_override("font_size", 30); t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; box.add_child(t)
 	info = Label.new(); info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	info.add_theme_color_override("font_color", MUTED); box.add_child(info)
+	info.theme_type_variation = "Muted"; box.add_child(info)
 	if _supported():
 		info.text = "Le navigateur intégré (Chromium) n'est pas encore installé.\nTéléchargement unique d'environ 1 Go, puis il s'ouvre dans cette fenêtre."
 		inst_btn = Button.new(); inst_btn.text = "Télécharger et installer"; inst_btn.custom_minimum_size.y = 50; inst_btn.pressed.connect(_download); box.add_child(inst_btn)
@@ -382,7 +381,7 @@ func _show_panel(title: String, builder: Callable) -> void:
 func _row(body: Control, text: String, buttons: Array, muted := false) -> void:
 	var h := HBoxContainer.new(); body.add_child(h)
 	var l := Label.new(); l.text = text; l.clip_text = true; l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	if muted: l.add_theme_color_override("font_color", MUTED)
+	if muted: l.theme_type_variation = "Muted"
 	h.add_child(l)
 	for b in buttons:
 		var bt := Button.new(); bt.text = b[0]; bt.pressed.connect(b[1]); h.add_child(bt)
@@ -505,9 +504,9 @@ func _start_android() -> void:
 	wv = Engine.get_singleton("LangWebView")
 	wv.connect("url_changed", func(u: String): _sync_url(u))
 	_build_ui(44)
-	shade = ColorRect.new(); shade.color = Color("1b1f2a"); shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); shade.visible = false; view.add_child(shade)
+	shade = ColorRect.new(); shade.color = UI.p("popup"); shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); shade.visible = false; view.add_child(shade)
 	var sl := Label.new(); sl.text = "Navigateur en arrière-plan\nClique ici pour le remettre au premier plan"; sl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sl.add_theme_color_override("font_color", MUTED); sl.set_anchors_and_offsets_preset(Control.PRESET_CENTER); sl.grow_horizontal = Control.GROW_DIRECTION_BOTH; sl.grow_vertical = Control.GROW_DIRECTION_BOTH; shade.add_child(sl)
+	sl.theme_type_variation = "Muted"; sl.set_anchors_and_offsets_preset(Control.PRESET_CENTER); sl.grow_horizontal = Control.GROW_DIRECTION_BOTH; sl.grow_vertical = Control.GROW_DIRECTION_BOTH; shade.add_child(sl)
 	shade.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed: get_tree().current_scene._show("chromium"))
 	_refresh_tabs()
 	await get_tree().process_frame; await get_tree().process_frame

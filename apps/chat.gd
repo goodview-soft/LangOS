@@ -1,4 +1,5 @@
 extends Control
+const UI = preload("res://apps/ui.gd")
 ## Application « Chat IA » : même conversation que l'overlay (partagée via ChatCore).
 
 var core: ChatCore
@@ -18,7 +19,7 @@ func _ready() -> void:
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 10); m.add_child(v)
 	var top := HBoxContainer.new(); top.add_theme_constant_override("separation", 8); v.add_child(top)
 	var ttl := Label.new(); ttl.text = "Assistant IA"; ttl.add_theme_font_size_override("font_size", 20); ttl.size_flags_horizontal = SIZE_EXPAND_FILL; top.add_child(ttl)
-	status = Label.new(); status.add_theme_color_override("font_color", Color("8f9bb3")); top.add_child(status)
+	status = Label.new(); status.theme_type_variation = "Muted"; top.add_child(status)
 	model_opt = OptionButton.new(); model_opt.focus_mode = Control.FOCUS_NONE; model_opt.item_selected.connect(func(i: int): core.set_model(str(core.available[i]))); top.add_child(model_opt)
 	var pg := CheckButton.new(); pg.text = "Page web"; pg.focus_mode = Control.FOCUS_NONE; pg.tooltip_text = "Le modèle voit la page du navigateur et peut ouvrir un site"
 	pg.button_pressed = core.page_ctx; pg.toggled.connect(func(on: bool): core.page_ctx = on); top.add_child(pg)
@@ -27,7 +28,7 @@ func _ready() -> void:
 	dl_btn.visible = false; dl_btn.pressed.connect(func(): core.download_model()); top.add_child(dl_btn)
 	var nb := Button.new(); nb.text = "Nouvelle discussion"; nb.theme_type_variation = "Flat"; nb.focus_mode = Control.FOCUS_NONE; nb.pressed.connect(func(): core.clear()); top.add_child(nb)
 	var pc := PanelContainer.new(); pc.size_flags_vertical = SIZE_EXPAND_FILL
-	var sb := StyleBoxFlat.new(); sb.bg_color = Color("171b25"); sb.set_corner_radius_all(12); sb.set_content_margin_all(10); pc.add_theme_stylebox_override("panel", sb); v.add_child(pc)
+	var sb := StyleBoxFlat.new(); sb.bg_color = UI.p("field"); sb.set_corner_radius_all(UI.rad()); sb.set_content_margin_all(10); pc.add_theme_stylebox_override("panel", sb); v.add_child(pc)
 	scroll = ScrollContainer.new(); scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; pc.add_child(scroll)
 	box = VBoxContainer.new(); box.size_flags_horizontal = SIZE_EXPAND_FILL; box.add_theme_constant_override("separation", 8); scroll.add_child(box)
 	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 8); v.add_child(row)

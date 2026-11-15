@@ -67,7 +67,7 @@ func _new_ce() -> CodeEdit:
 	ce.indent_use_spaces = true; ce.indent_size = 4
 	ce.add_theme_font_override("font", mono); ce.add_theme_font_size_override("font_size", fsize)
 	ce.add_theme_color_override("background_color", _col("field", Color("171b25"))); ce.add_theme_color_override("font_color", _col("text", Color("e5e9f0")))
-	ce.add_theme_color_override("line_number_color", Color("6b7a99"))
+	ce.add_theme_color_override("line_number_color", _col("muted", Color("6b7a99")))
 	ce.gui_input.connect(_key)
 	return ce
 
@@ -168,7 +168,7 @@ func restore() -> bool:
 
 # ------------------------------------------------------------------ interface
 func _btn(t: String, w: float, f: Callable) -> Button:
-	var b := Button.new(); b.text = t; b.custom_minimum_size = Vector2(w, 38); b.focus_mode = Control.FOCUS_NONE; b.pressed.connect(f); return b
+	var b := Button.new(); b.text = t; b.custom_minimum_size = Vector2(w, 40); b.focus_mode = Control.FOCUS_NONE; b.pressed.connect(f); return b
 
 func _ready() -> void:
 	mono = SystemFont.new(); mono.font_names = PackedStringArray(["DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono", "monospace"])
@@ -193,7 +193,7 @@ func _ready() -> void:
 	find_bar.add_child(_btn("Remplacer", 86, func(): replace_one(find_in.text, rep_in.text)))
 	find_bar.add_child(_btn("Tout", 50, func(): replace_all(find_in.text, rep_in.text)))
 	stack = Control.new(); stack.size_flags_vertical = Control.SIZE_EXPAND_FILL; stack.clip_contents = true; vb.add_child(stack)
-	status = Label.new(); status.add_theme_color_override("font_color", Color("8f9bb3")); status.add_theme_font_size_override("font_size", 14); vb.add_child(status)
+	status = Label.new(); status.theme_type_variation = "Muted"; status.add_theme_font_size_override("font_size", 14); vb.add_child(status)
 	if not restore(): new_doc()
 	_timer = Timer.new(); _timer.wait_time = 5.0; _timer.autostart = true
 	_timer.timeout.connect(func(): if dirty_session: autosave())

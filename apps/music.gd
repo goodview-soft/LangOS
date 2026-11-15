@@ -6,7 +6,7 @@ const MUSIC_DIR := "user://music"
 const LIB_PATH := "user://library.json"
 const VOCAB_PATH := "user://vocab.json"
 const PRINT_TPL := "TRACK\t%(id)s\t%(title)s\t%(artist|NA)s\t%(track|NA)s\t%(uploader|NA)s\t%(duration|0)s"
-const ACCENT := Color("5aa2ff")
+const UI = preload("res://apps/ui.gd")
 const LANGS := [["Español", "spa", "Spanish", "espagnol"], ["English", "eng", "English", "anglais"], ["Français", "fra", "French", "français"],
 	["Italiano", "ita", "Italian", "italien"], ["Português", "por", "Portuguese", "portugais"], ["Nederlands", "nld", "Dutch", "néerlandais"], ["日本語", "jpn", "Japanese", "japonais"]]
 const ACC := {"à": "a", "á": "a", "â": "a", "ã": "a", "ä": "a", "å": "a", "ç": "c", "è": "e", "é": "e", "ê": "e", "ë": "e",
@@ -149,11 +149,11 @@ func _build_ui() -> void:
 	clip_chk = CheckBox.new(); clip_chk.text = "avec le clip"; clip_chk.focus_mode = Control.FOCUS_NONE; top.add_child(clip_chk)
 	dl_btn = _btn("Télécharger", _download, "Accent"); top.add_child(dl_btn)
 	status = Label.new(); status.add_theme_font_size_override("font_size", 13)
-	status.add_theme_color_override("font_color", Color("8f9bb3")); status.clip_text = true; root.add_child(status)
+	status.theme_type_variation = "Muted"; status.clip_text = true; root.add_child(status)
 	var hb := HBoxContainer.new(); hb.size_flags_vertical = SIZE_EXPAND_FILL
 	hb.add_theme_constant_override("separation", 12); root.add_child(hb)
 	# Bibliothèque
-	left = PanelContainer.new(); left.custom_minimum_size.x = 220; left.add_theme_stylebox_override("panel", _panel(Color("181c27"), 14, 10)); hb.add_child(left)
+	left = PanelContainer.new(); left.custom_minimum_size.x = 220; left.add_theme_stylebox_override("panel", _panel(UI.p("card"), UI.rad(2), 10)); hb.add_child(left)
 	var lv := VBoxContainer.new(); lv.add_theme_constant_override("separation", 8); left.add_child(lv)
 	var lt := Label.new(); lt.text = "Bibliothèque"; lt.add_theme_font_size_override("font_size", 18); lv.add_child(lt)
 	list = ItemList.new(); list.size_flags_vertical = SIZE_EXPAND_FILL
@@ -187,7 +187,7 @@ func _build_ui() -> void:
 	vh.add_child(_btn("Supprimer", _vocab_delete, "Flat")); vh.add_child(_btn("Fermer", _toggle_vocab, "Flat"))
 	vocab_list = ItemList.new(); vocab_list.size_flags_vertical = SIZE_EXPAND_FILL; vv.add_child(vocab_list)
 	# Carte mot
-	var wp := PanelContainer.new(); wp.custom_minimum_size.y = 128; wp.add_theme_stylebox_override("panel", _panel(Color("181c27"), 12, 10)); right.add_child(wp)
+	var wp := PanelContainer.new(); wp.custom_minimum_size.y = 128; wp.add_theme_stylebox_override("panel", _panel(UI.p("card"), UI.rad(), 10)); right.add_child(wp)
 	var wh := HBoxContainer.new(); wh.add_theme_constant_override("separation", 10); wp.add_child(wh)
 	word_view = RichTextLabel.new(); word_view.bbcode_enabled = true; word_view.selection_enabled = true; word_view.context_menu_enabled = true
 	word_view.size_flags_horizontal = SIZE_EXPAND_FILL; word_view.add_theme_font_size_override("normal_font_size", 17)
@@ -195,14 +195,14 @@ func _build_ui() -> void:
 	wh.add_child(word_view)
 	star_btn = _btn("★ Apprendre", _toggle_star, "Accent", 150); star_btn.visible = false; wh.add_child(star_btn)
 	# Transport
-	var tbar := PanelContainer.new(); tbar.add_theme_stylebox_override("panel", _panel(Color("181c27"), 14, 8)); root.add_child(tbar)
+	var tbar := PanelContainer.new(); tbar.add_theme_stylebox_override("panel", _panel(UI.p("card"), UI.rad(2), 8)); root.add_child(tbar)
 	var tp := HBoxContainer.new(); tp.add_theme_constant_override("separation", 8); tbar.add_child(tp)
 	tp.add_child(_ibtn("prev", func(): _play(_wrap(current - 1)), 44, 44, 20))
 	play_btn = _btn("", _toggle); play_btn.custom_minimum_size = Vector2(56, 56)
 	for st in ["normal", "hover", "pressed"]:
-		var ps := StyleBoxFlat.new(); ps.bg_color = Color("5aa2ff") if st != "hover" else Color("7bb5ff"); ps.set_corner_radius_all(28); play_btn.add_theme_stylebox_override(st, ps)
+		var ps := StyleBoxFlat.new(); ps.bg_color = UI.accent() if st != "hover" else UI.accent().lightened(0.2); ps.set_corner_radius_all(28); play_btn.add_theme_stylebox_override(st, ps)
 	play_btn.icon = _ico("play"); play_btn.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER; play_btn.add_theme_constant_override("icon_max_width", 24)
-	for c in ["icon_normal_color", "icon_hover_color", "icon_pressed_color"]: play_btn.add_theme_color_override(c, Color("0b1220"))
+	for c in ["icon_normal_color", "icon_hover_color", "icon_pressed_color"]: play_btn.add_theme_color_override(c, UI.on(UI.accent()))
 	tp.add_child(play_btn)
 	tp.add_child(_ibtn("next", func(): _play(_wrap(current + 1)), 44, 44, 20))
 	time_lbl = Label.new(); time_lbl.text = "0:00 / 0:00"; time_lbl.custom_minimum_size.x = 96; tp.add_child(time_lbl)

@@ -2,8 +2,9 @@ extends Control
 ## Zone d'état de la barre des tâches : réseau (Wi-Fi / mobile / filaire / aucun) et batterie, comme sur un PC.
 ## Android : plugin natif « LangLauncher ».systemStatus() ; Linux : /sys/class/power_supply et /sys/class/net.
 
-const OK := Color("e5e9f0")
-const DIM := Color(1, 1, 1, 0.3)
+const UI = preload("res://apps/ui.gd")
+var OK := Color("e5e9f0")
+var DIM := Color(1, 1, 1, 0.3)
 var batt := -1            # % ou -1 si pas de batterie
 var charging := false
 var net := "none"         # wifi | cell | eth | none
@@ -44,6 +45,7 @@ func _poll_linux() -> void:
 			if a.count(".") == 3 and not a.begins_with("127.") and not a.begins_with("169.254."): net = "eth"; break
 
 func _draw() -> void:
+	OK = UI.p("text"); DIM = Color(OK, 0.3)
 	var h := size.y
 	var x := 4.0
 	_draw_net(Vector2(x + 12, h / 2.0))
@@ -68,12 +70,12 @@ func _draw_net(c: Vector2) -> void:
 		_:
 			var base := c + Vector2(0, 8)
 			for i in 3: draw_arc(base, 5.0 + i * 5.0, deg_to_rad(225), deg_to_rad(315), 12, DIM, 2.0)
-			draw_line(c + Vector2(-10, -8), c + Vector2(10, 10), Color("f87171"), 2.5)
+			draw_line(c + Vector2(-10, -8), c + Vector2(10, 10), UI.err(), 2.5)
 
 func _draw_batt(p: Vector2) -> void:
 	var w := 26.0
 	var h := 13.0
-	var col := Color("34d399") if batt > 30 else (Color("fbbf24") if batt > 15 else Color("f87171"))
+	var col := UI.ok() if batt > 30 else (UI.warn() if batt > 15 else UI.err())
 	draw_rect(Rect2(p.x, p.y - h / 2.0, w, h), OK, false, 1.6)
 	draw_rect(Rect2(p.x + w + 1, p.y - 3.0, 2.5, 6.0), OK)
 	draw_rect(Rect2(p.x + 2.2, p.y - h / 2.0 + 2.2, (w - 4.4) * clampf(batt / 100.0, 0.0, 1.0), h - 4.4), col)

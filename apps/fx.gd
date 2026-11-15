@@ -148,7 +148,7 @@ func appearance_card(page: Control) -> void:
 	var c: VBoxContainer = m._s_card(page, "Apparence")
 	var sw := HFlowContainer.new(); sw.add_theme_constant_override("h_separation", 8); sw.add_theme_constant_override("v_separation", 8)
 	for h in ACCENTS:
-		var b: Button = m._mk_btn("", 36, 36)
+		var b: Button = m._mk_btn("", 36, 40)
 		for s in ["normal", "hover", "pressed"]: b.add_theme_stylebox_override(s, m._box(Color(h), 18, Color(1, 1, 1, 0.5 if s != "normal" else 0.0), 2))
 		b.pressed.connect(func(): set_accent(Color(h)))
 		sw.add_child(b)

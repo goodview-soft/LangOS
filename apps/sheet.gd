@@ -424,7 +424,7 @@ func _draw_grid() -> void:
 			if not cells.has(k): continue
 			var v: Variant = value(k)
 			var col := txt
-			if v is String and v.begins_with("#"): col = Color("f87171")
+			if v is String and v.begins_with("#"): col = _c("err")
 			var s := show_val(k)
 			var al := HORIZONTAL_ALIGNMENT_RIGHT if v is float else HORIZONTAL_ALIGNMENT_LEFT
 			grid.draw_string(f, Vector2(HW + ci * CW + 4, y + RH - 9), s, al, CW - 8, fs, col)

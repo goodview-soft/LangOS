@@ -2,11 +2,11 @@ extends Control
 ## Échecs à deux joueurs (même écran). Clique une pièce : ses coups légaux s'affichent (points / cercles).
 ## Règles complètes : roque, prise en passant, promotion, échec, mat, pat.
 
+const UI = preload("res://apps/ui.gd")
 const LIGHT := Color("e8d9b5")
 const DARK := Color("a9794f")
 const SEL := Color(0.35, 0.65, 1.0, 0.55)
 const LAST := Color(1.0, 0.9, 0.2, 0.35)
-const MUTED := Color("8f9bb3")
 
 var b: Array = []            # 64 cases : "" ou "wP".."bK" (index = r*8+c, r=0 en haut = rang 8)
 var turn := "w"
@@ -47,7 +47,7 @@ func _ready() -> void:
 	resign_btn = Button.new(); resign_btn.text = "Abandonner"; resign_btn.custom_minimum_size.y = 40; resign_btn.visible = false
 	resign_btn.pressed.connect(func(): menu.send({"t": "resign"}); over = "fin"; over_msg = "Tu as abandonné."; _refresh()); side.add_child(resign_btn)
 	list = Label.new(); list.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	list.add_theme_color_override("font_color", MUTED); list.size_flags_vertical = Control.SIZE_EXPAND_FILL; side.add_child(list)
+	list.add_theme_color_override("font_color", UI.muted_c()); list.size_flags_vertical = Control.SIZE_EXPAND_FILL; side.add_child(list)
 	resized.connect(queue_redraw)
 	_new()
 	menu = GameMenu.new(); menu.game_id = "chess"; menu.title = "Échecs"; add_child(menu)
