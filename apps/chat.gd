@@ -19,6 +19,9 @@ func _ready() -> void:
 	var ttl := Label.new(); ttl.text = "Assistant IA local"; ttl.add_theme_font_size_override("font_size", 20); ttl.size_flags_horizontal = SIZE_EXPAND_FILL; top.add_child(ttl)
 	status = Label.new(); status.add_theme_color_override("font_color", Color("8f9bb3")); top.add_child(status)
 	model_opt = OptionButton.new(); model_opt.focus_mode = Control.FOCUS_NONE; model_opt.item_selected.connect(func(i: int): core.set_model(model_opt.get_item_text(i))); top.add_child(model_opt)
+	var pg := CheckButton.new(); pg.text = "Page web"; pg.focus_mode = Control.FOCUS_NONE; pg.tooltip_text = "Le modèle voit la page du navigateur et peut ouvrir un site"
+	pg.button_pressed = core.page_ctx; pg.toggled.connect(func(on: bool): core.page_ctx = on); top.add_child(pg)
+	core.changed.connect(func(): pg.set_pressed_no_signal(core.page_ctx))
 	var nb := Button.new(); nb.text = "Nouvelle discussion"; nb.theme_type_variation = "Flat"; nb.focus_mode = Control.FOCUS_NONE; nb.pressed.connect(func(): core.clear()); top.add_child(nb)
 	var pc := PanelContainer.new(); pc.size_flags_vertical = SIZE_EXPAND_FILL
 	var sb := StyleBoxFlat.new(); sb.bg_color = Color("171b25"); sb.set_corner_radius_all(12); sb.set_content_margin_all(10); pc.add_theme_stylebox_override("panel", sb); v.add_child(pc)

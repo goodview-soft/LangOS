@@ -14,6 +14,9 @@ var model := ""
 var available: Array = []
 var messages: Array = []     # {role: user|assistant, content}
 var is_busy := false
+var browser_hook: Object            # navigateur ouvert (get_page_text / current_url / open_url) ou null
+var page_ctx := false               # « Page web » : le modèle voit la page du navigateur et peut ouvrir une adresse
+const PAGE_SYS := "\nLe navigateur de LangOS est ouvert. Tu vois le texte de la page affichée (tronqué) ci-dessous. Pour ouvrir un site, écris sur une ligne [[OUVRIR https://adresse]]."
 
 
 func _ready() -> void:
@@ -65,7 +68,14 @@ func ask(text: String) -> void:
 	if model == "":
 		_reply("⚠ Ollama introuvable. Lance-le sur le PC (ou règle l'adresse du serveur dans Paramètres).")
 		return
-	var msgs := [{"role": "system", "content": SYSTEM}]
+	var sys := SYSTEM
+	if page_ctx:
+		if browser_hook != null and is_instance_valid(browser_hook):
+			var pg: String = await browser_hook.get_page_text()
+			sys += PAGE_SYS + "\nAdresse : " + browser_hook.current_url() + "\nTexte de la page :\n" + pg
+		else:
+			sys += "\nL'option « Page web » est activée mais le navigateur n'est pas ouvert : dis à l'utilisateur d'ouvrir Logiciels > Chromium."
+	var msgs := [{"role": "system", "content": sys}]
 	msgs.append_array(messages.slice(maxi(0, messages.size() - 20)))
 	var body := {"model": model, "stream": false, "think": false, "keep_alive": "3m",
 		"options": {"temperature": 0.4, "num_predict": 600}, "messages": msgs}
@@ -79,6 +89,10 @@ func ask(text: String) -> void:
 	var d = JSON.parse_string(r[3].get_string_from_utf8())
 	var c := str(d.get("message", {}).get("content", "")) if d is Dictionary else ""
 	c = RegEx.create_from_string("(?s)<think>.*?</think>").sub(c, "", true).strip_edges()
+	if page_ctx and browser_hook != null and is_instance_valid(browser_hook):
+		var m := RegEx.create_from_string("\\[\\[OUVRIR\\s+([^\\]\\s]+)\\]\\]").search(c)
+		if m:
+			c = c.replace(m.get_string(), "").strip_edges() + "\n(ouverture de %s)" % m.get_string(1); browser_hook.open_url(m.get_string(1))
 	_reply(c if c != "" else "(réponse vide)")
 
 

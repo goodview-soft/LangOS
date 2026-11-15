@@ -162,7 +162,7 @@ func _start() -> void:
 	view = TextureRect.new(); view.size_flags_vertical = Control.SIZE_EXPAND_FILL; view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; view.focus_mode = Control.FOCUS_ALL; view.clip_contents = true
 	view.gui_input.connect(_view_input); view.resized.connect(func(): if browser: browser.resize(view.size)); body.add_child(view)
-	_build_side(body, tb)
+	_hook_chat(tb)
 	await get_tree().process_frame
 	browser = cef.create_browser(HOME, view, {"javascript": true, "webgl": true, "enable_ad_block": true})
 	if browser == null: _build_install(); info.text = "Impossible de créer le navigateur : " + str(cef.get_error()); return
@@ -208,7 +208,7 @@ func _start_android() -> void:
 	url_edit.text_submitted.connect(_go); tb.add_child(url_edit)
 	var body := HBoxContainer.new(); body.size_flags_vertical = Control.SIZE_EXPAND_FILL; body.add_theme_constant_override("separation", 0); v.add_child(body)
 	view = TextureRect.new(); view.size_flags_vertical = Control.SIZE_EXPAND_FILL; view.size_flags_horizontal = Control.SIZE_EXPAND_FILL; body.add_child(view)
-	_build_side(body, tb)
+	_hook_chat(tb)
 	await get_tree().process_frame; await get_tree().process_frame
 	wv_rect = _screen_rect()
 	wv.open(HOME, wv_rect.position.x, wv_rect.position.y, wv_rect.size.x, wv_rect.size.y); wv_shown = true
@@ -230,36 +230,28 @@ func _sync_wv() -> void:
 	var r := _screen_rect()
 	if r != wv_rect: wv_rect = r; wv.place(r.position.x, r.position.y, r.size.x, r.size.y)
 
-# ---------------------------------------------------------------- Assistant (panneau de droite)
-## Chat avec le modèle local du Chat IA (Ollama) qui voit la page affichée. Il peut aussi ouvrir une adresse :
-## s'il répond « [[OUVRIR adresse]] », la page correspondante est chargée.
+# ---------------------------------------------------------------- Lien avec Chat IA
+## Le navigateur se déclare auprès de ChatCore (browser_hook) : Chat IA peut alors lire la page affichée et ouvrir une adresse.
 
-const AI_SYS := "Tu es l'assistant du navigateur de LangOS. Tu reçois le texte de la page affichée (tronqué). Réponds en français, brièvement. Pour ouvrir un site, écris sur une ligne [[OUVRIR https://adresse]]."
-var side: VBoxContainer
-var ai_log: RichTextLabel
-var ai_in: LineEdit
-var ai_http: HTTPRequest
-var ai_hist: Array = []
-var ai_busy := false
+func _chat_core() -> Object:
+	var m := get_tree().current_scene
+	return m.get("chat_core") if m else null
 
-func _build_side(parent: Control, toolbar: Control) -> void:
-	var tg := Button.new(); tg.text = "💬"; tg.custom_minimum_size = Vector2(44, 38); tg.focus_mode = Control.FOCUS_NONE; tg.tooltip_text = "Assistant"
-	tg.pressed.connect(func(): side.visible = not side.visible); toolbar.add_child(tg)
-	side = VBoxContainer.new(); side.custom_minimum_size.x = 320; side.add_theme_constant_override("separation", 6); parent.add_child(side)
-	var ti := Label.new(); ti.text = "  Assistant"; ti.add_theme_color_override("font_color", ACCENT); side.add_child(ti)
-	ai_log = RichTextLabel.new(); ai_log.bbcode_enabled = true; ai_log.scroll_following = true; ai_log.selection_enabled = true
-	ai_log.size_flags_vertical = Control.SIZE_EXPAND_FILL; side.add_child(ai_log)
-	_ai_say("[color=#8f9bb3]Pose une question sur la page affichée, ou demande d'ouvrir un site.[/color]")
-	var qs := HBoxContainer.new(); side.add_child(qs)
-	var rb := Button.new(); rb.text = "Résumer la page"; rb.focus_mode = Control.FOCUS_NONE; rb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	rb.pressed.connect(_ai_ask.bind("Résume cette page en quelques points.")); qs.add_child(rb)
-	ai_in = LineEdit.new(); ai_in.placeholder_text = "Écris ici…"; ai_in.text_submitted.connect(func(t: String): ai_in.clear(); _ai_ask(t)); side.add_child(ai_in)
-	ai_http = HTTPRequest.new(); ai_http.timeout = 120.0; add_child(ai_http); ai_http.request_completed.connect(_ai_done)
-
-func _ai_say(t: String) -> void: ai_log.append_text(t + "\n\n")
+func _hook_chat(toolbar: Control) -> void:
+	var tg := Button.new(); tg.text = "💬"; tg.custom_minimum_size = Vector2(44, 38); tg.focus_mode = Control.FOCUS_NONE
+	tg.tooltip_text = "Discuter de cette page avec Chat IA"
+	tg.pressed.connect(func():
+		var core = _chat_core()
+		if core: core.page_ctx = true; core.changed.emit()
+		get_tree().current_scene._open_app("chat")); toolbar.add_child(tg)
+	var core = _chat_core()
+	if core: core.browser_hook = self
+	tree_exiting.connect(func():
+		var c = _chat_core()
+		if c and c.browser_hook == self: c.browser_hook = null; c.page_ctx = false)
 
 ## Texte visible de la page (tronqué), vide si indisponible.
-func _page_text() -> String:
+func get_page_text() -> String:
 	var t := ""
 	if wv:
 		wv.getText()
@@ -275,32 +267,6 @@ func _page_text() -> String:
 		t = html.strip_edges()
 	return t.substr(0, 5000)
 
-func _ai_ask(q: String) -> void:
-	q = q.strip_edges()
-	if q == "" or ai_busy: return
-	var core = get_tree().current_scene.get("chat_core")
-	if core == null or str(core.model) == "":
-		_ai_say("[color=#f87171]Aucun modèle local : ouvre Chat IA pour en choisir un (Ollama doit tourner).[/color]"); return
-	ai_busy = true; _ai_say("[b]Toi :[/b] " + q.replace("[", "[lb]"))
-	var page := await _page_text()
-	var url := last_url
-	ai_hist.append({"role": "user", "content": q})
-	if ai_hist.size() > 8: ai_hist = ai_hist.slice(ai_hist.size() - 8)
-	var msgs: Array = [{"role": "system", "content": AI_SYS + "\nPage : " + url + "\nTexte de la page :\n" + page}] + ai_hist
-	var body := JSON.stringify({"model": core.model, "messages": msgs, "stream": false, "options": {"num_predict": 400}})
-	if ai_http.request(str(core.ollama_url) + "/api/chat", ["Content-Type: application/json"], HTTPClient.METHOD_POST, body) != OK:
-		ai_busy = false; _ai_say("[color=#f87171]Requête impossible.[/color]")
+func current_url() -> String: return last_url
 
-func _ai_done(result: int, code: int, _h: PackedStringArray, body: PackedByteArray) -> void:
-	ai_busy = false
-	var info = JSON.parse_string(body.get_string_from_utf8()) if result == HTTPRequest.RESULT_SUCCESS and code == 200 else null
-	if not (info is Dictionary) or not info.has("message"):
-		_ai_say("[color=#f87171]Pas de réponse (Ollama arrêté ?).[/color]"); return
-	var txt := RegEx.create_from_string("(?s)<think>.*?</think>").sub(str(info["message"]["content"]), "", true).strip_edges()
-	ai_hist.append({"role": "assistant", "content": txt})
-	var m := RegEx.create_from_string("\\[\\[OUVRIR\\s+([^\\]\\s]+)\\]\\]").search(txt)
-	var note := ""
-	if m:
-		txt = txt.replace(m.get_string(), "").strip_edges(); note = "\n[color=#8f9bb3](ouverture de %s)[/color]" % m.get_string(1).replace("[", "[lb]")
-		_go(m.get_string(1))
-	_ai_say("[b]Assistant :[/b] " + txt.replace("[", "[lb]") + note)
+func open_url(u: String) -> void: _go(u)
