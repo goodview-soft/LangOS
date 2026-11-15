@@ -1,4 +1,4 @@
 ## Version de l appli (mise à jour par release.sh).
-const VERSION := "1.15.5"
+const VERSION := "1.16.0"
 ## Niveau de la partie native (Android) requis par cette version ; à incrémenter quand un plugin/manifeste change (aussi dans LangLauncherPlugin.nativeLevel).
 const NATIVE := 8
