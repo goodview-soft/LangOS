@@ -20,6 +20,7 @@ import java.util.Set;
 /** WebView Android (Chromium du système) superposé à la zone « page » de la fenêtre navigateur de LangOS. */
 public class LangWebViewPlugin extends GodotPlugin {
 	private static final SignalInfo URL_CHANGED = new SignalInfo("url_changed", String.class);
+	private static final SignalInfo PAGE_TEXT = new SignalInfo("page_text", String.class);
 	private WebView web;
 
 	public LangWebViewPlugin(Godot godot) {
@@ -33,7 +34,7 @@ public class LangWebViewPlugin extends GodotPlugin {
 
 	@Override
 	public Set<SignalInfo> getPluginSignals() {
-		return Collections.singleton(URL_CHANGED);
+		return new java.util.HashSet<>(java.util.Arrays.asList(URL_CHANGED, PAGE_TEXT));
 	}
 
 	private FrameLayout.LayoutParams params(int x, int y, int w, int h) {
@@ -96,6 +97,16 @@ public class LangWebViewPlugin extends GodotPlugin {
 		final Activity a = getActivity();
 		if (a == null) return;
 		a.runOnUiThread(() -> { if (web != null) web.loadUrl(url); });
+	}
+
+	@UsedByGodot
+	public void getText() {
+		final Activity a = getActivity();
+		if (a == null) return;
+		a.runOnUiThread(() -> {
+			if (web == null) { emitSignal(PAGE_TEXT, ""); return; }
+			web.evaluateJavascript("(function(){return document.body ? document.body.innerText : ''})()", value -> emitSignal(PAGE_TEXT, value == null ? "" : value));
+		});
 	}
 
 	@UsedByGodot
