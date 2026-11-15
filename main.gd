@@ -87,7 +87,7 @@ func _top_ids() -> Array:
 	var android := OS.get_name() == "Android"
 	return APPS.keys().filter(func(k): return not inside.has(k) and (k != "android_apps" or android))
 var active := ""
-var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "cursor": "auto", "pad": false, "pad_speed": 0.7, "model": "", "engine": -1, "src": "spa", "tgt": "fra"}
+var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "cursor": "auto", "pad": false, "pad_speed": 0.7, "zoom": 1.0, "model": "", "engine": -1, "src": "spa", "tgt": "fra"}
 var kb: PanelContainer
 var ui_root: VBoxContainer
 var pointer: Control
@@ -95,6 +95,9 @@ var flex: PanelContainer
 var fold_half := false
 var fold_top := 0.0
 var fold_bottom := 0.0
+var fold_px_top := 0.0       # charnière en pixels écran (indépendant du zoom)
+var fold_px_bottom := 0.0
+var zoom_save := false
 var kb_btn: Button
 var upd_http: HTTPRequest
 var upd_btn: Button
@@ -427,11 +430,12 @@ func _build_desktop() -> void:
 	_build_keyboard()
 	get_tree().node_added.connect(_on_node_added)
 	pointer = Control.new(); pointer.set_script(load("res://apps/pointer.gd")); pointer.set("mode", set_cfg["cursor"]); add_child(pointer)
-	flex = PanelContainer.new(); flex.set_script(load("res://apps/flex_pad.gd")); flex.set("pointer", pointer); flex.set("gain", set_cfg["pad_speed"]); flex.visible = false; add_child(flex)
+	flex = PanelContainer.new(); flex.set_script(load("res://apps/flex_pad.gd")); flex.set("pointer", pointer); flex.set("gain", set_cfg["pad_speed"]); flex.set("on_zoom", Callable(self, "_set_zoom")); flex.set("get_zoom", Callable(self, "_get_zoom")); flex.visible = false; add_child(flex)
 	flex.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	if OS.get_name() == "Android" and Engine.has_singleton("LangLauncher") and int(Engine.get_singleton("LangLauncher").nativeLevel()) >= 7:
 		var ll := Engine.get_singleton("LangLauncher")
 		ll.connect("fold_changed", _on_fold); _on_fold(str(ll.foldState()))
+	get_window().content_scale_factor = set_cfg["zoom"]
 	resized.connect(_update_flex)
 	_update_flex.call_deferred()
 	_apply_kb.call_deferred()
@@ -606,23 +610,36 @@ func _on_fold(json: String) -> void:
 		var ang := int(d.get("angle", -1))
 		fold_half = d.get("state", "") == "half" or (ang >= 25 and ang <= 160)
 	if fold_half:
-		var inv := get_viewport().get_final_transform().affine_inverse()
-		fold_top = (inv * Vector2(0, float(d["top"]))).y; fold_bottom = (inv * Vector2(0, float(d["bottom"]))).y
+		fold_px_top = float(d["top"]); fold_px_bottom = float(d["bottom"])
 	_update_flex()
+
+func _get_zoom() -> float: return float(set_cfg["zoom"])
+
+## Zoom de l'interface (pincement à deux doigts sur le pavé, ou réglage) : 0,5 à 2,2.
+func _set_zoom(z: float) -> void:
+	z = clampf(snappedf(z, 0.02), 0.5, 2.2)
+	if is_equal_approx(z, float(set_cfg["zoom"])): return
+	set_cfg["zoom"] = z; get_window().content_scale_factor = z
+	if not zoom_save:
+		zoom_save = true
+		get_tree().create_timer(0.8).timeout.connect(func(): zoom_save = false; _save_settings())
 
 func _update_flex() -> void:
 	if flex == null: return
 	var on: bool = fold_half or bool(set_cfg["pad"])
-	var top := fold_top if fold_half else size.y * 0.6
+	if fold_half:
+		var inv := get_viewport().get_final_transform().affine_inverse()
+		fold_top = (inv * Vector2(0, fold_px_top)).y; fold_bottom = (inv * Vector2(0, fold_px_bottom)).y
+	var top := fold_top if fold_half else size.y * 0.55
 	var bot := fold_bottom if fold_half else top
-	if on and (top < 200.0 or size.y - bot < 140.0): on = false   # zone trop petite : pas de pavé
+	if on and (top < 200.0 or size.y - bot < 200.0): on = false   # zone trop petite : pas de pavé
 	flex.visible = on
 	pointer.set("pad_active", on); pointer.set("pad_top", bot if on else -1.0)
 	flex.set("top_h", top)
 	if on:
 		flex.offset_left = 0.0; flex.offset_right = 0.0; flex.offset_top = -(size.y - bot); flex.offset_bottom = 0.0
 		ui_root.offset_bottom = -(size.y - top)
-		if not (pointer.pos.y >= 0.0 and pointer.pos.y < top): pointer.move_to(Vector2(size.x * 0.5, top * 0.5))
+		if not (pointer.pos.y >= 0.0 and pointer.pos.y < top and pointer.pos.x < size.x): pointer.move_to(Vector2(size.x * 0.5, top * 0.5))
 	else:
 		ui_root.offset_bottom = 0.0
 
@@ -867,6 +884,10 @@ func _app_settings() -> void:
 	var psl := Label.new(); psl.text = "Vitesse du curseur du pavé : %.1f" % set_cfg["pad_speed"]; v.add_child(psl)
 	var ps := HSlider.new(); ps.min_value = 0.2; ps.max_value = 2.5; ps.step = 0.1; ps.value = set_cfg["pad_speed"]; ps.custom_minimum_size.y = 28; ps.focus_mode = Control.FOCUS_NONE
 	ps.value_changed.connect(func(val: float): set_cfg["pad_speed"] = val; psl.text = "Vitesse du curseur du pavé : %.1f" % val; flex.set("gain", val); _save_settings()); v.add_child(ps)
+	var zl := Label.new(); zl.text = "Zoom de l'interface : %d %%" % int(float(set_cfg["zoom"]) * 100); v.add_child(zl)
+	var zs := HSlider.new(); zs.min_value = 0.5; zs.max_value = 2.2; zs.step = 0.05; zs.value = set_cfg["zoom"]; zs.custom_minimum_size.y = 28; zs.focus_mode = Control.FOCUS_NONE
+	zs.value_changed.connect(func(val: float): _set_zoom(val); zl.text = "Zoom de l'interface : %d %%" % int(float(set_cfg["zoom"]) * 100)); v.add_child(zs)
+	v.add_child(_mlbl("Sur le pavé, deux doigts qui s'écartent ou se rapprochent règlent aussi le zoom."))
 	v.add_child(_mlbl("Le pavé s'affiche aussi tout seul quand un téléphone pliable est plié à moitié (mode Flex)."))
 	v.add_child(_dlbl("Clavier"))
 	var ko := OptionButton.new(); ko.focus_mode = Control.FOCUS_NONE
@@ -1410,13 +1431,13 @@ func _load_settings() -> void:
 		set_cfg["font"] = clampi(int(c.get_value("ui", "font", 22)), 14, 40)
 		set_cfg["ollama"] = str(c.get_value("translate", "server", set_cfg["ollama"]))
 		set_cfg["model"] = str(c.get_value("translate", "model", ""))
-		set_cfg["kb"] = str(c.get_value("ui", "kb", "osk")); set_cfg["cursor"] = str(c.get_value("ui", "cursor", "auto")); set_cfg["pad"] = bool(c.get_value("ui", "pad", false)); set_cfg["pad_speed"] = clampf(float(c.get_value("ui", "pad_speed", 0.7)), 0.2, 2.5)
+		set_cfg["kb"] = str(c.get_value("ui", "kb", "osk")); set_cfg["cursor"] = str(c.get_value("ui", "cursor", "auto")); set_cfg["pad"] = bool(c.get_value("ui", "pad", false)); set_cfg["pad_speed"] = clampf(float(c.get_value("ui", "pad_speed", 0.7)), 0.2, 2.5); set_cfg["zoom"] = clampf(float(c.get_value("ui", "zoom", 1.0)), 0.5, 2.2)
 		set_cfg["engine"] = int(c.get_value("translate", "engine", -1))
 		set_cfg["src"] = str(c.get_value("lang", "src", "spa")); set_cfg["tgt"] = str(c.get_value("lang", "tgt", "fra"))
 
 func _save_settings() -> void:
 	var c := ConfigFile.new()
-	c.set_value("ui", "bg", set_cfg["bg"]); c.set_value("ui", "font", set_cfg["font"]); c.set_value("ui", "kb", set_cfg["kb"]); c.set_value("ui", "cursor", set_cfg["cursor"]); c.set_value("ui", "pad", set_cfg["pad"]); c.set_value("ui", "pad_speed", set_cfg["pad_speed"])
+	c.set_value("ui", "bg", set_cfg["bg"]); c.set_value("ui", "font", set_cfg["font"]); c.set_value("ui", "kb", set_cfg["kb"]); c.set_value("ui", "cursor", set_cfg["cursor"]); c.set_value("ui", "pad", set_cfg["pad"]); c.set_value("ui", "pad_speed", set_cfg["pad_speed"]); c.set_value("ui", "zoom", set_cfg["zoom"])
 	c.set_value("translate", "server", set_cfg["ollama"]); c.set_value("translate", "model", set_cfg["model"]); c.set_value("translate", "engine", set_cfg["engine"])
 	c.set_value("lang", "src", set_cfg["src"]); c.set_value("lang", "tgt", set_cfg["tgt"])
 	c.save("user://settings.cfg")
