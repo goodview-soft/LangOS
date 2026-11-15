@@ -134,9 +134,24 @@ func _input(ev: InputEvent) -> void:
 		if not (fo is LineEdit or fo is TextEdit):
 			chat_ov.toggle(); get_viewport().set_input_as_handled(); return
 	if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT:
+		if ev.pressed: _raise_window_at(ev.position)
 		lp_active = ev.pressed; lp_pos = ev.position; lp_t = Time.get_ticks_msec()
 	elif ev is InputEventMouseMotion and lp_active and ev.position.distance_to(lp_pos) > 16.0:
 		lp_active = false
+
+## Un clic n'importe où dans une fenêtre la met au premier plan (la dernière sélectionnée passe devant).
+func _raise_window_at(pos: Vector2) -> void:
+	if desk == null or menu.visible: return
+	var p := pos - desk.global_position
+	var kids := desk.get_children()
+	kids.reverse()
+	for c in kids:
+		if not (c is PanelContainer and c.visible and Rect2(c.position, c.size).has_point(p)): continue
+		for id in wins:
+			if wins[id]["win"] == c:
+				if active != id: _show(id)
+				return
+		return
 
 func _check_longpress() -> void:
 	if lp_active and Time.get_ticks_msec() - lp_t > 550:

@@ -32,6 +32,7 @@ func _installed() -> bool: return FileAccess.file_exists(_lib()) and FileAccess.
 var wv: Object                         # plugin Android « LangWebView » (WebView du système)
 var wv_rect := Rect2i()
 var wv_shown := false
+var shade: ColorRect                   # voile affiché à la place du WebView quand la fenêtre n'est pas au premier plan
 
 func _android() -> bool: return OS.get_name() == "Android" and Engine.has_singleton("LangWebView")
 
@@ -196,6 +197,10 @@ func _start_android() -> void:
 	var body := HBoxContainer.new(); body.size_flags_vertical = Control.SIZE_EXPAND_FILL; body.add_theme_constant_override("separation", 0); v.add_child(body)
 	view = TextureRect.new(); view.size_flags_vertical = Control.SIZE_EXPAND_FILL; view.size_flags_horizontal = Control.SIZE_EXPAND_FILL; body.add_child(view)
 	_hook_chat(tb)
+	shade = ColorRect.new(); shade.color = Color("1b1f2a"); shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); shade.visible = false; view.add_child(shade)
+	var sl := Label.new(); sl.text = "Navigateur en arrière-plan\nClique ici pour le remettre au premier plan"; sl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sl.add_theme_color_override("font_color", MUTED); sl.set_anchors_and_offsets_preset(Control.PRESET_CENTER); sl.grow_horizontal = Control.GROW_DIRECTION_BOTH; sl.grow_vertical = Control.GROW_DIRECTION_BOTH; shade.add_child(sl)
+	shade.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed: get_tree().current_scene._show("chromium"))
 	await get_tree().process_frame; await get_tree().process_frame
 	wv_rect = _screen_rect()
 	wv.open(HOME, wv_rect.position.x, wv_rect.position.y, wv_rect.size.x, wv_rect.size.y); wv_shown = true
@@ -209,12 +214,23 @@ func _screen_rect() -> Rect2i:
 ## (fenêtre réduite ou menu Démarrer ouvert).
 func _sync_wv() -> void:
 	if view == null: return
-	var shown := is_visible_in_tree()
 	var main := get_tree().current_scene
-	if main and main.get("menu") and main.menu.visible: shown = false
+	var shown := is_visible_in_tree()
+	if main:
+		# Le WebView est une vue native toujours au-dessus de Godot : il ne doit apparaître que si cette fenêtre est au premier plan
+		# et qu'aucun menu (Démarrer, copier/coller) ne la recouvre.
+		if main.get("active") != "chromium": shown = false
+		if main.get("menu") and main.menu.visible: shown = false
+		var cm = main.get("ctx_menu")
+		if cm != null and is_instance_valid(cm) and cm.visible: shown = false
+	if shade: shade.visible = is_visible_in_tree() and not shown
 	if shown != wv_shown: wv_shown = shown; wv.setShown(shown)
 	if not shown: return
 	var r := _screen_rect()
+	# Le clavier visuel de LangOS passe devant : le WebView s'arrête à son bord supérieur.
+	if main and main.get("kb") and main.kb.visible:
+		var top := int((get_viewport().get_final_transform() * main.kb.get_global_rect()).position.y)
+		r.size.y = maxi(1, mini(r.end.y, top) - r.position.y)
 	if r != wv_rect: wv_rect = r; wv.place(r.position.x, r.position.y, r.size.x, r.size.y)
 
 # ---------------------------------------------------------------- Lien avec Chat IA
