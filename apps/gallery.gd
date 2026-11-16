@@ -52,7 +52,7 @@ func _ready() -> void:
 	_build_overlay()
 	if OS.get_name() == "Android":   # accès aux photos / vidéos : demandé à l'ouverture de la Galerie, puis on relit les dossiers
 		get_tree().on_request_permissions_result.connect(func(_p, _ok): _rescan())
-		for p in ["READ_MEDIA_IMAGES", "READ_MEDIA_VIDEO"]: OS.request_permission(p)
+		if not OS.get_granted_permissions().has("android.permission.READ_MEDIA_IMAGES"): OS.request_permissions()
 	_rescan()
 
 

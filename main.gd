@@ -156,7 +156,7 @@ var active := ""
 var menu_reset := Callable()
 var menu_sc: ScrollContainer
 var menu_search: LineEdit
-var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "cursor": "auto", "pad": false, "pad_speed": 0.7, "zoom": 1.0, "model": "", "engine": -1, "src": "spa", "tgt": "fra", "light": false, "wall": false, "icons": {}, "layout": {}, "open": [], "accent": "5aa2ff", "anim": true, "wtrans": 1.0, "radius": 12, "isize": 56, "pins": ["notepad", "settings", "calc", "music"], "desk": ["trash"], "installed": [], "dock_hide": false, "keys": {}, "padmap": {}, "clip_save": true, "clip_nopw": true}
+var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "cursor": "auto", "pad": false, "pad_speed": 0.7, "zoom": 1.0, "model": "", "engine": -1, "src": "spa", "tgt": "fra", "light": false, "wall": false, "icons": {}, "layout": {}, "open": [], "accent": "5aa2ff", "anim": true, "wtrans": 1.0, "radius": 12, "isize": 56, "pins": ["notepad", "settings", "calc", "music"], "desk": ["trash", "market"], "mk_desk": true, "installed": [], "dock_hide": false, "keys": {}, "padmap": {}, "clip_save": true, "clip_nopw": true}
 var kb: PanelContainer
 var ui_root: VBoxContainer
 var pointer: Control
@@ -1416,14 +1416,14 @@ func _app_market() -> void:
 		for id in shown:
 			var card := PanelContainer.new(); card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			card.add_theme_stylebox_override("panel", _box(_p("menu"), UI.rad(), _p("edge"), 1, 12, 10))
-			card.mouse_filter = Control.MOUSE_FILTER_STOP; card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-			card.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT: st["detail"] = id; st["r"].call_deferred())
+			card.mouse_filter = Control.MOUSE_FILTER_PASS
 			var cv := VBoxContainer.new(); cv.add_theme_constant_override("separation", 8); card.add_child(cv)
 			var ch := HBoxContainer.new(); ch.add_theme_constant_override("separation", 10); cv.add_child(ch)
 			ch.add_child(icon_of.call(id, 48))
 			var nv := VBoxContainer.new(); nv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; nv.mouse_filter = Control.MOUSE_FILTER_IGNORE; ch.add_child(nv)
 			var nl := Label.new(); nl.text = str(APPS[id][0]); nl.clip_text = true; nl.mouse_filter = Control.MOUSE_FILTER_IGNORE; nv.add_child(nl)
 			nv.add_child(UI.small(cat_of[id]))
+			ch.add_child(UI.icon_btn("info", "Détails", func(): st["detail"] = id; st["r"].call_deferred(), "Flat", 40))
 			cv.add_child(action_btn.call(id, 0))
 			grid.add_child(card)
 	st["r"] = render
@@ -2046,7 +2046,8 @@ func _load_settings() -> void:
 		var pf = c.get_value("ui", "profiles", null)
 		if pf is Array: set_cfg["profiles"] = pf
 		var ins = c.get_value("ui", "installed", null); set_cfg["installed"] = ins if ins is Array else APPS.keys().filter(func(k): return not CORE.has(k))   # anciennes configs : tout reste installé
-		var dk = c.get_value("ui", "desk", null); set_cfg["desk"] = dk if dk is Array else ["trash"]
+		var dk = c.get_value("ui", "desk", null); set_cfg["desk"] = dk if dk is Array else ["trash", "market"]
+		if not bool(c.get_value("ui", "mk_desk", false)) and not set_cfg["desk"].has("market"): set_cfg["desk"].append("market")
 		var pn = c.get_value("ui", "pins", set_cfg["pins"]); set_cfg["pins"] = pn if pn is Array else set_cfg["pins"]
 	ACCENT = Color.html(str(set_cfg["accent"])) if str(set_cfg["accent"]).is_valid_html_color() else Color("5aa2ff")
 
@@ -2055,7 +2056,7 @@ func _save_settings() -> void:
 	c.set_value("ui", "bg", set_cfg["bg"]); c.set_value("ui", "font", set_cfg["font"]); c.set_value("ui", "kb", set_cfg["kb"]); c.set_value("ui", "cursor", set_cfg["cursor"]); c.set_value("ui", "pad", set_cfg["pad"]); c.set_value("ui", "pad_speed", set_cfg["pad_speed"]); c.set_value("ui", "zoom", set_cfg["zoom"])
 	c.set_value("translate", "server", set_cfg["ollama"]); c.set_value("translate", "model", set_cfg["model"]); c.set_value("translate", "engine", set_cfg["engine"])
 	c.set_value("lang", "src", set_cfg["src"]); c.set_value("lang", "tgt", set_cfg["tgt"])
-	for k in ["light", "wall", "icons", "layout", "open", "accent", "anim", "wtrans", "radius", "isize", "pins", "desk", "installed", "dock_hide", "keys", "padmap", "clip_save", "clip_nopw"]: c.set_value("ui", k, set_cfg[k])
+	for k in ["light", "wall", "icons", "layout", "open", "accent", "anim", "wtrans", "radius", "isize", "pins", "desk", "mk_desk", "installed", "dock_hide", "keys", "padmap", "clip_save", "clip_nopw"]: c.set_value("ui", k, set_cfg[k])
 	c.set_value("ui", "nvd", n_vd)
 	if set_cfg.has("profiles"): c.set_value("ui", "profiles", set_cfg["profiles"])
 	c.save("user://settings.cfg")

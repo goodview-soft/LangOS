@@ -323,14 +323,11 @@ func _camera() -> void:
 
 
 func _start_camera() -> void:
-	if OS.get_name() == "Android" and not OS.request_permission("CAMERA"):
-		cam_msg.text = "Autorise la caméra dans la fenêtre Android qui s'affiche…"
-		var res = await get_tree().on_request_permissions_result
-		if not is_instance_valid(cam_view): return
-		if res is Array and res.size() > 1 and not res[1]:
-			cam_msg.text = "Permission caméra refusée. Touche « Réglages » pour l'autoriser, ou importe une photo."
-			perm_btn.visible = true; return
-		cam_msg.text = ""
+	if not await _cam_permission():
+		if is_instance_valid(cam_view):
+			cam_msg.text = "Permission caméra non accordée. Touche « Réglages » pour l'autoriser. Si aucune fenêtre d'autorisation n'apparaît, installe la dernière APK (la permission n'existe que dans l'APK récente). Tu peux aussi importer une photo."
+			perm_btn.visible = true
+		return
 	CameraServer.monitoring_feeds = true
 	await get_tree().create_timer(0.8).timeout
 	if not is_instance_valid(cam_view): return
@@ -339,6 +336,21 @@ func _start_camera() -> void:
 		cam_msg.text = "Aucune caméra détectée. Importe une photo avec le bouton ci-dessous."; return
 	cam_feed = fs[0]; cam_feed.feed_is_active = true
 	cam_tex = CameraTexture.new(); cam_tex.camera_feed_id = cam_feed.get_id(); cam_view.texture = cam_tex
+
+
+## Demande la permission caméra (Android) et attend la réponse en vérifiant la liste des permissions accordées (30 s max).
+func _cam_permission() -> bool:
+	if OS.get_name() != "Android": return true
+	var perm := "android.permission.CAMERA"
+	if OS.get_granted_permissions().has(perm): return true
+	if is_instance_valid(cam_msg): cam_msg.text = "Autorise la caméra dans la fenêtre Android…"
+	OS.request_permissions()
+	for i in 60:
+		await get_tree().create_timer(0.5).timeout
+		if not is_instance_valid(cam_view): return false
+		if OS.get_granted_permissions().has(perm):
+			cam_msg.text = ""; return true
+	return false
 
 
 func _stop_camera() -> void:
