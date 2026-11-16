@@ -1164,7 +1164,7 @@ func _make_window(id: String, _title: String, sz: Vector2, pos: Vector2) -> VBox
 	_keep_in(w, ds)
 	var wv := VBoxContainer.new(); wv.add_theme_constant_override("separation", 0)
 	w.add_child(wv)
-	var tb := PanelContainer.new()
+	var tb := PanelContainer.new(); tb.set_meta("no_reflow", true)
 	tb.gui_input.connect(_title_input.bind(id))
 	wv.add_child(tb)
 	# Barre de titre façon headerbar : icône à gauche, titre gras centré, contrôles ronds à droite
@@ -1214,12 +1214,13 @@ func _reflow(w) -> void:
 		var stack: Array = [w]
 		while not stack.is_empty():
 			var n: Node = stack.pop_back()
+			if n.has_meta("no_reflow"): continue   # barre de titre : elle gère seule son repli
 			stack.append_array(n.get_children())
 			if not n is Control or n == w: continue
 			var c: Control = n
 			var room := avail - 2.0 * maxf(0.0, c.global_position.x - w.global_position.x)   # place disponible (marges symétriques)
 			if c.get_combined_minimum_size().x <= room - 2.0: continue
-			if c.get_class() == "HBoxContainer" and c.get_child_count() >= 2 and c.get_script() == null and c.get_parent() != null:
+			if c.get_class() == "HBoxContainer" and c.get_child_count() >= 2 and c.get_script() == null and c.get_parent() != null and not c.has_meta("no_flow"):
 				var fl := HFlowContainer.new(); fl.name = c.name
 				var sep := c.get_theme_constant("separation"); fl.add_theme_constant_override("h_separation", sep); fl.add_theme_constant_override("v_separation", mini(sep, 6))
 				fl.alignment = int((c as BoxContainer).alignment) as FlowContainer.AlignmentMode; fl.size_flags_horizontal = c.size_flags_horizontal; fl.size_flags_vertical = c.size_flags_vertical
@@ -1231,6 +1232,13 @@ func _reflow(w) -> void:
 				# l'ancien HBox reste en place (vide) : le code de l'appli qui le garde en variable continue de fonctionner (visibilité relayée)
 				c.custom_minimum_size = Vector2.ZERO; c.size_flags_horizontal = Control.SIZE_FILL; c.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 				c.visibility_changed.connect(func(): if is_instance_valid(fl): fl.visible = c.visible)
+				changed = true
+			elif c.get_class() == "HBoxContainer" and c.has_meta("no_flow") and c.get_parent() != null and not c.get_parent() is ScrollContainer:
+				# groupes de boutons d'en-tête : restent sur une ligne, défilables horizontalement quand l'écran est trop étroit
+				var par2 := c.get_parent(); var idx2 := c.get_index()
+				var hs := ScrollContainer.new(); hs.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO; hs.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+				hs.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hs.custom_minimum_size = Vector2(40, c.get_combined_minimum_size().y)
+				par2.remove_child(c); par2.add_child(hs); par2.move_child(hs, idx2); hs.add_child(c)
 				changed = true
 			elif c is GridContainer and (c as GridContainer).columns > 1:
 				(c as GridContainer).columns -= 1; changed = true

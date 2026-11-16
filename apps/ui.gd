@@ -300,10 +300,10 @@ static func header_bar(t := "", centered := true) -> PanelContainer:
 	var pc := PanelContainer.new(); pc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	style(pc, "panel", bar_box)
 	var h := HBoxContainer.new(); h.add_theme_constant_override("separation", S2); h.custom_minimum_size.y = BTN; pc.add_child(h)
-	var a := HBoxContainer.new(); a.add_theme_constant_override("separation", S2); h.add_child(a)
+	var a := HBoxContainer.new(); a.add_theme_constant_override("separation", S2); h.add_child(a); a.set_meta("no_flow", true)
 	var l := heading(t); l.size_flags_horizontal = Control.SIZE_EXPAND_FILL; l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER if centered else HORIZONTAL_ALIGNMENT_LEFT; l.custom_minimum_size.x = 10; h.add_child(l)
-	var e := HBoxContainer.new(); e.add_theme_constant_override("separation", S2); h.add_child(e)
+	var e := HBoxContainer.new(); e.add_theme_constant_override("separation", S2); h.add_child(e); e.set_meta("no_flow", true)
 	pc.set_meta("start", a); pc.set_meta("title", l); pc.set_meta("end", e)
 	return pc
 
