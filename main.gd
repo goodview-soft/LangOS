@@ -112,7 +112,6 @@ const APPS := {
 	"notes": ["Notes", "res://icons/app_notes.svg"],
 	"trash": ["Corbeille", ""],
 	"market": ["Market", ""],
-	"displays": ["Écrans", "res://icons/app_devices.svg"],
 	"scanner": ["Scanner", ""],
 	"gallery": ["Galerie", ""],
 	"airhockey": ["Air Hockey", ""],
@@ -122,7 +121,7 @@ const APPS := {
 const FOLDERS := {
 	"f_lang": ["translate", "dict", "music"],
 	"f_games": ["chess", "hika", "airhockey", "deepminer"],
-	"f_soft": ["chromium", "notes", "files", "terminal", "code", "profiles", "clipboard", "devices", "displays"],
+	"f_soft": ["chromium", "notes", "files", "terminal", "code", "profiles", "clipboard", "devices"],
 	"f_comm": ["messenger", "remote", "chat", "soundlink"],
 	"f_office": ["sheet", "imgview", "pdf", "calendar", "scanner", "gallery"],
 	"f_tools": ["calc", "units", "timer", "todo", "vault", "cards"],
@@ -1097,7 +1096,6 @@ func _open_app(id: String) -> void:
 		"trash": _app_files("trash")
 		"market": _app_market()
 		"scanner": _app_scanner()
-		"displays": _app_displays()
 		"gallery": _app_gallery()
 		"terminal": _app_dev("terminal", Vector2(760, 480))
 		"code": _app_dev("code", Vector2(900, 620))
@@ -1510,7 +1508,7 @@ const MARKET_DESC := {
 	"remote": "Contrôle un autre ordinateur à distance.", "chat": "Discute avec une IA.", "soundlink": "Partage du son entre appareils.",
 	"sheet": "Tableur : cellules, formules et calculs.", "imgview": "Visionneuse d'images.", "pdf": "Lecteur de documents PDF.", "calendar": "Agenda et rendez-vous.", "airhockey": "Air Hockey contre l'IA, à deux ou en réseau local.", "deepminer": "Deep Miner : creuse la caverne, fabrique, survis (3D, clavier/souris ou tactile).", "gallery": "Photos et vidéos de ton appareil en grille, avec visionneuse.", "scanner": "Photographie un document : bords détectés, page redressée, texte net, export PDF.",
 	"calc": "Calculatrice simple et scientifique.", "units": "Convertis longueurs, poids, devises et plus.", "timer": "Minuteur et chronomètre.",
-	"todo": "Listes de tâches.", "vault": "Coffre-fort chiffré pour tes mots de passe.", "displays": "Test multi-écrans (pliants) : écrans détectés, contenu sur l'autre écran.", "cards": "Cartes mémoire pour réviser.", "android_apps": "Lance les applis Android installées.",
+	"todo": "Listes de tâches.", "vault": "Coffre-fort chiffré pour tes mots de passe.", "cards": "Cartes mémoire pour réviser.", "android_apps": "Lance les applis Android installées.",
 }
 
 ## Market façon Play Store : recherche, catégories, cartes, page de détail.
@@ -1526,13 +1524,6 @@ func _app_scanner() -> void:
 	var c := Control.new(); c.set_script(load("res://apps/scanner.gd")); c.m = self
 	c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	c.custom_minimum_size = Vector2(minf(560.0, maxf(280.0, desk.size.x - 16.0)), 460); c.clip_contents = true
-	wv.add_child(c)
-
-func _app_displays() -> void:
-	var wv := _make_window("displays", "", Vector2(560, 560), Vector2(190, 30))
-	var c := Control.new(); c.set_script(load("res://apps/displays.gd")); c.m = self
-	c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	c.custom_minimum_size = Vector2(minf(520.0, maxf(280.0, desk.size.x - 16.0)), 440); c.clip_contents = true
 	wv.add_child(c)
 
 func _app_market() -> void:
