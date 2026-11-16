@@ -31,6 +31,8 @@ func join(ip: String, port: int = DEFAULT_PORT) -> Error:
 	return err
 
 func leave() -> void:
-	multiplayer.multiplayer_peer = null
+	if multiplayer.multiplayer_peer:
+		multiplayer.multiplayer_peer.close()
+	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	mode = Mode.LOCAL
 	disconnected.emit()

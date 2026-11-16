@@ -31,3 +31,18 @@ static func apply_snapshot(p: PlayerController, snap: Dictionary, blend: float =
 	p.velocity = snap["vel"]
 	p.yaw = lerp_angle(p.yaw, float(snap["yaw"]), blend)
 	p.pitch = lerpf(p.pitch, float(snap["pitch"]), blend)
+
+## Entrée de l'historique pour un numéro de séquence ({} si absente).
+func find(seq: int) -> Dictionary:
+	for h in _history:
+		if h["seq"] == seq:
+			return h
+	return {}
+
+## Décale tout l'historique (après une correction de position) pour que les comparaisons suivantes restent cohérentes.
+func shift(delta: Vector3) -> void:
+	for h in _history:
+		h["pos"] = (h["pos"] as Vector3) + delta
+
+func clear() -> void:
+	_history.clear()

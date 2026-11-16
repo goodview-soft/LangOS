@@ -12,6 +12,7 @@ var state: int = Cfg.State.WAITING
 var timer := 0.0
 var last_scorer: PlayerController
 var _last_tick := -1
+var net_client := false   # client réseau : l'état vient de l'hôte (net_apply), pas de simulation locale
 
 func start_match() -> void:
 	score.reset()
@@ -32,7 +33,12 @@ func on_bed_reached(player: PlayerController, _bed_team: int) -> void:
 	_set_state(Cfg.State.POINT_SCORED, Tuning.point_banner_time)
 	point_scored.emit(player.team, player)
 
+func net_apply(s: int, t: float) -> void:
+	_set_state(s, t)
+
 func _process(dt: float) -> void:
+	if net_client:
+		return
 	match state:
 		Cfg.State.WAITING:
 			timer -= dt

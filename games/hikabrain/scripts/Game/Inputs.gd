@@ -15,6 +15,7 @@ static func setup() -> void:
 	_key("slot_2", KEY_2)
 	_key("slot_3", KEY_3)
 	_key("scoreboard", KEY_TAB)
+	_key("auto_bridge", KEY_B)
 	_mouse("attack", MOUSE_BUTTON_LEFT)
 	_mouse("use", MOUSE_BUTTON_RIGHT)
 	_mouse("scroll_up", MOUSE_BUTTON_WHEEL_UP)

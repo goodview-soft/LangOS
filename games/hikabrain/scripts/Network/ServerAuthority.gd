@@ -20,6 +20,10 @@ func _can_act(p: PlayerController) -> bool:
 
 ## Retourne le joueur touché (ou null).
 func request_attack(att: PlayerController) -> PlayerController:
+	if game.is_net_client():
+		if att.is_local and att.alive and not att.frozen:
+			game.hnet.send_attack()
+		return null   # le résultat revient de l'hôte (fx_hit)
 	if not _can_act(att):
 		return null
 	var t := _now()
@@ -54,6 +58,8 @@ func request_attack(att: PlayerController) -> PlayerController:
 		kdir.y = 0.0
 		kdir = (kdir.normalized() * 0.7 + att.flat_forward() * 0.3)
 		best.knock.apply(kdir, att.move.sprinting)
+		if game.hnet:
+			game.hnet.on_hit(att, best, Tuning.sword_damage, kdir, att.move.sprinting)
 		best.last_attacker = att
 		best.last_attacker_time = t
 		best.flash()
@@ -67,7 +73,7 @@ func _reach_ok(p: PlayerController, cell: Vector3i) -> bool:
 	var eye := p.eye_pos()
 	var cmin := Vector3(cell)
 	var closest := Vector3(clampf(eye.x, cmin.x, cmin.x + 1.0), clampf(eye.y, cmin.y, cmin.y + 1.0), clampf(eye.z, cmin.z, cmin.z + 1.0))
-	return eye.distance_to(closest) <= Tuning.reach + 0.5
+	return eye.distance_to(closest) <= Tuning.reach + (0.5 if p.is_local else 1.3)   # marge de latence pour les joueurs distants
 
 func _cell_blocked_by_player(cell: Vector3i) -> bool:
 	var cmin := Vector3(cell)
@@ -83,6 +89,12 @@ func _cell_blocked_by_player(cell: Vector3i) -> bool:
 	return false
 
 func request_place(p: PlayerController, cell: Vector3i) -> bool:
+	if game.is_net_client():
+		# Le client demande, l'hôte valide et diffuse le bloc (pré-contrôles bon marché pour ne pas spammer)
+		if not p.is_local or not _can_act(p) or p.inv.block_count <= 0 or not game.blocks.in_bounds(cell) or game.blocks.is_solid(cell):
+			return false
+		game.hnet.send_place(cell)
+		return true
 	if not _can_act(p):
 		return false
 	var t := _now()
@@ -108,6 +120,11 @@ func request_place(p: PlayerController, cell: Vector3i) -> bool:
 	return true
 
 func request_break(p: PlayerController, cell: Vector3i) -> bool:
+	if game.is_net_client():
+		if not p.is_local or not _can_act(p) or not game.blocks.is_destructible(cell):
+			return false
+		game.hnet.send_break(cell)
+		return true
 	if not _can_act(p):
 		return false
 	var b := game.blocks

@@ -22,6 +22,9 @@ var game_id := "game"
 var title := "Jeu"
 var modes: Array = ["ai", "local", "net"]
 var disabled_modes := {}        # mode -> texte (ex. {"net": "bientôt"})
+var multi := false              # vrai : réseau à plusieurs (2-8 joueurs, ex. Hikabrain) : l'hôte s'annonce, les autres le voient et touchent pour rejoindre
+var adv_port := 24567           # multi : port du jeu (ENet) annoncé par l'hôte
+signal net_multi(role: String, ip: String, port: int)   # multi : "host" ou "client" (+ adresse) : le jeu branche sa connexion
 var udp_port := 0
 var tcp_port := 0
 var my_name := ""
@@ -92,7 +95,12 @@ func _pick(m: String) -> void:
 	if m == "net": _open_lobby(); return
 	visible = false; chosen.emit(m)
 
+## Multi : le menu revient avec un message (connexion impossible, hôte parti...).
+func show_lobby(msg: String) -> void:
+	visible = true; _net_stop(); _open_lobby(); if head and msg != "": head.text = msg
+
 func _open_lobby() -> void:
+	if multi: state = "lobby"; peers = {}; sig = "x"; _build_lobby(); return
 	if server.listen(tcp_port) != OK:
 		_build_menu(); box.add_child(_label("Port %d indisponible : réseau impossible." % tcp_port, 14, Color("f87171"))); return
 	state = "lobby"; peers = {}; sig = "x"; _build_lobby()
@@ -101,6 +109,9 @@ func _build_lobby() -> void:
 	_clear()
 	box.add_child(_label("Multijoueur — " + title, 28))
 	head = _label("", 15, MUTED); box.add_child(head)
+	if multi:
+		_build_multi()
+		return
 	if state == "lobby":
 		for k in peers:
 			var p: Dictionary = peers[k]
@@ -113,10 +124,26 @@ func _build_lobby() -> void:
 	_btn("Retour", show_menu)
 	_set_head()
 
+func _build_multi() -> void:
+	_btn("Héberger une partie", func() -> void: state = "host"; visible = false; net_multi.emit("host", "", adv_port))
+	for k in peers:
+		var p: Dictionary = peers[k]
+		_btn("Rejoindre « %s »" % p["name"], func() -> void: state = "play"; visible = false; net_multi.emit("client", p["ip"], p["port"]))
+	var adv := Button.new(); adv.text = "Options avancées (IP manuelle) ▸"; adv.flat = true; box.add_child(adv)
+	var advbox := VBoxContainer.new(); advbox.visible = false; box.add_child(advbox)
+	var ip := LineEdit.new(); ip.placeholder_text = "IP de l'hôte (ex. 192.168.1.20)"; advbox.add_child(ip)
+	var pt := LineEdit.new(); pt.text = str(adv_port); advbox.add_child(pt)
+	var jb := Button.new(); jb.text = "Rejoindre cette adresse"; jb.custom_minimum_size.y = 46; advbox.add_child(jb)
+	jb.pressed.connect(func() -> void:
+		if ip.text.strip_edges() != "": state = "play"; visible = false; net_multi.emit("client", ip.text.strip_edges(), pt.text.to_int()))
+	adv.pressed.connect(func() -> void: advbox.visible = not advbox.visible)
+	_btn("Retour", show_menu)
+	_set_head()
+
 func _set_head() -> void:
 	if head == null: return
 	match state:
-		"lobby": head.text = "Joueurs trouvés sur le réseau local :" if not peers.is_empty() else "Recherche de joueurs sur le réseau local…\n(l'autre joueur doit ouvrir ce même jeu en mode Multijoueur)"
+		"lobby": head.text = ("Parties trouvées sur le réseau local :" if not peers.is_empty() else "Recherche de parties sur le réseau local…\n(ou héberge la tienne : les autres la verront ici)") if multi else "Joueurs trouvés sur le réseau local :" if not peers.is_empty() else "Recherche de joueurs sur le réseau local…\n(l'autre joueur doit ouvrir ce même jeu en mode Multijoueur)"
 		"out": head.text = "Défi envoyé à %s… en attente de réponse." % peer_name
 		"in": head.text = "Tu joueras les %s." % ("premiers" if inc_slot == 0 else "seconds")
 
@@ -174,9 +201,9 @@ func _process(delta: float) -> void:
 	var now := Time.get_ticks_msec() / 1000.0
 	if not udp.is_bound() and udp.bind(udp_port) == OK: udp.set_broadcast_enabled(true)
 	beacon_t -= delta
-	if beacon_t <= 0.0 and udp.is_bound():
+	if beacon_t <= 0.0 and udp.is_bound() and (not multi or state == "host"):
 		beacon_t = 2.0
-		var msg := ("%s|%s|%d|%d|%s" % [game_id, my_id, tcp_port, 0 if state == "lobby" else 1, my_name.replace("|", " ")]).to_utf8_buffer()
+		var msg := ("%s|%s|%d|%d|%s" % [game_id, my_id, adv_port if multi else tcp_port, 0 if state == "lobby" or multi else 1, my_name.replace("|", " ")]).to_utf8_buffer()
 		for a in _broadcast_addrs(): udp.set_dest_address(a, udp_port); udp.put_packet(msg)
 	while udp.is_bound() and udp.get_available_packet_count() > 0:
 		var parts := udp.get_packet().get_string_from_utf8().split("|", true, 4)

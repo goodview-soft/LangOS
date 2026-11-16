@@ -6,6 +6,7 @@ extends Node
 var p: PlayerController
 var placement: BlockPlacement
 var destruction: BlockDestruction
+var bridge: AutoBridge
 var _attack_cd := 0.0
 var _attack_queue := 0.0
 var _place_cd := 0.0
@@ -46,3 +47,5 @@ func tick(c: InputCmd, dt: float) -> void:
 		_place_cd = Tuning.place_cooldown
 		if placement.try_place():
 			p.swing_arm()
+	if p.auto_bridge and bridge:
+		bridge.tick(c, dt)

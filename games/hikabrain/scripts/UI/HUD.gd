@@ -18,6 +18,12 @@ var _pause: Control
 var _feed: VBoxContainer
 var _inv_ui: InventoryUI
 var _hit_t := 0.0
+var _netinfo: Label
+var _lobby: ColorRect
+var _lobby_title: Label
+var _lobby_list: Label
+var _lobby_btn: Button
+var _touch := false
 
 func _lbl(size: int, color: Color = Color.WHITE) -> Label:
 	var l := Label.new()
@@ -122,6 +128,53 @@ func _ready() -> void:
 	_victory_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_victory_label.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_victory.add_child(_victory_label)
+	var vb := HBoxContainer.new()
+	vb.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	vb.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	vb.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	vb.position.y = -60
+	vb.add_theme_constant_override("separation", 12)
+	_victory.add_child(vb)
+	for it in [["Rejouer", func() -> void: game.restart_match()], ["Menu principal", func() -> void: game.exit_requested.emit()]]:
+		var vbtn := Button.new()
+		vbtn.text = it[0]
+		vbtn.custom_minimum_size = Vector2(170, 52)
+		vbtn.pressed.connect(it[1])
+		vb.add_child(vbtn)
+	# Salon d'attente réseau
+	_lobby = ColorRect.new()
+	_lobby.color = Color(0.05, 0.07, 0.12, 0.88)
+	_lobby.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_lobby.visible = false
+	root.add_child(_lobby)
+	var lv := VBoxContainer.new()
+	lv.set_anchors_preset(Control.PRESET_CENTER)
+	lv.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	lv.grow_vertical = Control.GROW_DIRECTION_BOTH
+	lv.add_theme_constant_override("separation", 14)
+	_lobby.add_child(lv)
+	_lobby_title = _lbl(30)
+	_lobby_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lv.add_child(_lobby_title)
+	_lobby_list = _lbl(20)
+	_lobby_list.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lv.add_child(_lobby_list)
+	_lobby_btn = Button.new()
+	_lobby_btn.text = "Lancer"
+	_lobby_btn.custom_minimum_size = Vector2(240, 52)
+	_lobby_btn.pressed.connect(func() -> void: game.hnet.start_now())
+	lv.add_child(_lobby_btn)
+	var lq := Button.new()
+	lq.text = "Quitter"
+	lq.custom_minimum_size = Vector2(240, 46)
+	lq.pressed.connect(func() -> void: game.exit_requested.emit())
+	lv.add_child(lq)
+	# Infos réseau (hôte : IP:port à donner aux autres joueurs)
+	_netinfo = _lbl(15, Color(0.75, 0.85, 1.0))
+	_netinfo.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_netinfo.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_netinfo.position.y = 66
+	root.add_child(_netinfo)
 	# Pause
 	_pause = ColorRect.new()
 	(_pause as ColorRect).color = Color(0, 0, 0, 0.65)
@@ -151,8 +204,49 @@ func _ready() -> void:
 		game.exit_requested.emit())
 	pb.add_child(b2)
 
+func _update_lobby() -> void:
+	var on := game.hnet != null and game.match_manager.state == Cfg.State.LOBBY
+	_lobby.visible = on
+	if not on:
+		return
+	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE   # pour pouvoir cliquer « Lancer »
+	var n := game.hnet.players.size()
+	var s := ""
+	for id in game.hnet.players:
+		var q: PlayerController = game.hnet.players[id]
+		s += "%s  —  %s%s\n" % [q.display_name, Cfg.TEAM_NAMES[q.team], "  (hôte)" if id == 1 else ""]
+	_lobby_list.text = s
+	var host := game.hnet.is_host()
+	if n < 2:
+		_lobby_title.text = "En attente de joueurs… (%d/%d)" % [n, HikaNet.MAX_PLAYERS]
+	elif game.hnet.lobby_t >= 0.0:
+		_lobby_title.text = "La partie démarre dans %d s… (%d/%d)" % [ceili(game.hnet.lobby_t), n, HikaNet.MAX_PLAYERS]
+	else:
+		_lobby_title.text = "En attente de l'hôte… (%d/%d)" % [n, HikaNet.MAX_PLAYERS]
+	_lobby_btn.visible = host
+	_lobby_btn.disabled = n < 2
+
+func is_paused() -> bool:
+	return _pause != null and _pause.visible
+
+## Sur téléphone : coeurs et inventaire en haut (les contrôles occupent le bas), journal décalé pour laisser le bouton Pause.
+func _touch_layout() -> void:
+	_touch = true
+	_hearts.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_hearts.position = Vector2(12, 12)
+	_protect.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_protect.position = Vector2(12, 42)
+	_inv_ui.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_inv_ui.grow_vertical = Control.GROW_DIRECTION_END
+	_inv_ui.position = Vector2(12, 70)
+	_inv_ui.scale = Vector2(0.7, 0.7)
+	_feed.position = Vector2(-150, 14)
+
 func bind(g: GameManager) -> void:
 	game = g
+	if g.touch != null:
+		_touch_layout()
 	for c in get_children():
 		pass
 	var mm := g.match_manager
@@ -166,7 +260,7 @@ func bind(g: GameManager) -> void:
 		_banner.add_theme_color_override("font_color", Cfg.TEAM_COLORS[team]))
 	mm.match_finished.connect(func(w: int) -> void:
 		_victory.visible = true
-		_victory_label.text = "%s GAGNE !\n\nR : rejouer   ·   Échap : menu" % Cfg.TEAM_NAMES[w]
+		_victory_label.text = "%s GAGNE !" % Cfg.TEAM_NAMES[w]
 		_victory_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_victory_label.add_theme_color_override("font_color", Cfg.TEAM_COLORS[w]))
 	_on_score(-1, g.score_manager.scores)
@@ -217,15 +311,21 @@ func _process(dt: float) -> void:
 	_hearts.set_hp(hp, Tuning.max_health)
 	_protect.visible = h.health.is_protected() and h.alive
 	_mine.size.x = 40.0 * h.mine_progress
+	_netinfo.text = game.hnet.info_text() if game.hnet else ""
+	_update_lobby()
 	_vignette.color.a = maxf(_vignette.color.a - dt * 1.5, 0.0)
 	_hit_t = maxf(_hit_t - dt, 0.0)
 	_cross.modulate = Color(1, 0.3, 0.3) if _hit_t > 0.0 else Color.WHITE
 
 func _toggle_pause() -> void:
-	var p := not get_tree().paused
-	get_tree().paused = p
+	var p := not _pause.visible
+	if game.net.mode == NetworkManager.Mode.LOCAL:
+		get_tree().paused = p   # en réseau la partie continue pour les autres : on affiche seulement le menu
 	_pause.visible = p
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if p else Input.MOUSE_MODE_CAPTURED
+	if p:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	elif game.touch == null:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 func _unhandled_input(e: InputEvent) -> void:
 	if e is InputEventKey and e.pressed and not e.echo:

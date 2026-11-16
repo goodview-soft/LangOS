@@ -6,6 +6,9 @@ var players: Array[PlayerController] = []
 func register(p: PlayerController) -> void:
 	players.append(p)
 
+func unregister(p: PlayerController) -> void:
+	players.erase(p)
+
 func enemy(team: int) -> int:
 	return 1 - team
 

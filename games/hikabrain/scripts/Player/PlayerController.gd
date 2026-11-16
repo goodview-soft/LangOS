@@ -19,6 +19,13 @@ var is_local := false
 var cmd := InputCmd.new()
 var provider: Node            # HumanInput ou BotBrain : gather(cmd, dt)
 var ai_paused := false        # utilisé par les tests
+var auto_bridge := false      # pose automatique d'un bloc sous les pieds (tactile : activée par défaut)
+var net_puppet := false       # client réseau : joueur distant, position pilotée par les snapshots de l'hôte
+var net_pos := Vector3.ZERO
+var net_yaw := 0.0
+var net_pitch := 0.0
+var pid := 0                  # identifiant réseau (1 = hôte)
+var spawn_idx := 0            # place dans l'équipe (décale le point d'apparition)
 
 var move: MovementController
 var combat: CombatController
@@ -52,11 +59,12 @@ var _cam_dip := 0.0
 var _cam_kick := 0.0
 var _fov := Tuning.base_fov
 
-func setup(p_game: GameManager, p_team: int, p_name: String, p_local: bool) -> void:
+func setup(p_game: GameManager, p_team: int, p_name: String, p_local: bool, puppet := false) -> void:
 	game = p_game
 	team = p_team
 	display_name = p_name
 	is_local = p_local
+	net_puppet = puppet
 	authority = game.authority
 	blocks = game.blocks
 	collision_layer = 2
@@ -110,6 +118,7 @@ func setup(p_game: GameManager, p_team: int, p_name: String, p_local: bool) -> v
 	combat.p = self
 	combat.placement = BlockPlacement.new(self)
 	combat.destruction = BlockDestruction.new(self)
+	combat.bridge = AutoBridge.new(self)
 	add_child(combat)
 	if view_model:
 		view_model.setup(self)
@@ -188,6 +197,15 @@ func target_block() -> Dictionary:
 	return blocks.raycast(eye_pos(), aim_dir(), Tuning.reach)
 
 func _physics_process(dt: float) -> void:
+	if net_puppet:
+		# Joueur distant côté client : interpolation vers le dernier état reçu de l'hôte
+		health.tick(dt)
+		if alive:
+			var k := clampf(dt * 14.0, 0.0, 1.0)
+			global_position = global_position.lerp(net_pos + velocity * 0.04, k)
+			yaw = lerp_angle(yaw, net_yaw, k)
+			pitch = lerpf(pitch, net_pitch, k)
+		return
 	if not alive:
 		return
 	rotation.y = yaw
