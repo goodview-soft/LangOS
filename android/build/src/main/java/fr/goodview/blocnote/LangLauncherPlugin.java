@@ -135,7 +135,7 @@ public class LangLauncherPlugin extends GodotPlugin {
 	/** Niveau de la partie native de cette APK (comparé à version.json « native » pour proposer de réinstaller l'APK). */
 	@UsedByGodot
 	public int nativeLevel() {
-		return 9;
+		return 10;
 	}
 
 	/** Ouvre le dossier (chemin /storage/emulated/0/...) dans un gestionnaire de fichiers installé ; false si aucun. */
