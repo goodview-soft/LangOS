@@ -1004,8 +1004,11 @@ func _update_flex() -> void:
 	var bot := fold_bottom if fold_half else top
 	var sc := get_viewport().get_final_transform().get_scale().y
 	if on and (top * sc < 200.0 or (size.y - bot) * sc < 200.0): on = false   # zone trop petite (en pixels réels, donc indépendante du zoom)
+	# Petit écran (écran de couverture d'un pliant, mini téléphone) : jamais de pavé, le doigt agit directement sur toute la surface.
+	var small_screen := DisplayServer.get_name() != "headless" and mini(DisplayServer.window_get_size().x, DisplayServer.window_get_size().y) < 900
+	if small_screen: on = false
 	flex.visible = on
-	if pad_btn: pad_btn.modulate = ACCENT.lightened(0.3) if on else Color.WHITE; pad_btn.visible = fold_half or OS.get_name() == "Android" or bool(set_cfg["pad"]) or pad_always
+	if pad_btn: pad_btn.modulate = ACCENT.lightened(0.3) if on else Color.WHITE; pad_btn.visible = (fold_half or OS.get_name() == "Android" or bool(set_cfg["pad"]) or pad_always) and not small_screen
 	pointer.set("pad_active", on); pointer.set("pad_top", bot if on else -1.0)
 	flex.set("top_h", top)
 	if on:
