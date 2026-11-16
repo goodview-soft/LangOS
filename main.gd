@@ -118,6 +118,7 @@ const APPS := {
 	"deepminer": ["Deep Miner", ""],
 }
 ## Dossiers du bureau : id -> applications contenues (affichées seulement dans le dossier).
+const DeskFiles = preload("res://apps/desk_files.gd")
 const FOLDERS := {
 	"f_lang": ["translate", "dict", "music"],
 	"f_games": ["chess", "hika", "airhockey", "deepminer"],
@@ -232,6 +233,8 @@ func _ready() -> void:
 # ---------------------------------------------------------------- Appui long : menu Copier / Coller
 
 func _input(ev: InputEvent) -> void:
+	if ev is InputEventKey and ev.pressed and not ev.echo and ev.keycode == KEY_F2 and desk_sel.begins_with("f:") and not (get_viewport().gui_get_focus_owner() is LineEdit or get_viewport().gui_get_focus_owner() is TextEdit):
+		_desk_rename(desk_sel.substr(2)); get_viewport().set_input_as_handled(); return
 	if keysc != null and keysc.handle(ev): get_viewport().set_input_as_handled(); return
 	if ev is InputEventKey and ev.pressed and not ev.echo and ev.ctrl_pressed and ev.keycode == KEY_SPACE and srch:
 		srch.toggle(); get_viewport().set_input_as_handled(); return
@@ -578,8 +581,10 @@ func _build_desktop() -> void:
 	add_child(root)
 	desk = Control.new(); desk.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	desk.clip_contents = true; root.add_child(desk)
+	desk.set_drag_forwarding(Callable(), _desk_can_drop, _desk_drop)
 	for id in set_cfg["desk"]:
 		if APPS.has(id): _desk_icon(id, Vector2.ZERO)
+	_scan_desk()
 	desk.resized.connect(_layout_icons); desk.resized.connect(_clamp_windows); _layout_icons.call_deferred()
 	# Barre des tâches
 	var bar := PanelContainer.new()
@@ -677,10 +682,12 @@ func _desk_icon(id: String, pos: Vector2) -> void:
 	var v := VBoxContainer.new(); v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.set_anchors_preset(Control.PRESET_FULL_RECT); v.alignment = BoxContainer.ALIGNMENT_CENTER
 	v.add_theme_constant_override("separation", 6); b.add_child(v)
-	var t := TextureRect.new(); t.texture = app_icon(id); t.custom_minimum_size = Vector2(56, 56)
+	var isf := id.begins_with("f:")
+	var t := TextureRect.new(); t.texture = app_icon(("files" if DirAccess.dir_exists_absolute(desk_dir().path_join(id.substr(2))) else "notepad") if isf else id); t.custom_minimum_size = Vector2(56, 56)
 	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	t.mouse_filter = Control.MOUSE_FILTER_IGNORE; v.add_child(t)
-	var l := Label.new(); l.text = APPS[id][0]; l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var l := Label.new(); l.text = id.substr(2) if isf else APPS[id][0]; l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.clip_text = isf; l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	l.add_theme_font_size_override("font_size", 14); l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
 	l.add_theme_constant_override("shadow_offset_x", 1); l.add_theme_constant_override("shadow_offset_y", 1)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE; v.add_child(l)
@@ -2412,6 +2419,8 @@ var toast: PanelContainer
 var np_panel: PanelContainer
 var np_catcher: Control
 var rs := {}       # redimensionnement en cours
+var desk_sel := ""   # id de l'icône sélectionnée (F2)
+var desk_dir_override := ""
 var idrag := {}    # glisser d'une icône en cours
 const GRID := 108.0
 const NO_RESTORE := ["hika", "deepminer", "chromium", "chromium2", "chromium3", "update"]
@@ -2505,7 +2514,11 @@ func _context_at(pos: Vector2) -> bool:
 	for c in kids:
 		if not (c is Control and c.visible): continue
 		if not Rect2(c.position, c.size).has_point(p): continue
-		if desk_icons.has(c): _icon_menu(str(c.get_meta("id")), pos); return true
+		if desk_icons.has(c):
+			var cid := str(c.get_meta("id"))
+			if cid.begins_with("f:"): _file_menu(cid.substr(2), pos)
+			else: _icon_menu(cid, pos)
+			return true
 		for id in wins:
 			if wins[id]["win"] == c and p.y < c.position.y + 44.0: _win_menu(id, pos); return true
 		return false
@@ -2517,6 +2530,9 @@ func _desk_menu(at: Vector2) -> void:
 		["Changer le fond d'écran", func(): _set_gradient((int(set_cfg["bg"]) + 1) % BG_GRADS.size())],
 		["Image de fond…", _pick_wallpaper],
 		["Thème sombre" if light else "Thème clair", func(): _set_light(not light)],
+		null,
+		["Nouveau fichier texte", func(): _desk_new(false)],
+		["Nouveau dossier", func(): _desk_new(true)],
 		null,
 		["Ranger les icônes", _reset_icons],
 		["Disposer les fenêtres", _tile_all],
@@ -2647,7 +2663,10 @@ func _icon_input(ev: InputEvent, b: Button, id: String) -> void:
 		elif idrag.get("b") == b:
 			var moved: bool = idrag["moved"]; var from: Vector2 = idrag["pos0"]; idrag = {}
 			if moved: _drop_icon(b, id, from)
-			elif Time.get_ticks_msec() - lp_t < 550: _open_app(id)
+			elif Time.get_ticks_msec() - lp_t < 550:
+				desk_sel = id
+				if id.begins_with("f:"): _open_desk_file(id.substr(2))
+				else: _open_app(id)
 			else: _layout_icons()
 	elif ev is InputEventMouseMotion and idrag.get("b") == b and (ev.button_mask & MOUSE_BUTTON_MASK_LEFT):
 		var dl: Vector2 = get_viewport().get_mouse_position() - idrag["p0"]
@@ -2659,6 +2678,7 @@ func _cell_of(b: Control) -> Vector2i:
 	return Vector2i(int(roundf((b.position.x - 16.0) / GRID)), int(roundf((b.position.y - 16.0) / GRID)))
 
 func _drop_icon(b: Button, id: String, from: Vector2) -> void:
+	if id.begins_with("f:") and _drop_file_icon(b, id): return
 	var cols := maxi(1, int((desk.size.x - 16.0) / GRID)); var rows := maxi(1, int((desk.size.y - 16.0) / GRID))
 	var c := _cell_of(b); c = Vector2i(clampi(c.x, 0, cols - 1), clampi(c.y, 0, rows - 1))
 	var old := Vector2i(int(roundf((from.x - 16.0) / GRID)), int(roundf((from.y - 16.0) / GRID)))
@@ -2812,3 +2832,100 @@ func _toggle_notifs() -> void:
 		if n["x"] != "": c.add_child(UI.note(str(n["x"])))
 	np_panel.size = np_panel.get_combined_minimum_size()
 	np_panel.position = Vector2(size.x - np_panel.size.x - 10.0, size.y - bar_h - 10.0 - np_panel.size.y)
+
+
+# --- Fichiers et dossiers du bureau (dossier réel, voir apps/desk_files.gd)
+func desk_dir() -> String: return desk_dir_override if desk_dir_override != "" else DeskFiles.dir()
+
+## (Re)crée les icônes des éléments du dossier du bureau.
+func _scan_desk() -> void:
+	for b in desk_icons.duplicate():
+		if str(b.get_meta("id")).begins_with("f:"): desk_icons.erase(b); b.queue_free()
+	for e in DeskFiles.list(desk_dir()): _desk_icon("f:" + str(e["name"]), Vector2.ZERO)
+	_restyle_icons(); _layout_icons()
+
+func _desk_icon_of(name: String) -> Control:
+	for b in desk_icons: if str(b.get_meta("id")) == "f:" + name: return b
+	return null
+
+func _desk_new(folder: bool) -> void:
+	var p := DeskFiles.create(desk_dir(), "Nouveau dossier" if folder else "Nouveau fichier.txt", folder)
+	if p == "": notify("Bureau", "Création impossible"); return
+	_scan_desk(); desk_sel = "f:" + p.get_file()
+	_desk_rename(p.get_file())
+
+func _desk_rename(name: String) -> void:
+	var b := _desk_icon_of(name)
+	var at := (b.global_position + Vector2(0, b.size.y - 30)) if b else size / 2.0
+	_hide_ctx()
+	var pn := PanelContainer.new(); pn.add_theme_stylebox_override("panel", _box(_p("menu"), UI.rad(), _p("edge"), 1, 18, 6)); add_child(pn)
+	var le := LineEdit.new(); le.text = name; le.custom_minimum_size = Vector2(190, 0); pn.add_child(le)
+	pn.position = Vector2(clampf(at.x - 45, 8, maxf(8, size.x - 220)), clampf(at.y, 8, maxf(8, size.y - 60)))
+	var done := [false]
+	var fin := func(ok: bool):
+		if done[0]: return
+		done[0] = true
+		var t := le.text.strip_edges()
+		if ok and t != name:
+			var np := DeskFiles.rename(desk_dir().path_join(name), t)
+			if np == "": notify("Bureau", DeskFiles.check_name(t) if DeskFiles.check_name(t) != "" else "Ce nom existe déjà")
+			else: _move_icon_cfg("f:" + name, "f:" + np.get_file()); desk_sel = "f:" + np.get_file()
+		pn.queue_free(); _scan_desk(); _save_settings()
+	le.text_submitted.connect(func(_t): fin.call(true))
+	le.focus_exited.connect(func(): fin.call(false))
+	le.gui_input.connect(func(ev: InputEvent): if ev is InputEventKey and ev.pressed and ev.keycode == KEY_ESCAPE: fin.call(false); get_viewport().set_input_as_handled())
+	le.grab_focus.call_deferred(); le.select_all.call_deferred()
+
+func _move_icon_cfg(a: String, b: String) -> void:
+	if set_cfg["icons"].has(a): set_cfg["icons"][b] = set_cfg["icons"][a]; set_cfg["icons"].erase(a)
+
+func _file_menu(name: String, at: Vector2) -> void:
+	desk_sel = "f:" + name
+	_popup_menu([["Ouvrir", func(): _open_desk_file(name)], ["Renommer (F2)", func(): _desk_rename(name)],
+		["Supprimer", func(): _desk_delete(name)], null, ["Ranger les icônes", _reset_icons]], at)
+
+func _desk_delete(name: String) -> void:
+	var f := Control.new(); f.set_script(load("res://apps/files.gd"))
+	var ok: bool = f.fs_trash(desk_dir().path_join(name)); f.free()
+	if ok: set_cfg["icons"].erase("f:" + name); _scan_desk(); _save_settings()
+
+func _files_node() -> Node:
+	if not wins.has("files"): return null
+	for n in wins["files"]["win"].find_children("*", "Control", true, false):
+		if n.has_method("_go") and n.has_method("open_file"): return n
+	return null
+
+func _open_desk_file(name: String) -> void:
+	var p := desk_dir().path_join(name)
+	if DirAccess.dir_exists_absolute(p):
+		_open_app("files")
+		var fn := _files_node()
+		if fn: fn._go(p)
+		return
+	var f := Control.new(); f.set_script(load("res://apps/files.gd")); f.main = self
+	f.open_file(p); f.free()
+
+## Icône de fichier lâchée : sur un dossier du bureau, sur la fenêtre Fichiers ou à sa place sur la grille.
+func _drop_file_icon(b: Button, id: String) -> bool:
+	var name := id.substr(2); var src := desk_dir().path_join(name)
+	var mp := get_viewport().get_mouse_position()
+	if wins.has("files") and wins["files"]["win"].visible and wins["files"]["win"].get_global_rect().has_point(mp):
+		var fn := _files_node()
+		if fn:
+			fn._do_drop({"fx": [src]}, fn._cur()); _scan_desk(); return true
+	for o in desk_icons:
+		var oid := str(o.get_meta("id"))
+		if o != b and oid.begins_with("f:") and DirAccess.dir_exists_absolute(desk_dir().path_join(oid.substr(2))) and o.get_global_rect().has_point(mp):
+			var np := DeskFiles.move_into(src, desk_dir().path_join(oid.substr(2)))
+			if np == "": _layout_icons(); return true
+			set_cfg["icons"].erase(id); _scan_desk(); _save_settings(); return true
+	return false
+
+## Dépôt depuis l'appli Fichiers sur le fond du bureau.
+func _desk_can_drop(_at: Vector2, d: Variant) -> bool: return d is Dictionary and d.has("fx")
+func _desk_drop(_at: Vector2, d: Variant) -> void:
+	var n := 0
+	for f in d["fx"]:
+		if str(f).get_base_dir() != desk_dir() and DeskFiles.move_into(str(f), desk_dir()) != "": n += 1
+	if n > 0: notify("Bureau", "%d élément(s) déplacé(s)" % n)
+	_scan_desk()
