@@ -114,11 +114,12 @@ const APPS := {
 	"market": ["Market", ""],
 	"scanner": ["Scanner", ""],
 	"gallery": ["Galerie", ""],
+	"airhockey": ["Air Hockey", ""],
 }
 ## Dossiers du bureau : id -> applications contenues (affichées seulement dans le dossier).
 const FOLDERS := {
 	"f_lang": ["translate", "dict", "music"],
-	"f_games": ["chess", "hika"],
+	"f_games": ["chess", "hika", "airhockey"],
 	"f_soft": ["chromium", "notes", "files", "terminal", "code", "profiles", "clipboard", "devices"],
 	"f_comm": ["messenger", "remote", "chat", "soundlink"],
 	"f_office": ["sheet", "imgview", "pdf", "calendar", "scanner", "gallery"],
@@ -129,12 +130,13 @@ const FOLDERS := {
 const TRASH_SVG := '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#94a3b8"/><stop offset="1" stop-color="#475569"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="15" fill="url(#g)"/><g fill="#fff" fill-opacity=".93"><rect x="14" y="19" width="36" height="5" rx="2.5"/><rect x="25" y="13" width="14" height="6" rx="2.5"/><path d="M17 27h30l-2.2 21a4 4 0 0 1-4 3.6H23.2a4 4 0 0 1-4-3.6z"/></g><g stroke="#64748b" stroke-width="2.4" stroke-linecap="round"><path d="M26 32v14M32 32v14M38 32v14"/></g></svg>'
 const SCANNER_SVG := '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fb923c"/><stop offset="1" stop-color="#c2410c"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="15" fill="url(#g)"/><path d="M19 12h20l8 8v32a2 2 0 0 1-2 2H19a2 2 0 0 1-2-2V14a2 2 0 0 1 2-2z" fill="#fff" fill-opacity=".95"/><path d="M24 28h16M24 34h16M24 40h10" stroke="#c2410c" stroke-width="2.6" stroke-linecap="round"/><path d="M8 32h48" stroke="#fde68a" stroke-width="3" stroke-linecap="round"/></svg>'
 const GALLERY_SVG := '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a78bfa"/><stop offset="1" stop-color="#6d28d9"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="15" fill="url(#g)"/><rect x="13" y="15" width="38" height="34" rx="5" fill="#fff" fill-opacity=".95"/><circle cx="24" cy="26" r="4.5" fill="#fbbf24"/><path d="M13 43l12-11 9 8 7-6 10 9v1a5 5 0 0 1-5 5H18a5 5 0 0 1-5-5z" fill="#7c3aed"/></svg>'
+const AIRHOCKEY_SVG := '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="15" fill="url(#g)"/><rect x="12" y="10" width="40" height="44" rx="6" fill="#fff" fill-opacity=".15" stroke="#fff" stroke-opacity=".9" stroke-width="2.5"/><path d="M12 32h40" stroke="#fff" stroke-opacity=".8" stroke-width="2.5"/><circle cx="32" cy="32" r="6" fill="none" stroke="#fff" stroke-opacity=".8" stroke-width="2"/><circle cx="25" cy="42" r="6.5" fill="#f87171"/><circle cx="25" cy="42" r="3" fill="#fecaca"/><circle cx="38" cy="22" r="3.2" fill="#fff"/></svg>'
 const MARKET_SVG := '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#047857"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="15" fill="url(#g)"/><path d="M15 23h34l-2.6 24a4 4 0 0 1-4 3.5H21.6a4 4 0 0 1-4-3.5z" fill="#fff" fill-opacity=".93"/><path d="M24 27v-4a8 8 0 0 1 16 0v4" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/></svg>'
 var _svg_tex := {}
 func app_icon(id: String) -> Texture2D:
-	if id == "trash" or id == "market" or id == "scanner" or id == "gallery":
+	if id == "trash" or id == "market" or id == "scanner" or id == "gallery" or id == "airhockey":
 		if not _svg_tex.has(id):
-			var img := Image.new(); img.load_svg_from_buffer(({"trash": TRASH_SVG, "market": MARKET_SVG, "scanner": SCANNER_SVG, "gallery": GALLERY_SVG}[id]).to_utf8_buffer(), 1.0)
+			var img := Image.new(); img.load_svg_from_buffer(({"trash": TRASH_SVG, "market": MARKET_SVG, "scanner": SCANNER_SVG, "gallery": GALLERY_SVG, "airhockey": AIRHOCKEY_SVG}[id]).to_utf8_buffer(), 1.0)
 			_svg_tex[id] = ImageTexture.create_from_image(img)
 		return _svg_tex[id]
 	return load(APPS[id][1])
@@ -156,8 +158,13 @@ var active := ""
 var menu_reset := Callable()
 var menu_sc: ScrollContainer
 var menu_search: LineEdit
-var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "cursor": "auto", "pad": false, "pad_speed": 0.7, "zoom": 1.0, "model": "", "engine": -1, "src": "spa", "tgt": "fra", "light": false, "wall": false, "icons": {}, "layout": {}, "open": [], "accent": "5aa2ff", "anim": true, "wtrans": 1.0, "radius": 12, "isize": 56, "pins": ["notepad", "settings", "calc", "music"], "desk": ["trash", "market"], "mk_desk": true, "installed": [], "dock_hide": false, "keys": {}, "padmap": {}, "clip_save": true, "clip_nopw": true}
+var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "cursor": "auto", "pad": false, "pad_speed": 0.7, "zoom": 1.0, "model": "", "engine": -1, "src": "spa", "tgt": "fra", "light": false, "wall": false, "icons": {}, "layout": {}, "open": [], "accent": "5aa2ff", "anim": true, "wtrans": 1.0, "radius": 12, "isize": 56, "pins": ["notepad", "settings", "calc", "music"], "desk": ["trash", "market"], "mk_desk": true, "installed": [], "dock_hide": true, "dock_h2": true, "keys": {}, "padmap": {}, "clip_save": true, "clip_nopw": true}
 var kb: PanelContainer
+var sb_btn: Button
+var kb_kv: VBoxContainer
+var kb_narrow := false
+var kb_keys: Array = []
+var kb_rows: Array = []
 var ui_root: VBoxContainer
 var pointer: Control
 var flex: PanelContainer
@@ -586,9 +593,12 @@ func _build_desktop() -> void:
 	start_btn.add_theme_font_override("font", UI.font(700))
 	start_btn.pressed.connect(_toggle_menu); bh.add_child(start_btn)
 	var vs := VSeparator.new(); bh.add_child(vs)
-	task_box = HBoxContainer.new(); task_box.add_theme_constant_override("separation", 4); bh.add_child(task_box)
-	var sp := Control.new(); sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL; bh.add_child(sp)
-	var sb_ := _icon_btn("search", "Flat", 42, 42, 18); sb_.tooltip_text = "Recherche (Ctrl+Espace)"; sb_.pressed.connect(func(): srch.toggle()); bh.add_child(sb_)
+	task_box = HBoxContainer.new(); task_box.add_theme_constant_override("separation", 4)
+	# les boutons de fenêtres défilent plutôt que d'élargir la barre (écran étroit / zoomé)
+	var tsc := ScrollContainer.new(); tsc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER; tsc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	tsc.size_flags_horizontal = Control.SIZE_EXPAND_FILL; tsc.custom_minimum_size.x = 0; tsc.add_child(task_box); bh.add_child(tsc)
+	sb_btn = _icon_btn("search", "Flat", 42, 42, 18); var sb_ := sb_btn
+	sb_.tooltip_text = "Recherche (Ctrl+Espace)"; sb_.pressed.connect(func(): srch.toggle()); bh.add_child(sb_)
 	vd_btn = _mk_btn("1/%d" % n_vd, 56, 42); vd_btn.theme_type_variation = "Flat"
 	vd_btn.tooltip_text = "Bureaux virtuels (Ctrl+Alt+Gauche/Droite)"; vd_btn.pressed.connect(_vd_menu); bh.add_child(vd_btn)
 	bell_btn = _icon_btn("bell", "Flat", 42, 42, 18); bell_btn.tooltip_text = "Notifications"; bell_btn.pressed.connect(_toggle_notifs); bh.add_child(bell_btn)
@@ -601,6 +611,7 @@ func _build_desktop() -> void:
 	clock.mouse_filter = Control.MOUSE_FILTER_STOP; clock.tooltip_text = "Notifications et calendrier"
 	clock.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT: _toggle_notifs())
 	bar_h = 54.0
+	resized.connect(_fit_bar); _fit_bar.call_deferred()
 	_build_keyboard()
 	get_tree().node_added.connect(_on_node_added)
 	pointer = Control.new(); pointer.set_script(load("res://apps/pointer.gd")); pointer.set("mode", set_cfg["cursor"]); add_child(pointer)
@@ -826,34 +837,86 @@ func _build_keyboard() -> void:
 	kb.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	var kv := VBoxContainer.new(); kv.alignment = BoxContainer.ALIGNMENT_CENTER
 	kv.add_theme_constant_override("separation", 6); kb.add_child(kv)
-	var act := HBoxContainer.new(); act.alignment = BoxContainer.ALIGNMENT_CENTER
-	act.add_theme_constant_override("separation", 6); kv.add_child(act)
+	kb_kv = kv; kb_keys = []; kb_rows = []; kv.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var act := HFlowContainer.new(); act.alignment = FlowContainer.ALIGNMENT_CENTER
+	act.add_theme_constant_override("h_separation", 6); act.add_theme_constant_override("v_separation", 4); act.size_flags_horizontal = Control.SIZE_EXPAND_FILL; kb_rows.append(act)
+	var top := HBoxContainer.new(); top.add_theme_constant_override("separation", 4); kv.add_child(top); top.add_child(act)
+	var xb := UI.icon_btn("x", "Fermer le clavier", func(): kb.visible = false, "Flat", 44); xb.custom_minimum_size = Vector2(44, 44); xb.focus_mode = Control.FOCUS_NONE; xb.size_flags_vertical = Control.SIZE_SHRINK_BEGIN; top.add_child(xb)
 	for e in [["Tout", "all"], ["Copier", "copy"], ["Couper", "cut"], ["Coller", "paste"], ["arrow-up", "up", "Haut"], ["arrow-down", "down", "Bas"], ["arrow-left-to-line", "home", "Début de ligne"], ["arrow-right-to-line", "end", "Fin de ligne"]]:
-		var ab := _mk_btn(e[0] if e.size() == 2 else "", 92 if e.size() == 2 else 56, 44); ab.pressed.connect(_clip_action.bind(e[1])); act.add_child(ab)
+		var ab := _mk_btn(e[0] if e.size() == 2 else "", 92 if e.size() == 2 else 56, 44); ab.pressed.connect(_clip_action.bind(e[1])); act.add_child(ab); kb_keys.append([ab, 44, 0.0, 92 if e.size() == 2 else 56, 0])
 		if e.size() > 2: UI.set_icon(ab, e[0], 20); ab.tooltip_text = e[2]
 	for r in ROWS_LOWER.size():
 		var row := HBoxContainer.new(); row.alignment = BoxContainer.ALIGNMENT_CENTER
-		row.add_theme_constant_override("separation", 6); kv.add_child(row)
+		row.add_theme_constant_override("separation", 6); kv.add_child(row); kb_rows.append(row)
 		if r == 3:
-			var sh := _mk_btn("", 80); UI.set_icon(sh, "arrow-big-up", 22); sh.tooltip_text = "Majuscule"; sh.pressed.connect(_toggle_shift); row.add_child(sh); shift_btns.append(sh)
+			var sh := _mk_btn("", 80); UI.set_icon(sh, "arrow-big-up", 22); sh.tooltip_text = "Majuscule"; sh.pressed.connect(_toggle_shift); row.add_child(sh); shift_btns.append(sh); kb_keys.append([sh, 50, 1.6, 80, 0])
 		for c in ROWS_LOWER[r].size():
 			var k := _mk_btn(ROWS_LOWER[r][c], 50, 50); k.add_theme_font_size_override("font_size", 19); k.add_theme_font_override("font", UI.font())
 			k.pressed.connect(_type_key.bind(r, c))
-			row.add_child(k); char_btns.append([k, r, c])
+			row.add_child(k); char_btns.append([k, r, c]); kb_keys.append([k, 50, 1.0, 50, 19])
 		if r == 0:
-			var bs := _mk_btn("", 80, 50); UI.set_icon(bs, "delete", 22); bs.tooltip_text = "Effacer"; bs.pressed.connect(func(): _bs()); row.add_child(bs)
+			var bs := _mk_btn("", 80, 50); UI.set_icon(bs, "delete", 22); bs.tooltip_text = "Effacer"; bs.pressed.connect(func(): _bs()); row.add_child(bs); kb_keys.append([bs, 50, 1.6, 80, 0])
 		if r == 1:
-			var en := _mk_btn("", 80, 50); UI.set_icon(en, "corner-down-left", 22); en.tooltip_text = "Entrée"; en.pressed.connect(func(): _ins("\n")); row.add_child(en)
+			var en := _mk_btn("", 80, 50); UI.set_icon(en, "corner-down-left", 22); en.tooltip_text = "Entrée"; en.pressed.connect(func(): _ins("\n")); row.add_child(en); kb_keys.append([en, 50, 1.6, 80, 0])
 		if r == 2:
-			var cp := _mk_btn("Maj", 80, 50); cp.pressed.connect(_toggle_caps); row.add_child(cp); shift_btns.append(cp)
+			var cp := _mk_btn("Maj", 80, 50); cp.pressed.connect(_toggle_caps); row.add_child(cp); shift_btns.append(cp); kb_keys.append([cp, 50, 1.6, 80, 0])
 	var last := HBoxContainer.new(); last.alignment = BoxContainer.ALIGNMENT_CENTER
-	last.add_theme_constant_override("separation", 6); kv.add_child(last)
+	last.add_theme_constant_override("separation", 6); kv.add_child(last); kb_rows.append(last)
 	for p in [["arrow-left", -1], ["arrow-right", 1]]:
-		var a := _mk_btn("", 70, 50); UI.set_icon(a, p[0], 20); a.pressed.connect(_move.bind(p[1])); last.add_child(a)
+		var a := _mk_btn("", 70, 50); UI.set_icon(a, p[0], 20); a.pressed.connect(_move.bind(p[1])); last.add_child(a); kb_keys.append([a, 50, 1.0, 70, 0])
 	var space := _mk_btn("Espace", 420, 50); space.pressed.connect(func(): _ins(" "))
-	last.add_child(space)
-	var tab := _mk_btn("Tab", 70, 50); tab.pressed.connect(func(): _ins("\t")); last.add_child(tab)
+	last.add_child(space); kb_keys.append([space, 50, 6.0, 420, 0])
+	var tab := _mk_btn("Tab", 70, 50); tab.pressed.connect(func(): _ins("\t")); last.add_child(tab); kb_keys.append([tab, 50, 1.2, 70, 0])
+	for kk in kb_keys:
+		var kbn: Button = kk[0]; kbn.clip_text = true
+		if kk[2] > 0.0: kbn.size_flags_horizontal = Control.SIZE_EXPAND_FILL; kbn.size_flags_stretch_ratio = kk[2]
 	_refresh_keys()
+	_fit_kb()
+	get_viewport().size_changed.connect(_fit_kb)
+
+## Barre des tâches compacte quand l'écran est étroit : moins de boutons, « LangOS » sans texte.
+func _fit_bar() -> void:
+	if start_btn == null: return
+	var w := size.x
+	start_btn.text = "" if w < 600.0 else "LangOS"
+	start_btn.custom_minimum_size.x = 0.0 if w < 600.0 else 112.0
+	for b in [sb_btn, vd_btn, pad_btn]: b.visible = w >= 600.0
+	bell_btn.visible = w >= 420.0
+	clock.visible = w >= 480.0
+	if tray_node: tray_node.custom_minimum_size.x = 120.0 if w >= 600.0 else 64.0
+	if ui_root: ui_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+## Adapte le clavier visuel à la largeur utile : touches extensibles, marges et hauteur réduites (≤ 45 % du bureau).
+func _fit_kb() -> void:
+	if kb == null or kb_kv == null: return
+	var dw: float = size.x
+	var dh: float = size.y - bar_h
+	var narrow := dw < 760.0
+	var st := kb.get_theme_stylebox("panel") as StyleBoxFlat
+	if st: st.set_content_margin_all(4 if narrow else 12)
+	var gap := 3 if narrow else 6
+	for r in kb_rows:
+		if r is HFlowContainer: r.add_theme_constant_override("h_separation", gap)
+		else: r.add_theme_constant_override("separation", gap)
+	kb_kv.add_theme_constant_override("separation", gap)
+	kb_kv.custom_minimum_size.x = minf(dw - (8.0 if narrow else 24.0), 1000.0)
+	var lines := 7.0 if narrow else 6.0
+	var hh := clampf((dh * 0.45 - lines * gap - 8.0) / lines, 26.0, 1000.0)
+	for kk in kb_keys:
+		var b: Button = kk[0]
+		var h: float = minf(UI.tp(float(kk[1])), hh) if narrow else UI.tp(float(kk[1]))
+		b.custom_minimum_size = Vector2(0.0 if (narrow and kk[2] > 0.0) else (float(kk[3]) if not narrow or kk[2] == 0.0 else 0.0), h)
+		if narrow and kk[2] == 0.0: b.custom_minimum_size = Vector2(46.0 if kk[3] == 92 else 34.0, maxf(24.0, hh * 0.75))
+		if narrow != kb_narrow:
+			for sn in ["normal", "hover", "pressed", "disabled", "focus"]:
+				if narrow:
+					var ks2: StyleBox = b.get_theme_stylebox(sn).duplicate() as StyleBox
+					ks2.content_margin_left = 1.0; ks2.content_margin_right = 1.0; ks2.content_margin_top = 1.0; ks2.content_margin_bottom = 1.0; b.add_theme_stylebox_override(sn, ks2)
+				else: b.remove_theme_stylebox_override(sn)
+		if kk[4] > 0 or b.text != "": b.add_theme_font_size_override("font_size", clampi(int(h * 0.42), 11, 19) if narrow else (19 if kk[4] > 0 else 16))
+	kb_narrow = narrow
+	kb_kv.reset_size()
+	if kb.visible: kb.offset_top = -(bar_h + kb.get_combined_minimum_size().y)
 
 func _target() -> Control:
 	var f := get_viewport().gui_get_focus_owner()
@@ -956,6 +1019,15 @@ func _update_flex() -> void:
 func _on_node_added(n: Node) -> void:
 	if n is LineEdit or n is TextEdit: n.virtual_keyboard_enabled = set_cfg["kb"] == "system"
 	elif n is ScrollContainer and UI.touch(): n.scroll_deadzone = 10   # défilement au doigt : un petit glissé n'active pas le bouton touché
+	elif n is Label and size.x < 700.0 and ui_root != null: _fit_label.call_deferred(n)
+
+## Écran étroit : un texte trop long ne doit pas élargir la fenêtre (retour à la ligne, ou points de suspension pour un mot seul).
+func _fit_label(l) -> void:
+	if not is_instance_valid(l) or l.autowrap_mode != TextServer.AUTOWRAP_OFF or l.clip_text or l.text_overrun_behavior != TextServer.OVERRUN_NO_TRIMMING: return
+	if l.text.length() < 8 or l.get_parent() is Button or l.get_parent() == null: return
+	if l.size_flags_horizontal == Control.SIZE_FILL: l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if l.text.contains(" ") and not l.text.contains("\n"): l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	else: l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 
 func _apply_kb() -> void:
 	var mode: String = set_cfg["kb"]
@@ -979,6 +1051,7 @@ func _toggle_pad() -> void:
 
 func _toggle_kb() -> void:
 	kb.visible = not kb.visible
+	_fit_kb()
 	kb.offset_top = -(bar_h + kb.get_combined_minimum_size().y)
 	kb.offset_bottom = -bar_h
 	if menu.visible: _place_menu()
@@ -1006,6 +1079,7 @@ func _open_app(id: String) -> void:
 		"android_apps": _app_android_apps()
 		"hika": _app_hika()
 		"chess": _app_chess()
+		"airhockey": _app_airhockey()
 		"calc": _app_tool("calc", Vector2(620, 520))
 		"units": _app_tool("units", Vector2(460, 560))
 		"timer": _app_tool("timer", Vector2(460, 600))
@@ -1095,7 +1169,7 @@ func _make_window(id: String, _title: String, sz: Vector2, pos: Vector2) -> VBox
 	wv.add_child(tb)
 	# Barre de titre façon headerbar : icône à gauche, titre gras centré, contrôles ronds à droite
 	var tbh := HBoxContainer.new(); tbh.add_theme_constant_override("separation", 6); tb.add_child(tbh)
-	var lead := HBoxContainer.new(); lead.custom_minimum_size.x = UI.tp(26) * 3 + 8 * 2; tbh.add_child(lead)
+	var lead := HBoxContainer.new(); lead.custom_minimum_size.x = (UI.tp(26) * 3 + 8 * 2) if ds.x >= 700.0 else 28.0; tbh.add_child(lead)
 	var ti := TextureRect.new(); ti.texture = app_icon(id); ti.custom_minimum_size = Vector2(20, 20)
 	ti.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; ti.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	ti.size_flags_vertical = Control.SIZE_SHRINK_CENTER; ti.mouse_filter = Control.MOUSE_FILTER_PASS; lead.add_child(ti)
@@ -1124,8 +1198,62 @@ func _make_window(id: String, _title: String, sz: Vector2, pos: Vector2) -> VBox
 	fx.open_win(w)
 	_clamp_windows.call_deferred()
 	get_tree().create_timer(0.3).timeout.connect(_clamp_windows)
+	if ds.x < 700.0:
+		_reflow.call_deferred(w); get_tree().create_timer(0.2).timeout.connect(func(): _reflow(w))
 	get_tree().create_timer(0.5).timeout.connect(_save_layout)   # après l'animation d'ouverture et la mise en place du contenu
 	return wv
+
+## Écran étroit : fait tenir le contenu d'une fenêtre dans la largeur du bureau (rangées de boutons qui passent à la ligne,
+## grilles à moins de colonnes, boutons et champs trop larges rognés). Sans effet sur un bureau large.
+func _reflow(w) -> void:
+	if not is_instance_valid(w): return
+	for _i in 6:
+		if not is_instance_valid(w): return
+		var avail := minf(desk.size.x - 12.0, w.size.x - 4.0)
+		var changed := false
+		var stack: Array = [w]
+		while not stack.is_empty():
+			var n: Node = stack.pop_back()
+			stack.append_array(n.get_children())
+			if not n is Control or n == w: continue
+			var c: Control = n
+			var room := avail - 2.0 * maxf(0.0, c.global_position.x - w.global_position.x)   # place disponible (marges symétriques)
+			if c.get_combined_minimum_size().x <= room - 2.0: continue
+			if c.get_class() == "HBoxContainer" and c.get_child_count() >= 2 and c.get_script() == null and c.get_parent() != null:
+				var fl := HFlowContainer.new(); fl.name = c.name
+				var sep := c.get_theme_constant("separation"); fl.add_theme_constant_override("h_separation", sep); fl.add_theme_constant_override("v_separation", mini(sep, 6))
+				fl.alignment = int((c as BoxContainer).alignment) as FlowContainer.AlignmentMode; fl.size_flags_horizontal = c.size_flags_horizontal; fl.size_flags_vertical = c.size_flags_vertical
+				fl.custom_minimum_size = Vector2(0, c.custom_minimum_size.y)
+				var par := c.get_parent(); var idx := c.get_index()
+				for ch in c.get_children(): c.remove_child(ch); fl.add_child(ch)
+				fl.visible = c.visible
+				par.add_child(fl); par.move_child(fl, idx)
+				# l'ancien HBox reste en place (vide) : le code de l'appli qui le garde en variable continue de fonctionner (visibilité relayée)
+				c.custom_minimum_size = Vector2.ZERO; c.size_flags_horizontal = Control.SIZE_FILL; c.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+				c.visibility_changed.connect(func(): if is_instance_valid(fl): fl.visible = c.visible)
+				changed = true
+			elif c is GridContainer and (c as GridContainer).columns > 1:
+				(c as GridContainer).columns -= 1; changed = true
+			elif (c is Button or c is OptionButton) and not (c as Button).clip_text:
+				(c as Button).clip_text = true; changed = true
+				if c is OptionButton: (c as OptionButton).fit_to_longest_item = false
+			elif c.custom_minimum_size.x > room * 0.6 and c.get_child_count() == 0 or (c is LineEdit and c.custom_minimum_size.x > room * 0.6):
+				c.custom_minimum_size.x = room * 0.6; changed = true
+			elif c.custom_minimum_size.x > room:
+				c.custom_minimum_size.x = room * 0.9; changed = true
+		_refit(w)
+		if not changed: return
+		await get_tree().process_frame
+	_refit(w)
+
+## Après un réagencement : les contenus ancrés plein cadre (hors conteneur) reprennent la taille de leur hôte.
+func _refit(w: Node) -> void:
+	var stack: Array = [w]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		stack.append_array(n.get_children())
+		if n is Control and not n.get_parent() is Container and n.get_parent() is Control and n != w and is_equal_approx(n.anchor_right, 1.0) and is_equal_approx(n.anchor_bottom, 1.0):
+			(n as Control).set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 func _title_input(ev: InputEvent, id: String) -> void:
 	var d: Dictionary = wins[id]
@@ -1327,7 +1455,7 @@ const MARKET_DESC := {
 	"terminal": "Terminal de commandes intégré.", "code": "Éditeur de code avec coloration syntaxique.", "profiles": "Profils d'environnement : fenêtres et applis par contexte.",
 	"clipboard": "Historique du presse-papiers.", "devices": "Liste des périphériques connectés.", "messenger": "Messagerie instantanée.",
 	"remote": "Contrôle un autre ordinateur à distance.", "chat": "Discute avec une IA.", "soundlink": "Partage du son entre appareils.",
-	"sheet": "Tableur : cellules, formules et calculs.", "imgview": "Visionneuse d'images.", "pdf": "Lecteur de documents PDF.", "calendar": "Agenda et rendez-vous.", "gallery": "Photos et vidéos de ton appareil en grille, avec visionneuse.", "scanner": "Photographie un document : bords détectés, page redressée, texte net, export PDF.",
+	"sheet": "Tableur : cellules, formules et calculs.", "imgview": "Visionneuse d'images.", "pdf": "Lecteur de documents PDF.", "calendar": "Agenda et rendez-vous.", "airhockey": "Air Hockey contre l'IA, à deux ou en réseau local.", "gallery": "Photos et vidéos de ton appareil en grille, avec visionneuse.", "scanner": "Photographie un document : bords détectés, page redressée, texte net, export PDF.",
 	"calc": "Calculatrice simple et scientifique.", "units": "Convertis longueurs, poids, devises et plus.", "timer": "Minuteur et chronomètre.",
 	"todo": "Listes de tâches.", "vault": "Coffre-fort chiffré pour tes mots de passe.", "cards": "Cartes mémoire pour réviser.", "android_apps": "Lance les applis Android installées.",
 }
@@ -1707,7 +1835,7 @@ func _app_remote() -> void:
 	var rd := Control.new()
 	rd.set_script(load("res://apps/remotedesk.gd"))
 	rd.size_flags_vertical = Control.SIZE_EXPAND_FILL; rd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	rd.custom_minimum_size = Vector2(320, 360); rd.clip_contents = true
+	rd.custom_minimum_size = Vector2(200, 300); rd.clip_contents = true
 	wv.add_child(rd)
 
 # ---------------------------------------------------------------- Messenger (app intégrée)
@@ -1717,7 +1845,7 @@ func _app_messenger() -> void:
 	var ms := Control.new()
 	ms.set_script(load("res://apps/messenger.gd"))
 	ms.size_flags_vertical = Control.SIZE_EXPAND_FILL; ms.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ms.custom_minimum_size = Vector2(320, 360); ms.clip_contents = true
+	ms.custom_minimum_size = Vector2(200, 300); ms.clip_contents = true
 	wv.add_child(ms)
 
 # ---------------------------------------------------------------- Chat IA (app + overlay « - »)
@@ -1749,7 +1877,7 @@ func _app_chat() -> void:
 	c.set_script(load("res://apps/chat.gd"))
 	c.set("core", chat_core)
 	c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	c.custom_minimum_size = Vector2(320, 360); c.clip_contents = true
+	c.custom_minimum_size = Vector2(200, 300); c.clip_contents = true
 	wv.add_child(c)
 
 # ---------------------------------------------------------------- Music (app intégrée)
@@ -1761,7 +1889,7 @@ func _app_music() -> void:
 	mu.set_script(load("res://apps/music.gd"))
 	mu.set("ollama_url", set_cfg["ollama"]); mu.set("src", set_cfg["src"]); mu.set("tgt", set_cfg["tgt"]); music_node = mu
 	mu.size_flags_vertical = Control.SIZE_EXPAND_FILL; mu.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	mu.custom_minimum_size = Vector2(320, 360); mu.clip_contents = true
+	mu.custom_minimum_size = Vector2(200, 300); mu.clip_contents = true
 	wv.add_child(mu)
 
 # ---------------------------------------------------------------- Dossiers et Échecs
@@ -1800,7 +1928,7 @@ func _app_android_apps() -> void:
 	var wv := _make_window("android_apps", "", big, Vector2(30, 12))
 	var c := Control.new(); c.set_script(load("res://apps/android_apps.gd"))
 	c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	c.custom_minimum_size = Vector2(320, 360); c.clip_contents = true; wv.add_child(c)
+	c.custom_minimum_size = Vector2(200, 300); c.clip_contents = true; wv.add_child(c)
 
 ## Nouvelle fenêtre de navigation (jusqu'à 3 fenêtres) ; sous Android un seul WebView existe : un onglet est ouvert à la place.
 func _open_browser_window() -> void:
@@ -1813,14 +1941,14 @@ func _app_browser(id := "chromium") -> void:
 	var wv := _make_window(id, "", big, Vector2(20 + (0 if id == "chromium" else 40), 10 + (0 if id == "chromium" else 30)))
 	var br := Control.new(); br.set_script(load("res://apps/browser.gd")); br.set("external", Callable(self, "_launch_browser")); br.set_meta("win_id", id)
 	br.size_flags_vertical = Control.SIZE_EXPAND_FILL; br.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	br.custom_minimum_size = Vector2(320, 360); br.clip_contents = true; wv.add_child(br)
+	br.custom_minimum_size = Vector2(200, 300); br.clip_contents = true; wv.add_child(br)
 
 func _app_hika() -> void:
 	var big := Vector2(minf(1100.0, desk.size.x - 24.0), minf(700.0, desk.size.y - 16.0))
 	var wv := _make_window("hika", "", big, Vector2(12, 8))
 	var h := Control.new(); h.set_script(load("res://apps/hika_host.gd"))
 	h.size_flags_vertical = Control.SIZE_EXPAND_FILL; h.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	h.custom_minimum_size = Vector2(320, 360); wv.add_child(h)
+	h.custom_minimum_size = Vector2(200, 300); wv.add_child(h)
 
 ## Petits outils (dossier Outils) : un script apps/tool_<id>.gd par outil.
 func _app_tool(id: String, sz: Vector2) -> void:
@@ -1893,12 +2021,20 @@ func _app_devices() -> void:
 	c.custom_minimum_size = Vector2(minf(520.0, maxf(280.0, desk.size.x - 16.0)), 420); c.clip_contents = true
 	wv.add_child(c); c.build()
 
+func _app_airhockey() -> void:
+	var wv := _make_window("airhockey", "", Vector2(520, 720), Vector2(190, 12))
+	var ah := Control.new()
+	ah.set_script(load("res://apps/airhockey.gd"))
+	ah.size_flags_vertical = Control.SIZE_EXPAND_FILL; ah.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ah.custom_minimum_size = Vector2(minf(280.0, maxf(200.0, desk.size.x - 16.0)), 340); ah.clip_contents = true
+	wv.add_child(ah)
+
 func _app_chess() -> void:
 	var wv := _make_window("chess", "", Vector2(900, 680), Vector2(180, 10))
 	var ch := Control.new()
 	ch.set_script(load("res://apps/chess.gd"))
 	ch.size_flags_vertical = Control.SIZE_EXPAND_FILL; ch.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ch.custom_minimum_size = Vector2(320, 360); ch.clip_contents = true
+	ch.custom_minimum_size = Vector2(200, 300); ch.clip_contents = true
 	wv.add_child(ch)
 
 # ---------------------------------------------------------------- Sound Link (app intégrée)
@@ -1908,7 +2044,7 @@ func _app_soundlink() -> void:
 	var sl := Control.new()
 	sl.set_script(load("res://apps/soundlink.gd"))
 	sl.size_flags_vertical = Control.SIZE_EXPAND_FILL; sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	sl.custom_minimum_size = Vector2(320, 360); sl.clip_contents = true
+	sl.custom_minimum_size = Vector2(200, 300); sl.clip_contents = true
 	wv.add_child(sl)
 
 # ---------------------------------------------------------------- Dictionnaire (hors ligne, données FreeDict)
@@ -2042,7 +2178,7 @@ func _load_settings() -> void:
 		var o = c.get_value("ui", "open", []); set_cfg["open"] = o if o is Array else []
 		set_cfg["accent"] = str(c.get_value("ui", "accent", "5aa2ff")); set_cfg["anim"] = bool(c.get_value("ui", "anim", true))
 		set_cfg["wtrans"] = clampf(float(c.get_value("ui", "wtrans", 1.0)), 0.5, 1.0); set_cfg["radius"] = clampi(int(c.get_value("ui", "radius", 12)), 0, 28)
-		set_cfg["isize"] = clampi(int(c.get_value("ui", "isize", 56)), 32, 96); set_cfg["dock_hide"] = bool(c.get_value("ui", "dock_hide", false))
+		set_cfg["isize"] = clampi(int(c.get_value("ui", "isize", 56)), 32, 96); set_cfg["dock_hide"] = bool(c.get_value("ui", "dock_hide", true)) or not bool(c.get_value("ui", "dock_h2", false))   # une seule fois : tout le monde passe en masquage auto
 		var pf = c.get_value("ui", "profiles", null)
 		if pf is Array: set_cfg["profiles"] = pf
 		var ins = c.get_value("ui", "installed", null); set_cfg["installed"] = ins if ins is Array else APPS.keys().filter(func(k): return not CORE.has(k))   # anciennes configs : tout reste installé
@@ -2056,7 +2192,7 @@ func _save_settings() -> void:
 	c.set_value("ui", "bg", set_cfg["bg"]); c.set_value("ui", "font", set_cfg["font"]); c.set_value("ui", "kb", set_cfg["kb"]); c.set_value("ui", "cursor", set_cfg["cursor"]); c.set_value("ui", "pad", set_cfg["pad"]); c.set_value("ui", "pad_speed", set_cfg["pad_speed"]); c.set_value("ui", "zoom", set_cfg["zoom"])
 	c.set_value("translate", "server", set_cfg["ollama"]); c.set_value("translate", "model", set_cfg["model"]); c.set_value("translate", "engine", set_cfg["engine"])
 	c.set_value("lang", "src", set_cfg["src"]); c.set_value("lang", "tgt", set_cfg["tgt"])
-	for k in ["light", "wall", "icons", "layout", "open", "accent", "anim", "wtrans", "radius", "isize", "pins", "desk", "mk_desk", "installed", "dock_hide", "keys", "padmap", "clip_save", "clip_nopw"]: c.set_value("ui", k, set_cfg[k])
+	for k in ["light", "wall", "icons", "layout", "open", "accent", "anim", "wtrans", "radius", "isize", "pins", "desk", "mk_desk", "installed", "dock_hide", "dock_h2", "keys", "padmap", "clip_save", "clip_nopw"]: c.set_value("ui", k, set_cfg[k])
 	c.set_value("ui", "nvd", n_vd)
 	if set_cfg.has("profiles"): c.set_value("ui", "profiles", set_cfg["profiles"])
 	c.save("user://settings.cfg")
@@ -2110,7 +2246,7 @@ func _set_upd(label: String, btn: String, disabled := false) -> void:
 	if upd_lbl and is_instance_valid(upd_lbl): upd_lbl.text = label
 	if upd_btn and is_instance_valid(upd_btn): upd_btn.text = btn; upd_btn.disabled = disabled
 	upd_avail = btn.begins_with("Mettre") or btn.begins_with("Télécharger")
-	start_btn.text = "LangOS" + (" ●" if upd_avail else "")
+	start_btn.text = ("LangOS" + (" ●" if upd_avail else "")) if size.x >= 600.0 else ""
 
 func _check_update() -> void:
 	if not CHECK_UPDATES:

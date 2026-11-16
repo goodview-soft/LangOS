@@ -39,7 +39,7 @@ func get_nodes_in_group_of(m: Node, g: String) -> Array: return m.get_tree().get
 func _init() -> void:
 	var fails: Array = []
 	var checks := 0
-	for size in [Vector2i(700, 1200), Vector2i(1280, 720), Vector2i(1000, 600)]:
+	for size in [Vector2i(700, 1200), Vector2i(1280, 720), Vector2i(1000, 600), Vector2i(360, 780), Vector2i(300, 640)]:
 		var vp := SubViewport.new(); vp.size = size; vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS; root.add_child(vp)
 		var m = load("res://main.tscn").instantiate(); vp.add_child(m); m.set_cfg["installed"] = m.APPS.keys()
 		await create_timer(0.8).timeout
@@ -59,6 +59,13 @@ func _init() -> void:
 			_walk(w, w.get_global_rect(), cl); checks += 1
 			for s in cl.slice(0, 3): fails.append("%s à %s : %s" % [id, str(size), s])
 			m._close_win(id)
+		# Clavier visuel : doit tenir dans la largeur du bureau et ≤ 45 % de sa hauteur
+		m.kb.visible = true; m._fit_kb(); await create_timer(0.2).timeout
+		checks += 2
+		var kmn: Vector2 = m.kb.get_combined_minimum_size()
+		if kmn.x > m.size.x + 1.0: fails.append("clavier à %s : trop large (minimum %.0f > %.0f)" % [str(size), kmn.x, m.size.x])
+		if size.x < 760 and kmn.y > m.desk.size.y * 0.45 + 2.0: fails.append("clavier à %s : trop haut (%.0f > 45 %% de %.0f)" % [str(size), kmn.y, m.desk.size.y])
+		m.kb.visible = false
 		# Recoloration à chaud : les panneaux stylés à la construction suivent le thème de fenêtres déjà ouvertes
 		if size.x == 700:
 			m.set_cfg["light"] = false; m._restyle()

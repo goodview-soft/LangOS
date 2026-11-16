@@ -6,6 +6,7 @@ var m
 var box: HBoxContainer
 var items := {}          # id -> Button
 var shown := true
+var _was_empty := true
 const DEFAULT_PINS := ["notepad", "settings", "calc", "music"]
 
 func setup(main) -> void:
@@ -84,7 +85,7 @@ func center_of(id: String):
 func place(instant := false) -> void:
 	size = get_combined_minimum_size()
 	var x: float = (m.size.x - size.x) / 2.0
-	var hide_it: bool = bool(m.set_cfg.get("dock_hide", false)) and not shown
+	var hide_it: bool = bool(m.set_cfg.get("dock_hide", false)) and not shown and not _desk_empty()
 	var y: float = m.size.y + 10.0 if hide_it else m.size.y - m.bar_h - size.y - 10.0
 	mouse_filter = Control.MOUSE_FILTER_IGNORE if hide_it else Control.MOUSE_FILTER_STOP
 	if instant or not m.fx.on():
@@ -92,9 +93,17 @@ func place(instant := false) -> void:
 	var tw := create_tween().set_parallel(true).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 	tw.tween_property(self, "position", Vector2(x, y), 0.18); tw.tween_property(self, "modulate:a", 0.0 if hide_it else 1.0, 0.18)
 
+## Vrai quand aucune fenêtre n'est visible : le dock reste alors affiché sur le bureau (il ne gêne ni jeu ni appli).
+func _desk_empty() -> bool:
+	for id in m.wins:
+		var w: Control = m.wins[id]["win"]
+		if is_instance_valid(w) and w.visible and not m.wins[id].get("min", false): return false
+	return true
+
 ## Masquage automatique : le dock réapparaît quand le pointeur touche le bas de l'écran.
 func _process(_d: float) -> void:
 	var my: float = m.get_global_mouse_position().y
 	var want: bool = my >= m.size.y - m.bar_h - 14.0 if not shown else my >= m.size.y - m.bar_h - size.y - 40.0
-	if want != shown:
-		shown = want; place()
+	var empty := _desk_empty()
+	if want != shown or empty != _was_empty:
+		shown = want; _was_empty = empty; place()

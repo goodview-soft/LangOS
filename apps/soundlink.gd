@@ -1515,9 +1515,13 @@ func _broadcast_addrs() -> PackedStringArray:
 
 ## Linux : crée le micro virtuel « Sound-Link-Micro » si le lanceur ne l'a pas fait.
 func _ensure_vsink() -> void:
-	if OS.get_name() != "Linux" or VSINK in AudioServer.get_output_device_list():
+	if OS.get_name() != "Linux" or DisplayServer.get_name() == "headless" or VSINK in AudioServer.get_output_device_list():
 		return
 	var out := []
+	# Déjà créé par une session précédente ? (évite d'empiler des dizaines de sinks identiques)
+	if OS.execute("pactl", ["list", "short", "sinks"], out) == 0 and out.size() > 0 and str(out[0]).contains(VSINK):
+		return
+	out = []
 	if OS.execute("pactl", ["load-module", "module-null-sink", "sink_name=" + VSINK,
 			"sink_properties=device.description=Sound-Link-Sortie"], out) != 0:
 		return
