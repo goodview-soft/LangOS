@@ -28,6 +28,11 @@ const INJ := 4242              # marque des événements injectés par le pavé 
 var _pinching := false
 var _d0 := 1.0
 var _z0 := 1.0
+var mini := false               # petit écran : seulement un carré (déplacement + clic), curseur libre sur tout l'écran
+var _top_box: Control
+var _hr: Control
+var _row: Control
+var _lbl: Label
 
 ## Roulette : un doigt qui glisse émet « step(+1/-1) » tous les `pitch` pixels.
 class Wheel extends Control:
@@ -70,20 +75,20 @@ func _ready() -> void:
 	for k in ["left", "right", "top"]: m.add_theme_constant_override("margin_" + k, 10)
 	m.add_theme_constant_override("margin_bottom", 0)
 	v.add_child(m)
-	var top := HBoxContainer.new(); top.add_theme_constant_override("separation", 8); m.add_child(top)
+	var top := HBoxContainer.new(); top.add_theme_constant_override("separation", 8); m.add_child(top); _top_box = m
 	_pad = PanelContainer.new(); _pad.size_flags_horizontal = Control.SIZE_EXPAND_FILL; _pad.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var ps := StyleBoxFlat.new(); ps.bg_color = UI.p("card"); ps.set_corner_radius_all(UI.rad(2)); ps.border_color = UI.p("edge"); ps.set_border_width_all(1)
 	_pad.add_theme_stylebox_override("panel", ps); top.add_child(_pad)
 	var l := Label.new(); l.text = "Pavé tactile\nglisse · touche = clic · appui long = clic droit\n2 doigts = zoom"; l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; l.add_theme_color_override("font_color", Color(UI.p("muted"), 0.7)); l.mouse_filter = Control.MOUSE_FILTER_IGNORE; _pad.add_child(l)
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER; l.add_theme_color_override("font_color", Color(UI.p("muted"), 0.7)); l.mouse_filter = Control.MOUSE_FILTER_IGNORE; _pad.add_child(l); _lbl = l
 	_pad.gui_input.connect(_pad_input)
 	var wv := Wheel.new(); _wv = wv; wv.custom_minimum_size.x = 60; wv.step.connect(func(d: int): _wheel(MOUSE_BUTTON_WHEEL_DOWN if d > 0 else MOUSE_BUTTON_WHEEL_UP)); top.add_child(wv)
-	var hr := HBoxContainer.new(); hr.add_theme_constant_override("separation", 8); hr.custom_minimum_size.y = 52; v.add_child(hr)
+	var hr := HBoxContainer.new(); hr.add_theme_constant_override("separation", 8); hr.custom_minimum_size.y = 52; v.add_child(hr); _hr = hr
 	var hm := MarginContainer.new(); hm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hm.add_theme_constant_override("margin_left", 10); hm.add_theme_constant_override("margin_right", 78); hr.add_child(hm)
 	var wh := Wheel.new(); _wh = wh; wh.horizontal = true; wh.custom_minimum_size.y = 52; wh.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	wh.step.connect(func(d: int): _wheel(MOUSE_BUTTON_WHEEL_RIGHT if d > 0 else MOUSE_BUTTON_WHEEL_LEFT)); hm.add_child(wh)
-	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 8); row.custom_minimum_size.y = 64; v.add_child(row)
+	var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 8); row.custom_minimum_size.y = 64; v.add_child(row); _row = row
 	var bl := Button.new(); bl.text = "Clic gauche (maintenir = glisser)"; bl.size_flags_horizontal = Control.SIZE_EXPAND_FILL; bl.focus_mode = Control.FOCUS_NONE
 	bl.button_down.connect(func(): _hold_left = true; _btn(MOUSE_BUTTON_LEFT, true)); bl.button_up.connect(func(): _hold_left = false; _btn(MOUSE_BUTTON_LEFT, false)); row.add_child(bl)
 	var br := Button.new(); br.text = "Clic droit"; br.size_flags_horizontal = Control.SIZE_EXPAND_FILL; br.focus_mode = Control.FOCUS_NONE
@@ -128,10 +133,26 @@ var px_scale := -1.0           # tests : échelle fixe (la fenêtre headless est
 func _px(p: Vector2) -> Vector2:
 	return p * px_scale if px_scale > 0.0 else get_viewport().get_final_transform() * p
 
+## Mode mini : le carré seul, translucide ; sinon pavé complet.
+func set_mini(on: bool) -> void:
+	if on == mini: return
+	mini = on
+	_hr.visible = not on; _row.visible = not on; _wv.visible = not on
+	_lbl.text = "pavé" if on else "Pavé tactile\nglisse · touche = clic · appui long = clic droit\n2 doigts = zoom"
+	var sb := StyleBoxFlat.new(); sb.border_color = UI.p("edge")
+	if on:
+		sb.bg_color = Color(UI.p("bar"), 0.55); sb.set_border_width_all(1); sb.set_corner_radius_all(UI.rad(2))
+		_top_box.add_theme_constant_override("margin_left", 0); _top_box.add_theme_constant_override("margin_right", 0); _top_box.add_theme_constant_override("margin_top", 0)
+	else:
+		sb.bg_color = UI.p("bar"); sb.border_width_top = 1
+		for k in ["left", "right", "top"]: _top_box.add_theme_constant_override("margin_" + k, 10)
+	add_theme_stylebox_override("panel", sb)
+	reset_touches()
+
 func _zone_at(pos: Vector2) -> String:
 	if not visible: return ""   # pavé caché (petit écran) : ses anciennes zones ne doivent plus avaler les touchers
-	if _wv.get_global_rect().has_point(pos): return "wv"
-	if _wh.get_global_rect().has_point(pos): return "wh"
+	if not mini and _wv.get_global_rect().has_point(pos): return "wv"
+	if not mini and _wh.get_global_rect().has_point(pos): return "wh"
 	if _pad.get_global_rect().has_point(pos): return "pad"
 	return ""
 

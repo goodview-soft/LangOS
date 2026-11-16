@@ -160,7 +160,7 @@ var active := ""
 var menu_reset := Callable()
 var menu_sc: ScrollContainer
 var menu_search: LineEdit
-var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "cursor": "auto", "pad": false, "pad_speed": 0.7, "zoom": 1.0, "model": "", "engine": -1, "src": "spa", "tgt": "fra", "light": false, "wall": false, "icons": {}, "layout": {}, "open": [], "accent": "5aa2ff", "anim": true, "wtrans": 1.0, "radius": 12, "isize": 56, "pins": ["notepad", "settings", "calc", "music"], "desk": ["trash", "market"], "mk_desk": true, "installed": [], "dock_hide": true, "dock_h2": true, "keys": {}, "padmap": {}, "clip_save": true, "clip_nopw": true}
+var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "cursor": "auto", "pad": false, "pad_speed": 0.7, "zoom": 1.0, "model": "", "engine": -1, "src": "spa", "tgt": "fra", "light": false, "wall": false, "icons": {}, "layout": {}, "open": [], "accent": "5aa2ff", "anim": true, "wtrans": 1.0, "radius": 12, "isize": 56, "pins": ["notepad", "settings", "calc", "music"], "desk": ["trash", "market"], "mk_desk": true, "installed": [], "dock_hide": true, "dock_h2": true, "keys": {}, "padmap": {}, "clip_save": true, "clip_nopw": true, "mini": true}
 var kb: PanelContainer
 var sb_btn: Button
 var kb_kv: VBoxContainer
@@ -1007,11 +1007,21 @@ func _update_flex() -> void:
 	# Petit écran (écran de couverture d'un pliant, mini téléphone) : jamais de pavé, le doigt agit directement sur toute la surface.
 	var small_screen := DisplayServer.get_name() != "headless" and mini(DisplayServer.window_get_size().x, DisplayServer.window_get_size().y) < 900
 	if small_screen: on = false
-	flex.visible = on
-	if pad_btn: pad_btn.modulate = ACCENT.lightened(0.3) if on else Color.WHITE; pad_btn.visible = (fold_half or OS.get_name() == "Android" or bool(set_cfg["pad"]) or pad_always) and not small_screen
-	pointer.set("pad_active", on); pointer.set("pad_top", bot if on else -1.0)
-	flex.set("top_h", top)
-	if on:
+	# Petit écran : mini-pavé (carré en bas à droite) qui déplace le curseur ; le doigt reste libre ailleurs.
+	var mini_on: bool = small_screen and bool(set_cfg.get("mini", true))
+	flex.call("set_mini", mini_on)
+	flex.visible = on or mini_on
+	if pad_btn: pad_btn.modulate = ACCENT.lightened(0.3) if (on or mini_on) else Color.WHITE; pad_btn.visible = fold_half or OS.get_name() == "Android" or bool(set_cfg["pad"]) or pad_always or small_screen
+	pointer.set("pad_active", on or mini_on); pointer.set("pad_top", bot if on else -1.0)
+	flex.set("top_h", size.y if mini_on else top)
+	if mini_on:
+		var side := clampf(minf(size.x, size.y) * 0.34, 110.0, 190.0)
+		flex.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+		flex.offset_right = -8.0; flex.offset_left = -8.0 - side; flex.offset_bottom = -(bar_h + 8.0); flex.offset_top = -(bar_h + 8.0) - side
+		ui_root.offset_bottom = 0.0
+		if pointer.pos.y < 0.0: pointer.move_to(size * 0.5)
+	elif on:
+		flex.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 		flex.offset_left = 0.0; flex.offset_right = 0.0; flex.offset_top = -(size.y - bot); flex.offset_bottom = 0.0
 		ui_root.offset_bottom = -(size.y - top)
 		var cp: Vector2 = pointer.pos
@@ -1050,7 +1060,9 @@ var pad_always := true
 
 ## Bouton de la barre : active/désactive le pavé tactile (mode Flex), y compris quand l'écran est plié.
 func _toggle_pad() -> void:
-	if fold_half: pad_off = not pad_off
+	if DisplayServer.get_name() != "headless" and mini(DisplayServer.window_get_size().x, DisplayServer.window_get_size().y) < 900:
+		set_cfg["mini"] = not bool(set_cfg.get("mini", true)); _save_settings()   # petit écran : montre / cache le mini-pavé
+	elif fold_half: pad_off = not pad_off
 	else: set_cfg["pad"] = not bool(set_cfg["pad"]); _save_settings()
 	_update_flex()
 
@@ -2248,6 +2260,7 @@ func _load_settings() -> void:
 		var dk = c.get_value("ui", "desk", null); set_cfg["desk"] = dk if dk is Array else ["trash", "market"]
 		if not bool(c.get_value("ui", "mk_desk", false)) and not set_cfg["desk"].has("market"): set_cfg["desk"].append("market")
 		var pn = c.get_value("ui", "pins", set_cfg["pins"]); set_cfg["pins"] = pn if pn is Array else set_cfg["pins"]
+	set_cfg["mini"] = bool(c.get_value("ui", "mini", true))
 	ACCENT = Color.html(str(set_cfg["accent"])) if str(set_cfg["accent"]).is_valid_html_color() else Color("5aa2ff")
 
 func _save_settings() -> void:
@@ -2255,7 +2268,7 @@ func _save_settings() -> void:
 	c.set_value("ui", "bg", set_cfg["bg"]); c.set_value("ui", "font", set_cfg["font"]); c.set_value("ui", "kb", set_cfg["kb"]); c.set_value("ui", "cursor", set_cfg["cursor"]); c.set_value("ui", "pad", set_cfg["pad"]); c.set_value("ui", "pad_speed", set_cfg["pad_speed"]); c.set_value("ui", "zoom", set_cfg["zoom"])
 	c.set_value("translate", "server", set_cfg["ollama"]); c.set_value("translate", "model", set_cfg["model"]); c.set_value("translate", "engine", set_cfg["engine"])
 	c.set_value("lang", "src", set_cfg["src"]); c.set_value("lang", "tgt", set_cfg["tgt"])
-	for k in ["light", "wall", "icons", "layout", "open", "accent", "anim", "wtrans", "radius", "isize", "pins", "desk", "mk_desk", "installed", "dock_hide", "dock_h2", "keys", "padmap", "clip_save", "clip_nopw"]: c.set_value("ui", k, set_cfg[k])
+	for k in ["light", "wall", "icons", "layout", "open", "accent", "anim", "wtrans", "radius", "isize", "pins", "desk", "mk_desk", "installed", "dock_hide", "dock_h2", "keys", "padmap", "clip_save", "clip_nopw", "mini"]: c.set_value("ui", k, set_cfg[k])
 	c.set_value("ui", "nvd", n_vd)
 	if set_cfg.has("profiles"): c.set_value("ui", "profiles", set_cfg["profiles"])
 	c.save("user://settings.cfg")
