@@ -129,6 +129,7 @@ func _px(p: Vector2) -> Vector2:
 	return p * px_scale if px_scale > 0.0 else get_viewport().get_final_transform() * p
 
 func _zone_at(pos: Vector2) -> String:
+	if not visible: return ""   # pavé caché (petit écran) : ses anciennes zones ne doivent plus avaler les touchers
 	if _wv.get_global_rect().has_point(pos): return "wv"
 	if _wh.get_global_rect().has_point(pos): return "wh"
 	if _pad.get_global_rect().has_point(pos): return "pad"
