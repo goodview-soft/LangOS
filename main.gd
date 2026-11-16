@@ -109,6 +109,10 @@ const APPS := {
 	"pdf": ["Lecteur PDF", "res://icons/app_pdf.svg"],
 	"calendar": ["Agenda", "res://icons/app_calendar.svg"],
 	"notes": ["Notes", "res://icons/app_notes.svg"],
+	"trash": ["Corbeille", ""],
+	"market": ["Market", ""],
+	"scanner": ["Scanner", ""],
+	"gallery": ["Galerie", ""],
 }
 ## Dossiers du bureau : id -> applications contenues (affichées seulement dans le dossier).
 const FOLDERS := {
@@ -116,17 +120,40 @@ const FOLDERS := {
 	"f_games": ["chess", "hika"],
 	"f_soft": ["chromium", "notes", "files", "terminal", "code", "profiles", "clipboard", "devices"],
 	"f_comm": ["messenger", "remote", "chat", "soundlink"],
-	"f_office": ["sheet", "imgview", "pdf", "calendar"],
+	"f_office": ["sheet", "imgview", "pdf", "calendar", "scanner", "gallery"],
 	"f_tools": ["calc", "units", "timer", "todo", "vault", "cards"],
 }
+
+## Icône d'une appli. La Corbeille est dessinée depuis du SVG intégré (pas besoin d'import Godot).
+const TRASH_SVG := '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#94a3b8"/><stop offset="1" stop-color="#475569"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="15" fill="url(#g)"/><g fill="#fff" fill-opacity=".93"><rect x="14" y="19" width="36" height="5" rx="2.5"/><rect x="25" y="13" width="14" height="6" rx="2.5"/><path d="M17 27h30l-2.2 21a4 4 0 0 1-4 3.6H23.2a4 4 0 0 1-4-3.6z"/></g><g stroke="#64748b" stroke-width="2.4" stroke-linecap="round"><path d="M26 32v14M32 32v14M38 32v14"/></g></svg>'
+const SCANNER_SVG := '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fb923c"/><stop offset="1" stop-color="#c2410c"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="15" fill="url(#g)"/><path d="M19 12h20l8 8v32a2 2 0 0 1-2 2H19a2 2 0 0 1-2-2V14a2 2 0 0 1 2-2z" fill="#fff" fill-opacity=".95"/><path d="M24 28h16M24 34h16M24 40h10" stroke="#c2410c" stroke-width="2.6" stroke-linecap="round"/><path d="M8 32h48" stroke="#fde68a" stroke-width="3" stroke-linecap="round"/></svg>'
+const GALLERY_SVG := '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a78bfa"/><stop offset="1" stop-color="#6d28d9"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="15" fill="url(#g)"/><rect x="13" y="15" width="38" height="34" rx="5" fill="#fff" fill-opacity=".95"/><circle cx="24" cy="26" r="4.5" fill="#fbbf24"/><path d="M13 43l12-11 9 8 7-6 10 9v1a5 5 0 0 1-5 5H18a5 5 0 0 1-5-5z" fill="#7c3aed"/></svg>'
+const MARKET_SVG := '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#047857"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="15" fill="url(#g)"/><path d="M15 23h34l-2.6 24a4 4 0 0 1-4 3.5H21.6a4 4 0 0 1-4-3.5z" fill="#fff" fill-opacity=".93"/><path d="M24 27v-4a8 8 0 0 1 16 0v4" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/></svg>'
+var _svg_tex := {}
+func app_icon(id: String) -> Texture2D:
+	if id == "trash" or id == "market" or id == "scanner" or id == "gallery":
+		if not _svg_tex.has(id):
+			var img := Image.new(); img.load_svg_from_buffer(({"trash": TRASH_SVG, "market": MARKET_SVG, "scanner": SCANNER_SVG, "gallery": GALLERY_SVG}[id]).to_utf8_buffer(), 1.0)
+			_svg_tex[id] = ImageTexture.create_from_image(img)
+		return _svg_tex[id]
+	return load(APPS[id][1])
+
+## Applis toujours installées ; les autres s'ajoutent depuis le Market.
+const CORE := ["market", "settings", "system", "files", "trash", "update", "notepad"]
+const HIDDEN := ["chromium2", "chromium3"]   # fenêtres supplémentaires du navigateur : jamais listées comme applis
+func installed(id: String) -> bool:
+	if HIDDEN.has(id): return installed("chromium")
+	if FOLDERS.has(id): return FOLDERS[id].any(func(k): return installed(k))
+	return CORE.has(id) or set_cfg["installed"].has(id)
 
 func _top_ids() -> Array:
 	var inside := []
 	for f in FOLDERS: inside += FOLDERS[f]
 	var android := OS.get_name() == "Android"
-	return APPS.keys().filter(func(k): return not inside.has(k) and (k != "android_apps" or android))
+	return APPS.keys().filter(func(k): return not inside.has(k) and not HIDDEN.has(k) and (k != "android_apps" or android))
 var active := ""
-var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "cursor": "auto", "pad": false, "pad_speed": 0.7, "zoom": 1.0, "model": "", "engine": -1, "src": "spa", "tgt": "fra", "light": false, "wall": false, "icons": {}, "layout": {}, "open": [], "accent": "5aa2ff", "anim": true, "wtrans": 1.0, "radius": 12, "isize": 56, "pins": ["notepad", "settings", "calc", "music"], "dock_hide": false, "keys": {}, "padmap": {}, "clip_save": true, "clip_nopw": true}
+var menu_reset := Callable()
+var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "cursor": "auto", "pad": false, "pad_speed": 0.7, "zoom": 1.0, "model": "", "engine": -1, "src": "spa", "tgt": "fra", "light": false, "wall": false, "icons": {}, "layout": {}, "open": [], "accent": "5aa2ff", "anim": true, "wtrans": 1.0, "radius": 12, "isize": 56, "pins": ["notepad", "settings", "calc", "music"], "desk": ["trash"], "installed": [], "dock_hide": false, "keys": {}, "padmap": {}, "clip_save": true, "clip_nopw": true}
 var kb: PanelContainer
 var ui_root: VBoxContainer
 var pointer: Control
@@ -172,6 +199,7 @@ func _ready() -> void:
 		print("CTL fermé après 2e toggle: ", chat_ov != null and not chat_ov.is_open())
 		get_tree().quit()
 	if "--os-test" in OS.get_cmdline_user_args():
+		set_cfg["installed"] = APPS.keys()
 		for id in APPS: _open_app(id)
 		_toggle_menu(); _toggle_menu(); _toggle_kb()
 		await get_tree().create_timer(1.0).timeout
@@ -528,7 +556,8 @@ func _build_desktop() -> void:
 	add_child(root)
 	desk = Control.new(); desk.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	desk.clip_contents = true; root.add_child(desk)
-	for id in _top_ids(): _desk_icon(id, Vector2.ZERO)
+	for id in set_cfg["desk"]:
+		if APPS.has(id): _desk_icon(id, Vector2.ZERO)
 	desk.resized.connect(_layout_icons); desk.resized.connect(_clamp_windows); _layout_icons.call_deferred()
 	# Barre des tâches
 	var bar := PanelContainer.new()
@@ -615,7 +644,7 @@ func _desk_icon(id: String, pos: Vector2) -> void:
 	var v := VBoxContainer.new(); v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.set_anchors_preset(Control.PRESET_FULL_RECT); v.alignment = BoxContainer.ALIGNMENT_CENTER
 	v.add_theme_constant_override("separation", 6); b.add_child(v)
-	var t := TextureRect.new(); t.texture = load(APPS[id][1]); t.custom_minimum_size = Vector2(56, 56)
+	var t := TextureRect.new(); t.texture = app_icon(id); t.custom_minimum_size = Vector2(56, 56)
 	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	t.mouse_filter = Control.MOUSE_FILTER_IGNORE; v.add_child(t)
 	var l := Label.new(); l.text = APPS[id][0]; l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -655,12 +684,50 @@ func _build_menu() -> void:
 	hi.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; hi.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED; head.add_child(hi)
 	var ht := UI.head("LangOS"); ht.size_flags_horizontal = Control.SIZE_EXPAND_FILL; head.add_child(ht)
 	head.add_child(UI.small("v" + VERSION))
-	for id in _top_ids():
-		var b := _mk_btn(APPS[id][0], 300, 46); b.theme_type_variation = "Nav"; b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		b.icon = load(APPS[id][1]); b.add_theme_constant_override("icon_max_width", 30)
+	var android := OS.get_name() == "Android"
+	var all_ids: Array = APPS.keys().filter(func(k): return (k != "android_apps" or android) and not HIDDEN.has(k) and installed(k))
+	all_ids.sort_custom(func(x, y): return str(APPS[x][0]).naturalnocasecmp_to(str(APPS[y][0])) < 0)
+	var search := LineEdit.new(); search.placeholder_text = "Rechercher une application…"; search.clear_button_enabled = true
+	search.custom_minimum_size = Vector2(300, 38); v.add_child(search)
+	var pin_box := VBoxContainer.new(); v.add_child(pin_box)
+	var pt := UI.small("Épinglées"); pin_box.add_child(pt)
+	var grid := GridContainer.new(); grid.columns = 4
+	grid.add_theme_constant_override("h_separation", 4); grid.add_theme_constant_override("v_separation", 4); pin_box.add_child(grid)
+	for id in set_cfg["pins"]:
+		if not APPS.has(id) or not installed(id): continue
+		var g := _mk_btn(APPS[id][0], 92, 88); g.theme_type_variation = "Nav"
+		g.icon = app_icon(id); g.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER; g.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
+		g.expand_icon = false; g.add_theme_constant_override("icon_max_width", 36); g.add_theme_font_size_override("font_size", 14)
+		g.clip_text = true; g.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		for k in ["icon_normal_color", "icon_hover_color", "icon_pressed_color"]: g.add_theme_color_override(k, Color.WHITE)
+		g.pressed.connect(func(): _toggle_menu(); _open_app(id))
+		g.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_RIGHT: _app_ctx(id))
+		grid.add_child(g)
+	var all_box := VBoxContainer.new(); all_box.visible = false; v.add_child(all_box)
+	var sc := ScrollContainer.new(); sc.custom_minimum_size = Vector2(380, 330); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; all_box.add_child(sc)
+	var lst := VBoxContainer.new(); lst.size_flags_horizontal = Control.SIZE_EXPAND_FILL; lst.add_theme_constant_override("separation", 2); sc.add_child(lst)
+	var rows := {}
+	for id in all_ids:
+		var b := _mk_btn(APPS[id][0], 300, 42); b.theme_type_variation = "Nav"; b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.icon = app_icon(id); b.add_theme_constant_override("icon_max_width", 28)
 		for k in ["icon_normal_color", "icon_hover_color", "icon_pressed_color"]: b.add_theme_color_override(k, Color.WHITE)
 		b.pressed.connect(func(): _toggle_menu(); _open_app(id))
-		v.add_child(b)
+		b.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_RIGHT: _app_ctx(id))
+		lst.add_child(b); rows[id] = b
+	var toggle := _mk_btn("Toutes les applications  ›", 300, 38); toggle.theme_type_variation = "Nav"; toggle.alignment = HORIZONTAL_ALIGNMENT_LEFT; v.add_child(toggle)
+	var show_all := func(on: bool):
+		pin_box.visible = not on; all_box.visible = on
+		toggle.text = "‹  Retour" if on else "Toutes les applications  ›"
+		menu.size = menu.get_combined_minimum_size()
+		menu.position.y = size.y - bar_h - 10 - menu.size.y
+	toggle.pressed.connect(func(): show_all.call(not all_box.visible))
+	search.text_changed.connect(func(t: String):
+		var q := t.strip_edges().to_lower()
+		if q != "" and not all_box.visible: show_all.call(true)
+		for id in rows: rows[id].visible = q == "" or str(APPS[id][0]).to_lower().contains(q))
+	menu_reset = func():
+		search.text = ""; for id in rows: rows[id].visible = true
+		show_all.call(false)
 	var sep := HSeparator.new(); sep.add_theme_constant_override("separation", 13); v.add_child(sep)
 	var pb := _mk_btn("Profils d'environnement…", 300, 38); pb.theme_type_variation = "Nav"; pb.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	UI.set_icon(pb, "users"); pb.add_theme_constant_override("h_separation", 19)
@@ -673,12 +740,44 @@ func _toggle_menu() -> void:
 	menu.visible = not menu.visible
 	catcher.visible = menu.visible
 	if menu.visible:
+		if menu_reset.is_valid(): menu_reset.call()
 		menu.size = menu.get_combined_minimum_size()
 		var end := Vector2(10, size.y - bar_h - 10 - menu.size.y)
 		menu.position = end + Vector2(0, 14); menu.modulate.a = 0.0
 		catcher.move_to_front(); menu.move_to_front()
 		var tw := create_tween().set_parallel(true).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 		tw.tween_property(menu, "position", end, 0.16); tw.tween_property(menu, "modulate:a", 1.0, 0.16)
+
+## Réinitialisation usine : confirmation, puis effacement de user:// (hors modèles IA et mises à jour) et fermeture.
+func _factory_confirm() -> void:
+	var dim := ColorRect.new(); dim.color = Color(0, 0, 0, 0.55); dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP; add_child(dim); dim.move_to_front()
+	var cc := CenterContainer.new(); cc.set_anchors_preset(Control.PRESET_FULL_RECT); dim.add_child(cc)
+	var pn := PanelContainer.new(); pn.add_theme_stylebox_override("panel", _menu_box()); cc.add_child(pn)
+	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 14); v.custom_minimum_size.x = 380; pn.add_child(v)
+	v.add_child(UI.head("Réinitialiser LangOS ?"))
+	var t := Label.new(); t.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	t.text = "Tous les réglages, notes, listes, coffre-fort, profils, corbeille et fichiers seront effacés définitivement. LangOS se fermera ensuite."
+	v.add_child(t)
+	var h := HBoxContainer.new(); h.add_theme_constant_override("separation", 10); h.alignment = BoxContainer.ALIGNMENT_END; v.add_child(h)
+	var no := _mk_btn("Annuler", 120, 42); no.pressed.connect(dim.queue_free); h.add_child(no)
+	var yes := _mk_btn("Tout effacer", 140, 42)
+	yes.add_theme_color_override("font_color", Color("ef4444")); yes.pressed.connect(_factory_reset); h.add_child(yes)
+
+func _factory_reset() -> void:
+	var keep := ["models", "update.pck", "update.cfg"]
+	var d := DirAccess.open("user://")
+	if d:
+		for f in d.get_files(): if not keep.has(f): DirAccess.remove_absolute("user://" + f)
+		for sub in d.get_directories(): if not keep.has(sub): _rm_rf("user://" + sub)
+	get_tree().quit()
+
+func _rm_rf(p: String) -> void:
+	var d := DirAccess.open(p)
+	if d:
+		for f in d.get_files(): DirAccess.remove_absolute(p + "/" + f)
+		for s in d.get_directories(): _rm_rf(p + "/" + s)
+	DirAccess.remove_absolute(p)
 
 func _quit() -> void:
 	if wins.has("notepad"): _save()
@@ -859,6 +958,7 @@ func _mlbl(t: String, sz := 14) -> Label:
 	return l
 
 func _open_app(id: String) -> void:
+	if not installed(id): return
 	if wins.has(id):
 		_show(id); return
 	if FOLDERS.has(id): _app_folder(id); return
@@ -876,6 +976,10 @@ func _open_app(id: String) -> void:
 		"vault": _app_tool("vault", Vector2(440, 520))
 		"cards": _app_tool("cards", Vector2(460, 640))
 		"files": _app_files()
+		"trash": _app_files("trash")
+		"market": _app_market()
+		"scanner": _app_scanner()
+		"gallery": _app_gallery()
 		"terminal": _app_dev("terminal", Vector2(760, 480))
 		"code": _app_dev("code", Vector2(900, 620))
 		"profiles": _app_profiles()
@@ -956,7 +1060,7 @@ func _make_window(id: String, _title: String, sz: Vector2, pos: Vector2) -> VBox
 	# Barre de titre façon headerbar : icône à gauche, titre gras centré, contrôles ronds à droite
 	var tbh := HBoxContainer.new(); tbh.add_theme_constant_override("separation", 6); tb.add_child(tbh)
 	var lead := HBoxContainer.new(); lead.custom_minimum_size.x = 26 * 3 + 8 * 2; tbh.add_child(lead)
-	var ti := TextureRect.new(); ti.texture = load(APPS[id][1]); ti.custom_minimum_size = Vector2(20, 20)
+	var ti := TextureRect.new(); ti.texture = app_icon(id); ti.custom_minimum_size = Vector2(20, 20)
 	ti.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; ti.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	ti.size_flags_vertical = Control.SIZE_SHRINK_CENTER; ti.mouse_filter = Control.MOUSE_FILTER_PASS; lead.add_child(ti)
 	var tl := UI.heading(title); tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -969,7 +1073,7 @@ func _make_window(id: String, _title: String, sz: Vector2, pos: Vector2) -> VBox
 	var cl := _icon_btn("close", "Circular", 26, 26, 12); cl.tooltip_text = "Fermer"; cl.pressed.connect(_close_win.bind(id)); ctl.add_child(cl)
 	for cb in [mn, mx, cl]: cb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var tk := _mk_btn(title, 140, 42); tk.theme_type_variation = "Flat"; tk.add_theme_font_override("font", UI.font(500))
-	tk.icon = load(APPS[id][1]); tk.add_theme_constant_override("icon_max_width", 22); tk.add_theme_constant_override("h_separation", 8)
+	tk.icon = app_icon(id); tk.add_theme_constant_override("icon_max_width", 22); tk.add_theme_constant_override("h_separation", 8)
 	tk.add_theme_color_override("icon_normal_color", Color.WHITE); tk.add_theme_color_override("icon_hover_color", Color.WHITE)
 	tk.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	tk.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_RIGHT: _win_menu(id, Vector2(tk.global_position.x, tk.global_position.y - 6.0), true))
@@ -1174,6 +1278,130 @@ func _app_settings() -> void:
 	c = _s_card(page, "À propos")
 	UI.add_row(c, UI.row("LangOS", "", "", UI.muted(UI.label("Version %s" % VERSION))))
 	UI.add_row(c, UI.row("Police et icônes", "Inter (licence OFL) et Lucide (licence ISC)"))
+
+	# --- Réinitialisation
+	c = _s_card(page, "Réinitialisation")
+	var rb := _mk_btn("Réinitialiser…", 150, 40); rb.pressed.connect(_factory_confirm)
+	_s_row(c, "Réinitialisation usine", rb, 150, "Efface réglages, notes, coffre-fort, profils et fichiers de LangOS.")
+
+const MARKET_DESC := {
+	"translate": "Traduis du texte hors ligne avec un modèle local.", "dict": "Dictionnaire intégré avec définitions.", "music": "Lecteur de musique de ta bibliothèque.",
+	"chess": "Joue aux échecs contre l'ordinateur.", "hika": "Jeu de combat en ligne Hikabrain.",
+	"chromium": "Navigateur web avec onglets, favoris, historique et bloqueur de pubs.", "notes": "Prends des notes rapides, classées et recherchables.",
+	"terminal": "Terminal de commandes intégré.", "code": "Éditeur de code avec coloration syntaxique.", "profiles": "Profils d'environnement : fenêtres et applis par contexte.",
+	"clipboard": "Historique du presse-papiers.", "devices": "Liste des périphériques connectés.", "messenger": "Messagerie instantanée.",
+	"remote": "Contrôle un autre ordinateur à distance.", "chat": "Discute avec une IA.", "soundlink": "Partage du son entre appareils.",
+	"sheet": "Tableur : cellules, formules et calculs.", "imgview": "Visionneuse d'images.", "pdf": "Lecteur de documents PDF.", "calendar": "Agenda et rendez-vous.", "gallery": "Photos et vidéos de ton appareil en grille, avec visionneuse.", "scanner": "Photographie un document : bords détectés, page redressée, texte net, export PDF.",
+	"calc": "Calculatrice simple et scientifique.", "units": "Convertis longueurs, poids, devises et plus.", "timer": "Minuteur et chronomètre.",
+	"todo": "Listes de tâches.", "vault": "Coffre-fort chiffré pour tes mots de passe.", "cards": "Cartes mémoire pour réviser.", "android_apps": "Lance les applis Android installées.",
+}
+
+## Market façon Play Store : recherche, catégories, cartes, page de détail.
+func _app_gallery() -> void:
+	var wv := _make_window("gallery", "", Vector2(860, 640), Vector2(160, 20))
+	var c := Control.new(); c.set_script(load("res://apps/gallery.gd")); c.m = self
+	c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c.custom_minimum_size = Vector2(minf(560.0, maxf(280.0, desk.size.x - 16.0)), 420); c.clip_contents = true
+	wv.add_child(c)
+
+func _app_scanner() -> void:
+	var wv := _make_window("scanner", "", Vector2(760, 700), Vector2(170, 20))
+	var c := Control.new(); c.set_script(load("res://apps/scanner.gd")); c.m = self
+	c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c.custom_minimum_size = Vector2(minf(560.0, maxf(280.0, desk.size.x - 16.0)), 460); c.clip_contents = true
+	wv.add_child(c)
+
+func _app_market() -> void:
+	var wv := _make_window("market", "", Vector2(620, 680), Vector2(180, 30))
+	var cat_of := {}
+	var cats := ["Tout", "Installées"]
+	var inside := []
+	for f in FOLDERS:
+		inside += FOLDERS[f]; cats.append(str(APPS[f][0]))
+		for id in FOLDERS[f]: cat_of[id] = str(APPS[f][0])
+	var ids: Array = APPS.keys().filter(func(k): return not FOLDERS.has(k) and not CORE.has(k) and not HIDDEN.has(k) and (k != "android_apps" or OS.get_name() == "Android"))
+	for id in ids: if not cat_of.has(id): cat_of[id] = "Autres"
+	if ids.any(func(k): return cat_of[k] == "Autres"): cats.append("Autres")
+	ids.sort_custom(func(x, y): return str(APPS[x][0]).naturalnocasecmp_to(str(APPS[y][0])) < 0)
+	var st := {"cat": "Tout", "q": "", "detail": ""}
+	var top := MarginContainer.new(); for k in ["left", "right", "top"]: top.add_theme_constant_override("margin_" + k, 12)
+	wv.add_child(top)
+	var tv := VBoxContainer.new(); tv.add_theme_constant_override("separation", 8); top.add_child(tv)
+	var search := LineEdit.new(); search.placeholder_text = "Rechercher dans le Market"; search.clear_button_enabled = true
+	search.custom_minimum_size.y = 40; tv.add_child(search)
+	var chip_sc := ScrollContainer.new(); chip_sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; tv.add_child(chip_sc)
+	var chips := HBoxContainer.new(); chips.add_theme_constant_override("separation", 6); chip_sc.add_child(chips)
+	var sc := ScrollContainer.new(); sc.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var sm := MarginContainer.new(); sm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for k in ["left", "right", "bottom", "top"]: sm.add_theme_constant_override("margin_" + k, 12)
+	wv.add_child(sc); sc.add_child(sm)
+	var body := VBoxContainer.new(); body.size_flags_horizontal = Control.SIZE_EXPAND_FILL; body.add_theme_constant_override("separation", 10); sm.add_child(body)
+	var action_btn := func(id: String, w: float) -> Button:
+		var b := _mk_btn("", w, 38)
+		b.text = "Ouvrir" if installed(id) else "Installer"
+		b.theme_type_variation = "" if installed(id) else "FlatOn"
+		b.pressed.connect(func():
+			if installed(id): _open_app(id)
+			else: _market_toggle(id); st["r"].call_deferred())
+		return b
+	var icon_of := func(id: String, sz: float) -> TextureRect:
+		var t := TextureRect.new(); t.texture = app_icon(id); t.custom_minimum_size = Vector2(sz, sz)
+		t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED; t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		return t
+	var render := func():
+		for c in body.get_children(): c.queue_free()
+		for c in chips.get_children(): c.queue_free()
+		chip_sc.visible = st["detail"] == "" and st["q"] == ""
+		for cname in cats:
+			var cb := _mk_btn(cname, 0, 34); cb.theme_type_variation = "FlatOn" if st["cat"] == cname else "Flat"
+			cb.pressed.connect(func(): st["cat"] = cname; st["r"].call_deferred()); chips.add_child(cb)
+		if st["detail"] != "":
+			var id: String = st["detail"]
+			var back := _mk_btn("‹  Retour", 110, 36); back.theme_type_variation = "Flat"; back.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+			back.pressed.connect(func(): st["detail"] = ""; st["r"].call_deferred()); body.add_child(back)
+			var hd := HBoxContainer.new(); hd.add_theme_constant_override("separation", 16); body.add_child(hd)
+			hd.add_child(icon_of.call(id, 84))
+			var hv := VBoxContainer.new(); hv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hd.add_child(hv)
+			hv.add_child(UI.head(str(APPS[id][0]))); hv.add_child(UI.small(cat_of[id]))
+			var hb := HBoxContainer.new(); hb.add_theme_constant_override("separation", 8); body.add_child(hb)
+			hb.add_child(action_btn.call(id, 140))
+			if installed(id):
+				var un := _mk_btn("Désinstaller", 140, 38); un.pressed.connect(func(): _market_toggle(id); st["r"].call_deferred()); hb.add_child(un)
+			var d := Label.new(); d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; d.text = MARKET_DESC.get(id, "Application LangOS."); body.add_child(d)
+			return
+		var q: String = st["q"].to_lower()
+		var shown := ids.filter(func(k):
+			if q != "": return str(APPS[k][0]).to_lower().contains(q)
+			if st["cat"] == "Installées": return installed(k)
+			return st["cat"] == "Tout" or cat_of[k] == st["cat"])
+		if shown.is_empty(): body.add_child(UI.small("Aucune application.")); return
+		var grid := GridContainer.new(); grid.columns = 2; grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		grid.add_theme_constant_override("h_separation", 10); grid.add_theme_constant_override("v_separation", 10); body.add_child(grid)
+		for id in shown:
+			var card := PanelContainer.new(); card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			card.add_theme_stylebox_override("panel", _box(_p("menu"), UI.rad(), _p("edge"), 1, 12, 10))
+			card.mouse_filter = Control.MOUSE_FILTER_STOP; card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+			card.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT: st["detail"] = id; st["r"].call_deferred())
+			var cv := VBoxContainer.new(); cv.add_theme_constant_override("separation", 8); card.add_child(cv)
+			var ch := HBoxContainer.new(); ch.add_theme_constant_override("separation", 10); cv.add_child(ch)
+			ch.add_child(icon_of.call(id, 48))
+			var nv := VBoxContainer.new(); nv.size_flags_horizontal = Control.SIZE_EXPAND_FILL; nv.mouse_filter = Control.MOUSE_FILTER_IGNORE; ch.add_child(nv)
+			var nl := Label.new(); nl.text = str(APPS[id][0]); nl.clip_text = true; nl.mouse_filter = Control.MOUSE_FILTER_IGNORE; nv.add_child(nl)
+			nv.add_child(UI.small(cat_of[id]))
+			cv.add_child(action_btn.call(id, 0))
+			grid.add_child(card)
+	st["r"] = render
+	search.text_changed.connect(func(t: String): st["q"] = t.strip_edges(); st["detail"] = ""; st["r"].call_deferred())
+	render.call()
+
+func _market_toggle(id: String) -> void:
+	if installed(id):
+		set_cfg["installed"].erase(id); set_cfg["pins"].erase(id)
+		if set_cfg["desk"].has(id): _desk_toggle(id)
+		if wins.has(id): _close_win(id)
+	else:
+		set_cfg["installed"].append(id)
+	_save_settings(); _rebuild_menu()
 
 func _app_system() -> void:
 	var wv := _make_window("system", "", Vector2(520, 520), Vector2(260, 80))
@@ -1509,11 +1737,12 @@ func _app_folder(fid: String) -> void:
 	var m := MarginContainer.new(); m.add_theme_constant_override("margin_left", 12); m.add_theme_constant_override("margin_top", 12)
 	m.size_flags_vertical = Control.SIZE_EXPAND_FILL; m.add_child(g); wv.add_child(m)
 	for id in FOLDERS[fid]:
+		if not installed(id): continue
 		var b := Button.new(); b.theme_type_variation = "Flat"; b.focus_mode = Control.FOCUS_NONE
 		b.custom_minimum_size = Vector2(120, 100)
 		var v := VBoxContainer.new(); v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		v.set_anchors_preset(Control.PRESET_FULL_RECT); v.alignment = BoxContainer.ALIGNMENT_CENTER; b.add_child(v)
-		var t := TextureRect.new(); t.texture = load(APPS[id][1]); t.custom_minimum_size = Vector2(56, 56)
+		var t := TextureRect.new(); t.texture = app_icon(id); t.custom_minimum_size = Vector2(56, 56)
 		t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		t.mouse_filter = Control.MOUSE_FILTER_IGNORE; v.add_child(t)
 		var l := Label.new(); l.text = APPS[id][0]; l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1566,12 +1795,13 @@ func _app_tool(id: String, sz: Vector2) -> void:
 	c.custom_minimum_size = Vector2(minf(sz.x, maxf(280.0, desk.size.x - 16.0)), sz.y); c.clip_contents = true
 	wv.add_child(c)
 
-func _app_files() -> void:
-	var wv := _make_window("files", "", Vector2(860, 600), Vector2(160, 20))
+func _app_files(wid := "files") -> void:
+	var wv := _make_window(wid, "", Vector2(860, 600), Vector2(160, 20))
 	var c := Control.new(); c.set_script(load("res://apps/files.gd")); c.main = self
 	c.size_flags_vertical = Control.SIZE_EXPAND_FILL; c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	c.custom_minimum_size = Vector2(minf(560.0, maxf(280.0, desk.size.x - 16.0)), 400); c.clip_contents = true
 	wv.add_child(c)
+	if wid == "trash": c._go("user://trash", 0)
 
 func _app_dev(id: String, sz: Vector2) -> void:
 	var wv := _make_window(id, "", sz, Vector2(200, 30))
@@ -1779,6 +2009,8 @@ func _load_settings() -> void:
 		set_cfg["isize"] = clampi(int(c.get_value("ui", "isize", 56)), 32, 96); set_cfg["dock_hide"] = bool(c.get_value("ui", "dock_hide", false))
 		var pf = c.get_value("ui", "profiles", null)
 		if pf is Array: set_cfg["profiles"] = pf
+		var ins = c.get_value("ui", "installed", null); set_cfg["installed"] = ins if ins is Array else APPS.keys().filter(func(k): return not CORE.has(k))   # anciennes configs : tout reste installé
+		var dk = c.get_value("ui", "desk", null); set_cfg["desk"] = dk if dk is Array else ["trash"]
 		var pn = c.get_value("ui", "pins", set_cfg["pins"]); set_cfg["pins"] = pn if pn is Array else set_cfg["pins"]
 	ACCENT = Color.html(str(set_cfg["accent"])) if str(set_cfg["accent"]).is_valid_html_color() else Color("5aa2ff")
 
@@ -1787,7 +2019,7 @@ func _save_settings() -> void:
 	c.set_value("ui", "bg", set_cfg["bg"]); c.set_value("ui", "font", set_cfg["font"]); c.set_value("ui", "kb", set_cfg["kb"]); c.set_value("ui", "cursor", set_cfg["cursor"]); c.set_value("ui", "pad", set_cfg["pad"]); c.set_value("ui", "pad_speed", set_cfg["pad_speed"]); c.set_value("ui", "zoom", set_cfg["zoom"])
 	c.set_value("translate", "server", set_cfg["ollama"]); c.set_value("translate", "model", set_cfg["model"]); c.set_value("translate", "engine", set_cfg["engine"])
 	c.set_value("lang", "src", set_cfg["src"]); c.set_value("lang", "tgt", set_cfg["tgt"])
-	for k in ["light", "wall", "icons", "layout", "open", "accent", "anim", "wtrans", "radius", "isize", "pins", "dock_hide", "keys", "padmap", "clip_save", "clip_nopw"]: c.set_value("ui", k, set_cfg[k])
+	for k in ["light", "wall", "icons", "layout", "open", "accent", "anim", "wtrans", "radius", "isize", "pins", "desk", "installed", "dock_hide", "keys", "padmap", "clip_save", "clip_nopw"]: c.set_value("ui", k, set_cfg[k])
 	c.set_value("ui", "nvd", n_vd)
 	if set_cfg.has("profiles"): c.set_value("ui", "profiles", set_cfg["profiles"])
 	c.save("user://settings.cfg")
@@ -1986,6 +2218,11 @@ func _on_files(files: PackedStringArray) -> void:
 	var f := files[0]; var e := f.get_extension().to_lower()
 	if e in ["png", "jpg", "jpeg", "webp", "bmp"]:
 		if _set_wallpaper(f): notify("Fond d'écran", "Image appliquée : " + f.get_file())
+	elif e in ["mp4", "webm", "mkv", "mov", "ogv"] and installed("gallery"):
+		_open_app("gallery"); notify("Galerie", f.get_file())
+	elif e in ["mp3", "ogg", "lrc"]:
+		_open_app("music")
+		if is_instance_valid(music_node): music_node.call_deferred("import_files", files)
 	elif e in ["txt", "md", "log"]:
 		_open_app("notepad"); edit.text = FileAccess.get_file_as_string(f); notify("Bloc-notes", f.get_file() + " ouvert")
 
@@ -2048,7 +2285,34 @@ func _profiles_menu(at := Vector2(-1, -1)) -> void:
 	_popup_menu(it, size / 2.0 - Vector2(115, 120) if at.x < 0 else at)
 
 func _icon_menu(id: String, at: Vector2) -> void:
-	_popup_menu([["Ouvrir", func(): _open_app(id)], null, ["Ranger les icônes", _reset_icons]], at)
+	_popup_menu([["Ouvrir", func(): _open_app(id)], _pin_item(id), ["Retirer du bureau", func(): _desk_toggle(id)], null, ["Ranger les icônes", _reset_icons]], at)
+
+func _app_ctx(id: String) -> void:
+	var on_desk: bool = set_cfg["desk"].has(id)
+	_popup_menu([["Ouvrir", func(): _toggle_menu(); _open_app(id)], _pin_item(id),
+		["Retirer du bureau" if on_desk else "Ajouter au bureau", func(): _desk_toggle(id)]], get_viewport().get_mouse_position())
+
+func _pin_item(id: String) -> Array:
+	var on: bool = set_cfg["pins"].has(id)
+	return ["Détacher du menu Démarrer" if on else "Épingler au menu Démarrer", func():
+		if on: set_cfg["pins"].erase(id)
+		else: set_cfg["pins"].append(id)
+		_save_settings(); _rebuild_menu()]
+
+func _desk_toggle(id: String) -> void:
+	if set_cfg["desk"].has(id):
+		set_cfg["desk"].erase(id)
+		for b in desk_icons:
+			if str(b.get_meta("id")) == id: desk_icons.erase(b); b.queue_free(); break
+	else:
+		set_cfg["desk"].append(id); _desk_icon(id, Vector2.ZERO); _restyle_icons()
+	_layout_icons(); _save_settings()
+
+func _rebuild_menu() -> void:
+	var was := menu.visible
+	catcher.queue_free(); menu.queue_free()
+	_build_menu()
+	if was: _toggle_menu()
 
 func _win_menu(id: String, at: Vector2, up := false) -> void:
 	if not wins.has(id): return

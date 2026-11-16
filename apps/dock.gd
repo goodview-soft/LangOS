@@ -19,7 +19,7 @@ func enabled() -> bool:
 
 func pins() -> Array:
 	var p = m.set_cfg.get("pins", DEFAULT_PINS)
-	return (p if p is Array else DEFAULT_PINS).filter(func(k): return m.APPS.has(k))
+	return (p if p is Array else DEFAULT_PINS).filter(func(k): return m.APPS.has(k) and m.installed(k))
 
 ## Identifiants affichés : épinglés d'abord, puis apps ouvertes non épinglées.
 func ids() -> Array:
@@ -42,7 +42,7 @@ func refresh() -> void:
 	for id in ids():
 		var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 1)
 		var b: Button = m._mk_btn("", s + 10, s + 10); b.theme_type_variation = "Nav"
-		b.icon = load(m.APPS[id][1]); b.add_theme_constant_override("icon_max_width", s)
+		b.icon = m.app_icon(id); b.add_theme_constant_override("icon_max_width", s)
 		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		for k in ["icon_normal_color", "icon_hover_color", "icon_pressed_color"]: b.add_theme_color_override(k, Color.WHITE)
 		b.tooltip_text = m.APPS[id][0]

@@ -84,6 +84,7 @@ func query(q: String, files := true) -> Array:
 	for i in m.n_vd: cmds.append(["Aller au bureau %d" % (i + 1), m._goto_vd.bind(i)])
 	var pre := []; var inn := []
 	for id in m.APPS:
+		if not m.installed(id) or m.HIDDEN.has(id): continue
 		var n := fold(str(m.APPS[id][0]))
 		if n.begins_with(f): pre.append(["Application", m.APPS[id][0], "Ouvrir", m._open_app.bind(id)])
 		elif n.contains(f): inn.append(["Application", m.APPS[id][0], "Ouvrir", m._open_app.bind(id)])

@@ -26,7 +26,7 @@ func actions() -> Dictionary:
 	for k in BASE: d[k] = BASE[k]
 	if m != null:
 		for id in m.APPS:
-			if not m.FOLDERS.has(id) and id != "android_apps": d["app:" + id] = ["Ouvrir " + str(m.APPS[id][0]), APP_KEYS.get(id, ""), false]
+			if not m.FOLDERS.has(id) and id != "android_apps" and not m.HIDDEN.has(id): d["app:" + id] = ["Ouvrir " + str(m.APPS[id][0]), APP_KEYS.get(id, ""), false]
 		if m.prof != null:
 			for p in m.prof.all(): d["prof:" + str(p["name"])] = ["Profil " + str(p["name"]), "", false]
 	return d

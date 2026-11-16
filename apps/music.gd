@@ -149,6 +149,7 @@ func _build_ui() -> void:
 	clip_chk = UI.bar_act(hbar, en, "monitor", "Télécharger avec le clip vidéo", func(): clip_chk.theme_type_variation = "FlatOn" if clip_chk.button_pressed else "Flat")
 	clip_chk.toggle_mode = true
 	dl_btn = UI.bar_act(hbar, en, "download", "Télécharger", _download)
+	UI.bar_act(hbar, en, "upload", "Importer des morceaux (mp3, ogg) ou des paroles (.lrc)", _import_pick)
 	status = Label.new(); status.add_theme_font_size_override("font_size", 13)
 	status.theme_type_variation = "Muted"; status.clip_text = true; root.add_child(status)
 	var hb := HBoxContainer.new(); hb.size_flags_vertical = SIZE_EXPAND_FILL
@@ -162,7 +163,7 @@ func _build_ui() -> void:
 	list.item_clicked.connect(func(i, _p, b): if b == MOUSE_BUTTON_LEFT: _list_pick(i)); lv.add_child(list)
 	var br := HBoxContainer.new(); br.add_theme_constant_override("separation", 4); lv.add_child(br)
 	br.add_child(_btn("Paroles", func(): _fetch_lyrics(current, true)))
-	tr_btn = _btn("Retraduire", _retranslate); br.add_child(tr_btn)
+	tr_btn = _btn("Retraduire", _retranslate); tr_btn.visible = false; br.add_child(_btn("Coller LRC", _paste_lrc))
 	br.add_child(_btn("Clip", _get_clip_selected))
 	br.add_child(_ibtn("trash", _delete, 40, 40, 18))
 	# Scène : clip (optionnel) + voile + karaoké
@@ -188,7 +189,7 @@ func _build_ui() -> void:
 	vh.add_child(_btn("Supprimer", _vocab_delete, "Flat")); vh.add_child(_btn("Fermer", _toggle_vocab, "Flat"))
 	vocab_list = ItemList.new(); vocab_list.size_flags_vertical = SIZE_EXPAND_FILL; vv.add_child(vocab_list)
 	# Carte mot
-	var wp := PanelContainer.new(); wp.custom_minimum_size.y = 128; UI.style(wp, "panel", func(): return _panel(UI.p("card"), UI.rad(), 10)); right.add_child(wp)
+	var wp := PanelContainer.new(); wp.visible = false; wp.custom_minimum_size.y = 128; UI.style(wp, "panel", func(): return _panel(UI.p("card"), UI.rad(), 10)); right.add_child(wp)
 	var wh := HBoxContainer.new(); wh.add_theme_constant_override("separation", 10); wp.add_child(wh)
 	word_view = RichTextLabel.new(); word_view.bbcode_enabled = true; word_view.selection_enabled = true; word_view.context_menu_enabled = true
 	word_view.size_flags_horizontal = SIZE_EXPAND_FILL; word_view.add_theme_font_size_override("normal_font_size", 17)
@@ -212,9 +213,8 @@ func _build_ui() -> void:
 	seek.drag_started.connect(func(): _seeking = true)
 	seek.drag_ended.connect(func(_c): _seeking = false; _seek_to(seek.value))
 	tp.add_child(seek)
-	var trb := CheckButton.new(); trb.text = "Traduction"; trb.button_pressed = true; trb.focus_mode = Control.FOCUS_NONE
-	trb.toggled.connect(func(on: bool): kv.show_tr = on; kv.queue_redraw()); tp.add_child(trb)
-	vocab_btn = UI.icon_btn("star", "Mes mots à apprendre", _toggle_vocab); tp.add_child(vocab_btn); _update_vocab_btn()
+	kv.show_tr = false   # plus de traduction : Music reste un simple lecteur à paroles synchronisées
+	vocab_btn = UI.icon_btn("star", "Mes mots à apprendre", _toggle_vocab); vocab_btn.visible = false; tp.add_child(vocab_btn)
 	tp.add_child(UI.icon_btn("panel-left", "Afficher ou masquer la bibliothèque", func(): left.visible = not left.visible))
 	if _overlay_ok():
 		ov_opt = OptionButton.new(); ov_opt.focus_mode = Control.FOCUS_NONE
@@ -243,7 +243,7 @@ func _build_ui() -> void:
 	tp.add_child(UI.icon_btn("plus", "Avancer les paroles", func(): _nudge(0.5)))
 	if OS.has_feature("android"):
 		dl_btn.disabled = true; clip_chk.disabled = true
-		status.text = "Le téléchargement YouTube (yt-dlp) n'est disponible que sur PC."
+		status.text = "Sur téléphone : importe tes morceaux (mp3, ogg) et paroles (.lrc) avec le bouton ⬆ en haut."
 
 
 # ---------------------------------------------------------------- Overlay (paroles flottantes, bas de l'écran)
@@ -425,7 +425,7 @@ func _list_pick(i: int) -> void:
 func _play(i: int) -> void:
 	if i < 0 or i >= tracks.size(): return
 	var t: Dictionary = tracks[i]
-	var s := AudioStreamMP3.load_from_file(ProjectSettings.globalize_path(t.file))
+	var s := _load_stream(t.file)
 	if s == null:
 		status.text = "Fichier illisible : " + t.file; return
 	current = i; _paused = false; _pause_pos = 0.0
@@ -438,6 +438,79 @@ func _play(i: int) -> void:
 	_load_lines()
 	if lines.is_empty(): _fetch_lyrics(i, false)
 	else: _auto_translate(i)
+
+
+func _load_stream(path: String) -> AudioStream:
+	var g := ProjectSettings.globalize_path(path)
+	if path.get_extension().to_lower() == "ogg": return AudioStreamOggVorbis.load_from_file(g)
+	return AudioStreamMP3.load_from_file(g)
+
+
+# ---------------------------------------------------------------- Import (morceaux locaux, paroles .lrc)
+func _import_pick() -> void:
+	var fd := FileDialog.new(); fd.file_mode = FileDialog.FILE_MODE_OPEN_FILES; fd.access = FileDialog.ACCESS_FILESYSTEM; fd.use_native_dialog = true
+	fd.filters = PackedStringArray(["*.mp3,*.ogg,*.lrc ; Musique et paroles"])
+	fd.files_selected.connect(func(p: PackedStringArray): import_files(p); fd.queue_free())
+	fd.canceled.connect(fd.queue_free)
+	add_child(fd); fd.popup_centered_ratio(0.7)
+
+
+## Copie des morceaux (mp3/ogg) dans la bibliothèque ; un .lrc de même nom est rattaché au morceau, sinon au morceau sélectionné.
+func import_files(paths: PackedStringArray) -> void:
+	var added := 0; var lrcs := []
+	var by_base := {}
+	for p in paths:
+		var e := p.get_extension().to_lower()
+		if e == "lrc": lrcs.append(p); continue
+		if e not in ["mp3", "ogg"]: continue
+		var src := FileAccess.open(p, FileAccess.READ)
+		if src == null: continue
+		var buf := src.get_buffer(src.get_length()); src.close()
+		var id := "loc_%d" % absi(hash(p.get_file() + str(buf.size())))
+		var dup := false
+		for t in tracks: if t.id == id: dup = true
+		if dup: continue
+		var dst := MUSIC_DIR.path_join(id + "." + e)
+		var f := FileAccess.open(dst, FileAccess.WRITE)
+		if f == null: continue
+		f.store_buffer(buf); f.close()
+		var base := p.get_file().get_basename()
+		var g := Lyrics.guess(base, "NA", "NA", "NA")
+		var st := _load_stream(dst)
+		tracks.append({"id": id, "title": base, "artist": g[0], "track": g[1], "duration": st.get_length() if st else 0.0, "file": dst, "lrc": "", "offset": 0.0})
+		by_base[base.to_lower()] = tracks.size() - 1; added += 1
+	for p in lrcs:
+		var base: String = p.get_file().get_basename().to_lower()
+		var idx: int = by_base.get(base, -1)
+		if idx < 0:
+			var sel := Array(list.get_selected_items())
+			idx = int(sel[0]) if not sel.is_empty() else current
+		if idx >= 0: _attach_lrc(idx, FileAccess.get_file_as_string(p))
+	_save_lib()
+	status.text = "%d morceau(x) importé(s)." % added + ("  Paroles ajoutées : %d." % lrcs.size() if not lrcs.is_empty() else "")
+
+
+func _attach_lrc(i: int, text: String) -> bool:
+	if i < 0 or i >= tracks.size() or Lyrics.parse(text).is_empty():
+		status.text = "Paroles illisibles : format LRC attendu ([01:23.45] texte)."; return false
+	var t: Dictionary = tracks[i]
+	t.lrc = MUSIC_DIR.path_join(str(t.id) + ".lrc")
+	var f := FileAccess.open(t.lrc, FileAccess.WRITE); f.store_string(text); f.close()
+	t.erase("no_lyrics"); _save_lib(false)
+	if i == current: _load_lines()
+	status.text = "Paroles enregistrées ✓"; return true
+
+
+func _paste_lrc() -> void:
+	var sel := Array(list.get_selected_items())
+	var i: int = int(sel[0]) if not sel.is_empty() else current
+	if i < 0: status.text = "Sélectionne d'abord un morceau."; return
+	var dlg := AcceptDialog.new(); dlg.title = "Coller des paroles (LRC)"; dlg.ok_button_text = "Enregistrer"; dlg.min_size = Vector2i(520, 420)
+	var te := TextEdit.new(); te.placeholder_text = "[00:12.30] Première ligne\n[00:15.80] Deuxième ligne…"; te.custom_minimum_size = Vector2(500, 340)
+	dlg.add_child(te)
+	dlg.confirmed.connect(func(): _attach_lrc(i, te.text); dlg.queue_free())
+	dlg.canceled.connect(dlg.queue_free)
+	add_child(dlg); dlg.popup_centered()
 
 
 func _raw_pos() -> float:
@@ -624,7 +697,10 @@ func _pick_model() -> String:
 
 
 ## Traduction automatique : lancée toute seule quand un morceau avec paroles est joué ou quand ses paroles arrivent.
-func _auto_translate(i: int) -> void:
+func _auto_translate(_i: int) -> void:
+	return   # traduction désactivée
+	@warning_ignore("unreachable_code")
+	var i := _i
 	if i < 0 or i >= tracks.size(): return
 	var t: Dictionary = tracks[i]
 	if t.get("lrc", "") == "" or not FileAccess.file_exists(t.lrc) or _read_tr(_tr_path(t))["done"] or t.id in _tr_queue: return
@@ -809,6 +885,7 @@ func _gloss_for(w: String) -> Dictionary:
 
 
 func _word_clicked(w: String, line: int) -> void:
+	if true: return
 	# Pause automatique pour avoir le temps de lire (Espace ou ▶ pour reprendre).
 	if player.playing: _toggle()
 	var g := _gloss_for(w)
@@ -868,6 +945,7 @@ func _ensure_line_tr(k: int) -> void:
 
 ## Traduction courte d'un mot par le dictionnaire hors ligne (mots sans traduction IA). "" si inconnu.
 func _quick_gloss(w: String) -> String:
+	if true: return ""
 	if src == tgt or w.length() < 3 or w in STOP or _dkey(w) in STOP: return ""
 	var t := _dict_text(w, w)
 	if t == "": return ""

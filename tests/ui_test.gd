@@ -41,7 +41,7 @@ func _init() -> void:
 	var checks := 0
 	for size in [Vector2i(700, 1200), Vector2i(1280, 720), Vector2i(1000, 600)]:
 		var vp := SubViewport.new(); vp.size = size; vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS; root.add_child(vp)
-		var m = load("res://main.tscn").instantiate(); vp.add_child(m)
+		var m = load("res://main.tscn").instantiate(); vp.add_child(m); m.set_cfg["installed"] = m.APPS.keys()
 		await create_timer(0.8).timeout
 		for id in m.APPS.keys():
 			if id in SKIP or m.FOLDERS.has(id): continue
