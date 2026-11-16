@@ -4,6 +4,7 @@ extends Control
 ## Un client (ex. téléphone) peut renvoyer son micro (PCM 16 bits mono, préfixe "MIC1") :
 ## le host le joue dans le micro virtuel « Sound-Link-Micro » créé par sound-link.sh.
 
+const UI = preload("res://apps/ui.gd")
 const FRAMES_PER_PACKET := 480
 const TIMEOUT := 3.0
 const MAX_QUEUE := 8
@@ -259,7 +260,7 @@ class Switch extends Control:
 	var k := 0.0
 
 	func _init() -> void:
-		custom_minimum_size = Vector2(56, 32)
+		custom_minimum_size = Vector2(56, UI.tp(32))
 		size_flags_vertical = SIZE_SHRINK_CENTER
 
 	func set_on(v: bool) -> void:
@@ -498,9 +499,9 @@ func _build_ui() -> void:
 	upd_dot.add_theme_color_override("font_color", C_ACCENT)
 	upd_dot.size_flags_vertical = SIZE_SHRINK_CENTER
 	upd_dot.visible = false
-	var gear := _button("⚙", bar)
+	var gear := _button("", bar); gear.icon = UI.icon("settings"); gear.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER; gear.tooltip_text = "Réglages"
 	gear.theme_type_variation = "Ghost"
-	gear.custom_minimum_size = Vector2(40, 40)
+	gear.custom_minimum_size = Vector2(UI.tp(40), UI.tp(40))
 	gear.pressed.connect(_open_drawer.bind(true))
 
 	# --- Mon appareil
@@ -578,7 +579,7 @@ func _build_ui() -> void:
 	var stt := _label("Réglages", sh)
 	stt.add_theme_font_size_override("font_size", 20)
 	stt.size_flags_horizontal = SIZE_EXPAND_FILL
-	var cl := _button("✕", sh)
+	var cl := _button("", sh); cl.icon = UI.icon("x"); cl.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER; cl.tooltip_text = "Fermer"; cl.custom_minimum_size = Vector2(UI.tp(40), UI.tp(40))
 	cl.theme_type_variation = "Ghost"
 	cl.pressed.connect(_open_drawer.bind(false))
 	var sc := ScrollContainer.new()
@@ -756,7 +757,7 @@ func _make_theme() -> Theme:
 		t.set_stylebox("pressed", ty, bp)
 		t.set_stylebox("hover_pressed", ty, bh)
 		t.set_stylebox("disabled", ty, bn)
-		t.set_stylebox("focus", ty, StyleBoxEmpty.new())
+		t.set_stylebox("focus", ty, UI.focus_box(10))
 		for c in ["font_color", "font_hover_color", "font_focus_color"]:
 			t.set_color(c, ty, C_TEXT)
 		t.set_color("font_pressed_color", ty, Color.WHITE)
@@ -842,8 +843,9 @@ func _make_theme() -> Theme:
 
 	# Cartes, barres de défilement
 	t.set_stylebox("panel", "PanelContainer", _sb(C_CARD, 16, 16, 16))
-	var grab := _sb(C_BORDER, 4, 3, 3)
-	t.set_stylebox("scroll", "VScrollBar", _sb(Color(0, 0, 0, 0), 4, 3, 3))
+	var sbm := 9 if UI.touch() else 3   # barre large au doigt (26 px), 14 px à la souris
+	var grab := _sb(C_TEXT.darkened(0.3), 99, sbm, 3)
+	t.set_stylebox("scroll", "VScrollBar", _sb(Color(0, 0, 0, 0), 99, sbm, 3))
 	for s in ["grabber", "grabber_highlight", "grabber_pressed"]:
 		t.set_stylebox(s, "VScrollBar", grab)
 	t.set_color("font_color", "TooltipLabel", C_TEXT)
@@ -917,7 +919,7 @@ func _slider(mn: float, mx: float, val: float, parent: Node) -> HSlider:
 	s.max_value = mx
 	s.step = 1
 	s.value = val
-	s.custom_minimum_size.y = 24
+	s.custom_minimum_size.y = UI.tp(24)
 	parent.add_child(s)
 	return s
 
@@ -1303,14 +1305,14 @@ func _on_version_json(result: int, code: int, _h: PackedStringArray, body: Packe
 	upd_btn.text = "Vérifier"
 	upd_btn.visible = true
 	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
-		upd_lbl.text = ("✓  v%s (aucune version publiée)" % VERSION) if code == 404 \
+		upd_lbl.text = ("v%s (aucune version publiée)" % VERSION) if code == 404 \
 			else "Mises à jour : vérification impossible (hors ligne ?)."
 		return
 	var info = JSON.parse_string(body.get_string_from_utf8())
 	if not (info is Dictionary) or not info.has("version"):
 		return
 	if not preload("res://boot.gd").newer(str(info["version"]), VERSION):
-		upd_lbl.text = "✓  À jour (v%s)" % VERSION
+		upd_lbl.text = "À jour (v%s)" % VERSION
 		return
 	upd_info = info
 	upd_btn.visible = true
@@ -1350,7 +1352,8 @@ func _on_pck(result: int, code: int, _h: PackedStringArray, _b: PackedByteArray)
 	if result != HTTPRequest.RESULT_SUCCESS or code != 200 \
 			or FileAccess.get_sha256(tmp) != str(upd_info.get("sha256", "")):
 		DirAccess.remove_absolute(tmp)
-		upd_lbl.text = "Échec du téléchargement, réessayer."
+		upd_lbl.text = "Le téléchargement a échoué. Vérifie ta connexion puis réessaie."
+		upd_lbl.tooltip_text = "Résultat %d, code HTTP %d" % [result, code]; upd_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 		return
 	DirAccess.rename_absolute(tmp, "user://update.pck")
 	var c := ConfigFile.new()
@@ -1607,7 +1610,7 @@ func _load_monitor() -> void:
 	var out := []
 	var rc := OS.execute("pactl", ["get-default-sink"], out)
 	if rc != 0 or out.is_empty():
-		_monitor_status("Retour son : échec (pactl get-default-sink code %d)" % rc)
+		_monitor_status("Retour son : impossible de trouver la sortie audio.", "pactl get-default-sink : code %d" % rc)
 		return
 	var sink := str(out[0]).strip_edges()
 	out = []
@@ -1617,11 +1620,11 @@ func _load_monitor() -> void:
 		monitor_module = str(out[0]).strip_edges()
 		_monitor_status("Retour son : actif → %s" % sink)
 	else:
-		_monitor_status("Retour son : échec (code %d) %s" % [rc, str(out).left(80)])
+		_monitor_status("Retour son : impossible de l'activer.", "Code %d : %s" % [rc, str(out).left(200)])
 
 
-func _monitor_status(t: String) -> void:
-	print(t)
+func _monitor_status(t: String, detail := "") -> void:
+	print(t, " ", detail)
 	monitor_msg = t
 
 

@@ -49,6 +49,7 @@ func refresh() -> void:
 		b.pressed.connect(_click.bind(id))
 		b.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_RIGHT: _menu(id, b))
 		b.mouse_entered.connect(func(): m.fx.hover(b, true, 1.15)); b.mouse_exited.connect(func(): m.fx.hover(b, false))
+		if m.overview != null: m.overview.attach(b, id)
 		v.add_child(b)
 		var cc := CenterContainer.new(); cc.custom_minimum_size.y = 5; v.add_child(cc)
 		var dot := Panel.new(); dot.custom_minimum_size = Vector2(14 if m.active == id else 5, 4); dot.visible = m.wins.has(id)

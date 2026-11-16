@@ -185,7 +185,7 @@ func _build_ui() -> void:
 	vocab_panel.add_theme_stylebox_override("panel", _panel(Color(0.05, 0.06, 0.1, 0.96), 12, 14)); stage.add_child(vocab_panel)
 	var vv := VBoxContainer.new(); vv.add_theme_constant_override("separation", 8); vocab_panel.add_child(vv)
 	var vh := HBoxContainer.new(); vv.add_child(vh)
-	var vt := Label.new(); vt.text = "★ Mes mots à apprendre"; vt.add_theme_font_size_override("font_size", 20); vt.size_flags_horizontal = SIZE_EXPAND_FILL; vh.add_child(vt)
+	vh.add_child(UI.icon_rect("star", 18)); var vt := Label.new(); vt.text = " Mes mots à apprendre"; vt.add_theme_font_size_override("font_size", 20); vt.size_flags_horizontal = SIZE_EXPAND_FILL; vh.add_child(vt)
 	vh.add_child(_btn("Supprimer", _vocab_delete, "Flat")); vh.add_child(_btn("Fermer", _toggle_vocab, "Flat"))
 	vocab_list = ItemList.new(); vocab_list.size_flags_vertical = SIZE_EXPAND_FILL; vv.add_child(vocab_list)
 	# Carte mot
@@ -193,9 +193,9 @@ func _build_ui() -> void:
 	var wh := HBoxContainer.new(); wh.add_theme_constant_override("separation", 10); wp.add_child(wh)
 	word_view = RichTextLabel.new(); word_view.bbcode_enabled = true; word_view.selection_enabled = true; word_view.context_menu_enabled = true
 	word_view.size_flags_horizontal = SIZE_EXPAND_FILL; word_view.add_theme_font_size_override("normal_font_size", 17)
-	word_view.text = "[color=#8f9bb3]Touche un mot : sa traduction s'affiche ici, avec ★ pour le garder. Les mots utiles de la ligne en cours sont traduits sous le mot. Touche une ligne : la musique y saute.[/color]"
+	word_view.text = "[color=#8f9bb3]Touche un mot : sa traduction s'affiche ici, avec l'étoile pour le garder. Les mots utiles de la ligne en cours sont traduits sous le mot. Touche une ligne : la musique y saute.[/color]"
 	wh.add_child(word_view)
-	star_btn = _btn("★ Apprendre", _toggle_star, "Accent", 150); star_btn.visible = false; wh.add_child(star_btn)
+	star_btn = _btn("Apprendre", _toggle_star, "Accent", 150); UI.set_icon(star_btn, "star"); star_btn.visible = false; wh.add_child(star_btn)
 	# Transport
 	var tbar := PanelContainer.new(); UI.style(tbar, "panel", func(): return _panel(UI.p("card"), UI.rad(2), 8)); root.add_child(tbar)
 	var tp := UI.toolbar(); tbar.add_child(tp)
@@ -208,7 +208,7 @@ func _build_ui() -> void:
 	tp.add_child(play_btn)
 	tp.add_child(_ibtn("next", func(): _play(_wrap(current + 1)), 44, 44, 20))
 	time_lbl = Label.new(); time_lbl.text = "0:00 / 0:00"; time_lbl.custom_minimum_size.x = 96; tp.add_child(time_lbl)
-	seek = HSlider.new(); seek.custom_minimum_size = Vector2(180, UI.TOUCH); seek.size_flags_horizontal = SIZE_EXPAND_FILL; seek.size_flags_vertical = SIZE_SHRINK_CENTER
+	seek = HSlider.new(); seek.custom_minimum_size = Vector2(180, UI.tp(UI.TOUCH)); seek.size_flags_horizontal = SIZE_EXPAND_FILL; seek.size_flags_vertical = SIZE_SHRINK_CENTER
 	seek.focus_mode = Control.FOCUS_NONE; seek.step = 0.1
 	seek.drag_started.connect(func(): _seeking = true)
 	seek.drag_ended.connect(func(_c): _seeking = false; _seek_to(seek.value))
@@ -498,7 +498,7 @@ func _attach_lrc(i: int, text: String) -> bool:
 	var f := FileAccess.open(t.lrc, FileAccess.WRITE); f.store_string(text); f.close()
 	t.erase("no_lyrics"); _save_lib(false)
 	if i == current: _load_lines()
-	status.text = "Paroles enregistrées ✓"; return true
+	status.text = "Paroles enregistrées"; return true
 
 
 func _paste_lrc() -> void:
@@ -663,7 +663,7 @@ func _fetch_lyrics(i: int, manual: bool) -> void:
 		t.erase("no_lyrics")
 		t.lrc = MUSIC_DIR.path_join(t.id + ".lrc")
 		var f := FileAccess.open(t.lrc, FileAccess.WRITE); f.store_string(lrc); f.close()
-		status.text = "Paroles trouvées ✓"
+		status.text = "Paroles trouvées"
 	_save_lib()
 	if i == current: _load_lines()
 	_auto_translate(i)
@@ -776,7 +776,7 @@ func _translate_track(i: int) -> void:
 			if not _card.is_empty() and trans.has(_card["line"]): _refresh_card_gloss()
 			status.text = "Traduction automatique (%s) : %d %%" % [model, int(100.0 * minf(1.0, float(k) / idxs.size()))]
 	_write_tr(path, out, true)
-	if _is_current(tid): status.text = "Traduction terminée ✓" + ("  (%d ligne(s) non traduite(s))" % failed if failed > 0 else "")
+	if _is_current(tid): status.text = "Traduction terminée" + ("  (%d ligne(s) non traduite(s))" % failed if failed > 0 else "")
 
 
 func _refresh_card_gloss() -> void:
@@ -917,7 +917,7 @@ func _render_card() -> void:
 	if _card["gloss"] != "": txt += "   [color=#7dd3fc][b]%s[/b][/color]" % str(_card["gloss"]).replace("[", "[lb]")
 	if _card["dict"] != "": txt += "\n[color=#8f9bb3]Dictionnaire :[/color] %s" % str(_card["dict"]).replace("[", "[lb]")
 	elif _card["gloss"] == "": txt += "\n[color=#8f9bb3]Pas de traduction connue pour ce mot.[/color]"
-	txt += "\n[color=#8f9bb3][i]⏸ En pause : Espace ou ▶ pour reprendre.[/i][/color]" if not player.playing else ""
+	txt += "\n[color=#8f9bb3][i]En pause : Espace ou le bouton lecture pour reprendre.[/i][/color]" if not player.playing else ""
 	word_view.text = txt
 
 
@@ -981,7 +981,7 @@ func _vkey(lemma: String) -> String:
 func _update_star() -> void:
 	if _card.is_empty(): return
 	var saved := vocab.has(_vkey(_card["lemma"]))
-	star_btn.text = "★ Appris" if saved else "☆ Apprendre"
+	star_btn.text = "Appris" if saved else "Apprendre"
 	star_btn.icon = _ico("star" if saved else "star_o"); star_btn.add_theme_constant_override("icon_max_width", 16)
 	star_btn.text = "Dans mes mots" if saved else "Apprendre"
 
@@ -1140,7 +1140,7 @@ func _poll_jobs() -> void:
 		if ok:
 			for t in tracks:
 				if t.id == j["id"]: t["video"] = MUSIC_DIR.path_join(j["id"] + ".ogv")
-			status.text = "Clip prêt ✓ (relance le morceau pour l'avoir en fond)"
+			status.text = "Clip prêt (relance le morceau pour l'avoir en fond)"
 			if current >= 0 and tracks[current].id == j["id"]:
 				var pos := _pos(); _load_video(tracks[current]); _vseek(pos)
 				if _paused: vplayer.paused = true

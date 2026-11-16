@@ -24,6 +24,7 @@ var ov_img: TextureRect
 var ov_vid: VideoStreamPlayer
 var ov_lbl: Label
 var ov_i := 0
+var hov := -1                 # cellule survolée (aperçu rapide avec Espace)
 
 
 func _ready() -> void:
@@ -49,6 +50,9 @@ func _ready() -> void:
 	grid = HFlowContainer.new(); grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grid.add_theme_constant_override("h_separation", 6); grid.add_theme_constant_override("v_separation", 6); sc.add_child(grid)
 	_build_overlay()
+	if OS.get_name() == "Android":   # accès aux photos / vidéos : demandé à l'ouverture de la Galerie, puis on relit les dossiers
+		get_tree().on_request_permissions_result.connect(func(_p, _ok): _rescan())
+		for p in ["READ_MEDIA_IMAGES", "READ_MEDIA_VIDEO"]: OS.request_permission(p)
 	_rescan()
 
 
@@ -98,7 +102,7 @@ func _fill() -> void:
 		if filt == "img" and it.vid: continue
 		if filt == "vid" and not it.vid: continue
 		shown.append(it)
-	info.text = "%d élément(s)" % shown.size() if not shown.is_empty() else "Aucune photo ni vidéo — importe-en avec ⬆ ou ajoute un dossier."
+	info.text = "%d élément(s)" % shown.size() if not shown.is_empty() else "Aucune photo ni vidéo — importe-en avec le bouton d'import ou ajoute un dossier."
 	for i in shown.size():
 		var it: Dictionary = shown[i]
 		var cell := Control.new(); cell.custom_minimum_size = Vector2(130, 130); cell.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
@@ -115,7 +119,13 @@ func _fill() -> void:
 			nodes[it.p] = t
 			if cache.has(it.p): t.texture = cache[it.p]
 			else: _load_thumb(str(it.p))
+		cell.mouse_entered.connect(func(): hov = i); cell.mouse_exited.connect(func(): if hov == i: hov = -1)
 		cell.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT: _open(i))
+
+
+func _unhandled_key_input(ev: InputEvent) -> void:
+	if ev is InputEventKey and ev.pressed and not ev.echo and ev.keycode == KEY_SPACE and is_visible_in_tree() and not over.visible and hov >= 0 and hov < shown.size():
+		load("res://apps/quicklook.gd").show_for(self, shown[hov].p); get_viewport().set_input_as_handled()
 
 
 func _load_thumb(p: String) -> void:

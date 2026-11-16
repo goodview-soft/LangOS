@@ -129,7 +129,7 @@ func _rebuild_found() -> void:
 	for c in found_box.get_children(): c.queue_free()
 	for id in found:
 		var f: Dictionary = found[id]
-		var b := _btn("🖥  %s   (%s)" % [f["name"], f["ip"]], func(): ip_edit.text = f["ip"]; code_edit.grab_focus(), "Flat")
+		var b := _btn("%s   (%s)" % [f["name"], f["ip"]], func(): ip_edit.text = f["ip"]; code_edit.grab_focus(), "Flat"); UI.set_icon(b, "monitor")
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT; found_box.add_child(b)
 	if found.is_empty():
 		found_box.add_child(UI.empty_state("Aucun appareil en partage trouvé"))
@@ -177,7 +177,8 @@ func _show_overlay(name: String) -> void:
 	var bar := PanelContainer.new(); bar.add_theme_stylebox_override("panel", _sb(Color("b3261e"), UI.rad(), 8))
 	bar.theme = UI.bubble_theme(true); overlay.add_child(bar)
 	var h := HBoxContainer.new(); bar.add_child(h)
-	var l := Label.new(); l.text = "🔴  Contrôlé à distance par %s" % name; h.add_child(l)
+	var ri := UI.icon_rect("circle-alert", 16); ri.modulate = UI.err(); h.add_child(ri)
+	var l := Label.new(); l.text = " Contrôlé à distance par %s" % name; h.add_child(l)
 	h.add_child(_btn("Couper", _host_drop, "Flat", 90, 40))
 	bar.position = Vector2(20, 8)
 	overlay.draw.connect(func():

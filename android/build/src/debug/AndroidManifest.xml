@@ -13,6 +13,10 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-feature tools:node="replace" android:name="android.hardware.vulkan.level" android:required="false" android:version="1" />
     <uses-feature tools:node="replace" android:name="android.hardware.vulkan.version" android:required="false" android:version="0x401000" />

@@ -20,6 +20,7 @@ var crop: CropView
 var prev: TextureRect
 var cam_view: TextureRect
 var cam_msg: Label
+var perm_btn: Button
 var cam_tex: CameraTexture
 var cam_feed: CameraFeed
 var busy: ColorRect
@@ -317,11 +318,19 @@ func _camera() -> void:
 	cam_msg = Label.new(); cam_msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; cam_msg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; root.add_child(cam_msg)
 	var r := _row()
 	r.add_child(_btn("Capturer", _capture, "FlatOn", 160)); r.add_child(_btn("Importer une photo", _import_pick, "", 180))
+	perm_btn = _btn("Réglages", func(): OS.request_permissions(), "", 120); perm_btn.visible = false; r.add_child(perm_btn)
 	_start_camera()
 
 
 func _start_camera() -> void:
-	if OS.get_name() == "Android": OS.request_permission("CAMERA")
+	if OS.get_name() == "Android" and not OS.request_permission("CAMERA"):
+		cam_msg.text = "Autorise la caméra dans la fenêtre Android qui s'affiche…"
+		var res = await get_tree().on_request_permissions_result
+		if not is_instance_valid(cam_view): return
+		if res is Array and res.size() > 1 and not res[1]:
+			cam_msg.text = "Permission caméra refusée. Touche « Réglages » pour l'autoriser, ou importe une photo."
+			perm_btn.visible = true; return
+		cam_msg.text = ""
 	CameraServer.monitoring_feeds = true
 	await get_tree().create_timer(0.8).timeout
 	if not is_instance_valid(cam_view): return

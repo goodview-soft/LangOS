@@ -1,4 +1,5 @@
 extends Node
+const UI = preload("res://apps/ui.gd")
 ## Look & fluidité : animations (désactivables), aperçu d'ancrage, réglages d'apparence en direct.
 ## Branché depuis main.gd (variable « fx »). Aucun relayout pendant les déplacements : seulement des tweens sur scale/modulate.
 
@@ -148,11 +149,11 @@ func appearance_card(page: Control) -> void:
 	var c: VBoxContainer = m._s_card(page, "Apparence")
 	var sw: HFlowContainer = m._s_flow()
 	for h in ACCENTS:
-		var b: Button = m._mk_btn("", 28, 28); b.size_flags_vertical = Control.SIZE_SHRINK_CENTER; b.tooltip_text = "#" + h
+		var b: Button = m._mk_btn("", int(UI.tp(28)), int(UI.tp(28))); b.size_flags_vertical = Control.SIZE_SHRINK_CENTER; b.tooltip_text = "#" + h
 		for s in ["normal", "hover", "pressed"]: b.add_theme_stylebox_override(s, m._box(Color(h), 14, Color(1, 1, 1, 0.6 if s != "normal" else 0.0), 2))
 		b.pressed.connect(func(): set_accent(Color(h)))
 		sw.add_child(b)
-	var cp := ColorPickerButton.new(); cp.custom_minimum_size = Vector2(44, 28); cp.color = m.ACCENT; cp.edit_alpha = false; cp.focus_mode = Control.FOCUS_NONE
+	var cp := ColorPickerButton.new(); cp.custom_minimum_size = Vector2(44, UI.tp(28)); cp.color = m.ACCENT; cp.edit_alpha = false; cp.focus_mode = Control.FOCUS_NONE
 	cp.size_flags_vertical = Control.SIZE_SHRINK_CENTER; cp.tooltip_text = "Autre couleur"
 	cp.color_changed.connect(set_accent); sw.add_child(cp)
 	m._s_row(c, "Couleur d'accent", sw, 190)

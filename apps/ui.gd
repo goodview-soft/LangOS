@@ -27,6 +27,18 @@ const BAR_H := 46        # barre d'en-tête
 const NARROW := 700.0    # sous cette largeur : un seul panneau
 const CLAMP_W := 600.0   # largeur maximale d'une page de préférences
 
+## Écran tactile (Android ou écran tactile détecté) : cibles ≥ 44 px, barres de défilement larges.
+static func touch() -> bool:
+	return OS.get_name() == "Android" or DisplayServer.is_touchscreen_available()
+
+## Taille de cible : au moins 44 px sur tactile.
+static func tp(n: float) -> float:
+	return maxf(n, 44.0) if touch() else n
+
+## Focus clavier visible et discret (contour d'accent) ; sur tactile les boutons gardent FOCUS_NONE (le clavier maison ne perd pas son champ).
+static func focus_mode_btn() -> int:
+	return Control.FOCUS_NONE if touch() else Control.FOCUS_ALL
+
 static func p(k: String) -> Color:
 	if m == null: return PAL_FALLBACK.get(k, Color("888888"))
 	return m._p(k)
@@ -151,6 +163,11 @@ static func check_tex(checked: bool, radio := false, disabled := false) -> Image
 	return _svg("ck|%s|%s|%s|%s|%s" % [checked, radio, disabled, a.to_html(false), o.to_html(false)], 20, 20, body)
 
 ## Bouton rond d'un curseur (20 x 20).
+## Contour de focus clavier (accent, sans remplissage).
+static func focus_box(r := -1) -> StyleBoxFlat:
+	var s := box(Color(0, 0, 0, 0), rad_btn() if r < 0 else r, Color(accent(), 0.8), 2)
+	return s
+
 static func knob_tex(hi := false) -> ImageTexture:
 	return _svg("knob|%s|%s" % [hi, light()], 20, 20, '<circle cx="10" cy="10" r="9" fill="#%s" stroke="#000" stroke-opacity="0.25" stroke-width="1"/>' % ("ffffff" if hi or light() else "dededf"))
 
@@ -222,24 +239,24 @@ static func status_label(t: String, kind := "ok") -> Label:
 # ---------------------------------------------------------------- Boutons
 ## Bouton à texte : plat par défaut, « suggested » (accent) si primary.
 static func button(t: String, primary := false, w := 0) -> Button:
-	var b := Button.new(); b.text = t; b.focus_mode = Control.FOCUS_NONE
+	var b := Button.new(); b.text = t; b.focus_mode = focus_mode_btn()
 	b.theme_type_variation = "Accent" if primary else "Flat"
-	b.custom_minimum_size = Vector2(w, TOUCH); return b
+	b.custom_minimum_size = Vector2(w, tp(TOUCH)); return b
 
 ## Bouton « destructive » (rouge).
 static func danger_button(t: String, w := 0) -> Button:
 	var b := button(t, false, w); b.theme_type_variation = "Destructive"; return b
 
 static func icon_button(tex: Texture2D, w := BTN, tip := "") -> Button:
-	var b := Button.new(); b.focus_mode = Control.FOCUS_NONE; b.theme_type_variation = "Flat"
-	b.icon = tex; b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER; b.custom_minimum_size = Vector2(w, BTN); b.tooltip_text = tip; return b
+	var b := Button.new(); b.focus_mode = focus_mode_btn(); b.theme_type_variation = "Flat"
+	b.icon = tex; b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER; b.custom_minimum_size = Vector2(tp(w), tp(BTN)); b.tooltip_text = tip; return b
 
 ## Bouton-icône Lucide avec infobulle : UI.icon_btn("plus", "Nouvelle note", callable).
 static func icon_btn(name: String, tip := "", cb := Callable(), variation := "Flat", sz := BTN) -> Button:
-	var b := Button.new(); b.focus_mode = Control.FOCUS_NONE; b.theme_type_variation = variation
+	var b := Button.new(); b.focus_mode = focus_mode_btn(); b.theme_type_variation = variation
 	b.icon = icon(name); b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	b.add_theme_constant_override("icon_max_width", 16)
-	b.custom_minimum_size = Vector2(sz, sz); b.tooltip_text = tip
+	b.custom_minimum_size = Vector2(tp(sz), tp(sz)); b.tooltip_text = tip
 	if cb.is_valid(): b.pressed.connect(cb)
 	return b
 
@@ -372,7 +389,8 @@ static func split_content(h: Control) -> void:
 ## Ligne de navigation d'une barre latérale : icône + libellé, plate, sélection voilée (variation « Nav »).
 static func nav_row(t: String, icon_name := "", cb := Callable()) -> Button:
 	var b := Button.new(); b.text = t; b.focus_mode = Control.FOCUS_NONE; b.theme_type_variation = "Nav"
-	b.alignment = HORIZONTAL_ALIGNMENT_LEFT; b.clip_text = true; b.custom_minimum_size = Vector2(0, TOUCH); b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	b.focus_mode = focus_mode_btn()
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT; b.clip_text = true; b.custom_minimum_size = Vector2(0, tp(TOUCH)); b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if icon_name != "": set_icon(b, icon_name)
 	if cb.is_valid(): b.pressed.connect(cb)
 	return b

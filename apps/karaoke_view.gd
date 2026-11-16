@@ -6,9 +6,14 @@ extends Control
 signal word_clicked(word: String, line: int)
 signal seek_requested(t: float)
 
-const GOLD := Color("ffd040")
-const GREEN := Color("6fcf97")
-const CYAN := Color("7dd3fc")
+const UI = preload("res://apps/ui.gd")
+# Couleurs suivant le thème (clair ou sombre)
+var GOLD: Color:
+	get: return UI.p("warn")
+var GREEN: Color:
+	get: return UI.p("ok")
+var CYAN: Color:
+	get: return UI.accent()
 
 var lines: Array = []
 var trans: Dictionary = {}
@@ -193,7 +198,7 @@ func _draw() -> void:
 	if lines.is_empty():
 		var msg := "♪  Pas de paroles synchronisées  ♪"
 		var s := f.get_string_size(msg, HORIZONTAL_ALIGNMENT_LEFT, -1, 22)
-		draw_string(f, Vector2((size.x - s.x) / 2, size.y / 2), msg, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1, 1, 1, 0.5)); return
+		draw_string(f, Vector2((size.x - s.x) / 2, size.y / 2), msg, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(UI.p("text"), 0.5)); return
 	if compact:
 		_bgbox.bg_color = Color(0.04, 0.05, 0.09, 0.62); _bgbox.set_corner_radius_all(18)
 		draw_style_box(_bgbox, Rect2(Vector2.ZERO, size))
@@ -237,7 +242,7 @@ func _draw() -> void:
 					_draw_sweep(f, Vector2(x, base), word, fs, prog if t < w1 else 1.0, t >= w0)
 				else:
 					if is_cur or alpha > 0.5: draw_string(f, Vector2(x + 2, base + 2), word, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0, 0, 0, alpha * 0.45))
-					draw_string(f, Vector2(x, base), word, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, alpha))
+					draw_string(f, Vector2(x, base), word, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(UI.p("text"), alpha))
 				if glm.has(cw):
 					var gs: String = glm[cw]
 					var weak := gs.begins_with("~")
@@ -287,9 +292,9 @@ func _draw_sweep(f: Font, pos: Vector2, word: String, fs: int, prog: float, star
 	draw_string(f, pos + Vector2(2, 2), word, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0, 0, 0, 0.5))
 	for c in n:
 		var ch := word[c]
-		var col := Color(1, 1, 1, 0.95)
+		var col := Color(UI.p("text"), 0.95)
 		if c < lit: col = GOLD
-		elif c == lit and started: col = Color(1, 1, 1, 0.95).lerp(GOLD, frac)
+		elif c == lit and started: col = Color(UI.p("text"), 0.95).lerp(GOLD, frac)
 		draw_string(f, Vector2(x, pos.y), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
 		x += f.get_string_size(ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 

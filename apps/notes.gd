@@ -63,12 +63,12 @@ var tree_sc_top := 0.0
 
 # ------------------------------------------------------------------ coloration Markdown de l'éditeur
 class MdHL extends SyntaxHighlighter:
-	var c_text := Color.WHITE
-	var c_head := Color.CYAN
-	var c_link := Color.CYAN
-	var c_code := Color.GREEN
-	var c_quote := Color.GRAY
-	var c_tag := Color.ORANGE
+	var c_text := UI.p("text")
+	var c_head := UI.accent()
+	var c_link := UI.accent()
+	var c_code := UI.p("ok")
+	var c_quote := UI.p("muted")
+	var c_tag := UI.p("warn")
 	var fence: Array = []
 	var rx_code := RegEx.new()
 	var rx_wl := RegEx.new()

@@ -245,6 +245,10 @@ func _mk_pane(k: int) -> P:
 		if k == 1: sb.border_width_left = 1
 		p.list.add_theme_stylebox_override("panel", sb)
 		p.list.add_theme_color_override("font_color", _col("text", Color("ffffff"))))
+	p.list.gui_input.connect(func(ev: InputEvent):
+		if ev is InputEventKey and ev.pressed and not ev.echo and ev.keycode == KEY_SPACE:
+			var f := _sel(); if not f.is_empty() and not is_dir(f[0]): load("res://apps/quicklook.gd").show_for(self, f[0])
+			p.list.accept_event())
 	p.list.item_activated.connect(func(i): act = k; _open_item(p, i))
 	p.list.item_selected.connect(func(_i): act = k; _preview())
 	p.list.item_clicked.connect(func(i, at, b): act = k; if b == MOUSE_BUTTON_RIGHT: _menu(p.list.get_global_transform() * at, false, i))

@@ -241,7 +241,8 @@ func _add_bubble(m: Dictionary) -> void:
 	if kind == "text":
 		v.add_child(_wrap_label(str(m.get("text", ""))))
 	elif kind == "nudge":
-		v.add_child(_wrap_label("📳 " + ("Tu as envoyé un nudge" if mine else "%s te secoue !" % _nm(cur))))
+		var nh := HBoxContainer.new(); nh.add_theme_constant_override("separation", 6); v.add_child(nh)
+		nh.add_child(UI.icon_rect("vibrate", 16)); nh.add_child(_wrap_label("Tu as envoyé un nudge" if mine else "%s te secoue !" % _nm(cur)))
 	elif kind == "file":
 		_file_bubble(v, m, mine)
 	var tl := Label.new(); tl.text = "%02d:%02d" % [ts["hour"], ts["minute"]]; tl.add_theme_font_size_override("font_size", 11)
@@ -282,7 +283,7 @@ func _file_bubble(v: VBoxContainer, m: Dictionary, mine: bool) -> void:
 		"rejected": st.text = "Refusé"
 		"failed": st.text = "Échec du transfert"
 		"done":
-			st.text = "Terminé ✓" if not mine else "Envoyé ✓"
+			st.text = "Terminé" if not mine else "Envoyé"
 			var r2 := HBoxContainer.new(); r2.add_theme_constant_override("separation", 6); v.add_child(r2)
 			if ext in ["mp3", "ogg", "wav"] and path != "": r2.add_child(_btn("Écouter", _play.bind(path)))
 			if path != "": r2.add_child(_btn("Ouvrir", func(): OS.shell_open(ProjectSettings.globalize_path(path) if path.begins_with("user://") else path)))

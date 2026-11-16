@@ -32,7 +32,7 @@ func _ready() -> void:
 	root.add_theme_stylebox_override("panel", sb); win.add_child(root)
 	var v := VBoxContainer.new(); v.add_theme_constant_override("separation", 8); root.add_child(v)
 	var head := HBoxContainer.new(); v.add_child(head)
-	var t := Label.new(); t.text = "💬 IA locale"; t.add_theme_font_size_override("font_size", 14); t.add_theme_color_override("font_color", UI.accent_text()); t.size_flags_horizontal = Control.SIZE_EXPAND_FILL; head.add_child(t)
+	head.add_child(UI.icon_rect("message-circle", 16)); var t := Label.new(); t.text = " IA locale"; t.add_theme_font_size_override("font_size", 14); t.add_theme_color_override("font_color", UI.accent_text()); t.size_flags_horizontal = Control.SIZE_EXPAND_FILL; head.add_child(t)
 	status = Label.new(); status.add_theme_font_size_override("font_size", 12); status.theme_type_variation = "Muted"; head.add_child(status)
 	var x := preload("res://apps/ui.gd").icon_btn("x", "Fermer"); x.pressed.connect(hide_chat); head.add_child(x)
 	scroll = ScrollContainer.new(); scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL; scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; v.add_child(scroll)

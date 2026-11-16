@@ -15,6 +15,7 @@ const BASE := {
 	"vd:2": ["Bureau 3", "Ctrl+Alt+3", false], "vd:3": ["Bureau 4", "Ctrl+Alt+4", false],
 	"snap:l": ["Ancrer à gauche", "Ctrl+Alt+Shift+Left", false], "snap:r": ["Ancrer à droite", "Ctrl+Alt+Shift+Right", false],
 	"snap:t": ["Ancrer en haut", "Ctrl+Alt+Shift+Up", false], "snap:b": ["Ancrer en bas", "Ctrl+Alt+Shift+Down", false],
+	"overview": ["Vue d'ensemble des fenêtres", "Ctrl+Alt+Tab", false],
 	"theme": ["Thème clair / sombre", "Ctrl+Alt+L", false],
 }
 const APP_KEYS := {"notepad": "Ctrl+Alt+N", "terminal": "Ctrl+Alt+T", "files": "Ctrl+Alt+F", "settings": "Ctrl+Alt+S", "chromium": "Ctrl+Alt+B"}
@@ -96,6 +97,7 @@ func run(a: String) -> bool:
 		match a:
 			"clip": m.clip.toggle(); return true
 			"search": m.srch.toggle(); return true
+			"overview": m.overview.toggle(); return true
 			"theme": m._set_light(not bool(m.set_cfg.get("light", false))); return true
 			"vd_next": m._goto_vd(posmod(m.cur_vd + 1, m.n_vd)); return true
 			"vd_prev": m._goto_vd(posmod(m.cur_vd - 1, m.n_vd)); return true

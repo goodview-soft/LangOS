@@ -91,11 +91,11 @@ func _process(_d: float) -> void:
 		var u: String = browser.get_url()
 		if u != last_url: _sync_url(u)
 
-func _fail(msg: String) -> void:
-	info.text = msg; inst_btn.disabled = false; if bar: bar.visible = false
+func _fail(msg: String, detail := "") -> void:
+	info.text = msg; info.tooltip_text = detail; info.mouse_filter = Control.MOUSE_FILTER_PASS; inst_btn.disabled = false; if bar: bar.visible = false
 
 func _on_downloaded(result: int, code: int, _h: PackedStringArray, _b: PackedByteArray) -> void:
-	if result != HTTPRequest.RESULT_SUCCESS or code != 200: _fail("Échec du téléchargement (résultat %d, code HTTP %d). Réessaie." % [result, code]); DirAccess.remove_absolute(_zip()); return
+	if result != HTTPRequest.RESULT_SUCCESS or code != 200: _fail("Le téléchargement de Chromium a échoué. Vérifie ta connexion puis réessaie.", "Résultat %d, code HTTP %d" % [result, code]); DirAccess.remove_absolute(_zip()); return
 	info.text = "Installation (extraction, un instant)…"; bar.value = bar.max_value
 	thread = Thread.new(); thread.start(_extract)
 
@@ -191,7 +191,7 @@ func _start() -> void:
 		if core.desktop_mode: cfg["user_agent"] = Core.UA_DESKTOP
 		if not cef.initialize(cfg):
 			var e: String = cef.get_error(); cef.queue_free(); cef = null
-			_build_install(); info.text = "Chromium n'a pas démarré : " + e; return
+			_build_install(); info.text = "Chromium n'a pas pu démarrer sur cet appareil."; info.tooltip_text = e; info.mouse_filter = Control.MOUSE_FILTER_PASS; return
 		Engine.set_meta("lang_cef", cef)
 	OS.low_processor_usage_mode = false
 	_build_ui(38)
@@ -215,7 +215,7 @@ func _activate(i: int) -> void:
 			var tv := TextureRect.new(); tv.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; tv.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT); tv.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			view.add_child(tv); views[id] = tv
 			var b = cef.create_browser(str(t["url"]), tv, {"javascript": true, "webgl": true, "enable_ad_block": core.adblock, "incognito": bool(t["private"])})
-			if b == null: _build_install(); info.text = "Impossible de créer le navigateur : " + str(cef.get_error()); return
+			if b == null: _build_install(); info.text = "Impossible d'ouvrir une page pour le moment. Réessaie."; info.tooltip_text = str(cef.get_error()); info.mouse_filter = Control.MOUSE_FILTER_PASS; return
 			brs[id] = b; b.resize(view.size)
 			for sg in ["on_download_updated", "on_download_started"]:
 				if b.has_signal(sg): b.connect(sg, _on_cef_download)
@@ -268,7 +268,7 @@ func _refresh_bm() -> void:
 		if it["t"] == "b":
 			b.text = str(it["name"]).substr(0, 16); b.pressed.connect(func(): _go(str(it["url"])))
 		else:
-			b.text = "📁 " + str(it["name"]).substr(0, 14)
+			b.text = str(it["name"]).substr(0, 14); UI.set_icon(b, "folder")
 			b.pressed.connect(func():
 				var items := []
 				for s in it["items"]:
@@ -408,7 +408,7 @@ func _bm_list(body: Control, l: Array, path: Array, depth: int) -> void:
 		var del: Array = ["Supprimer", func(): core.remove_item(i, path); core.save(); _refresh_bm(); _redo(_page_bookmarks, body)]
 		if it["t"] == "f":
 			var np := path + [i]
-			_row(body, pre + "📁 " + str(it["name"]), [["Ajouter la page", func(): core.add_bookmark(str(core.current()["title"]), current_url(), np); core.save(); _redo(_page_bookmarks, body)], del])
+			_row(body, pre + str(it["name"]), [["Ajouter la page", func(): core.add_bookmark(str(core.current()["title"]), current_url(), np); core.save(); _redo(_page_bookmarks, body)], del])
 			_bm_list(body, it["items"], np, depth + 1)
 		else:
 			_row(body, pre + str(it["name"]) + "  " + str(it["url"]), [["Ouvrir", func(): _go(str(it["url"])); panel.queue_free(); panel = null], del])

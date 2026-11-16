@@ -11,7 +11,7 @@ var net := "none"         # wifi | cell | eth | none
 var level := 3            # force du Wi-Fi 0..3
 
 func _ready() -> void:
-	custom_minimum_size = Vector2(120, 32)
+	custom_minimum_size = Vector2(120, UI.tp(32))
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var t := Timer.new(); t.wait_time = 5.0; t.autostart = true; t.timeout.connect(_poll); add_child(t)
 	_poll()

@@ -49,6 +49,7 @@ var prof          # apps/profiles.gd (logique)
 var srch          # apps/search.gd
 var cal           # apps/calendar.gd (agenda + rappels)
 var clip          # apps/clipboard.gd (historique du presse-papiers)
+var overview      # apps/overview.gd (vue d'ensemble Ctrl+Alt+Tab, aperçus au survol)
 var keysc         # apps/shortcuts.gd (raccourcis clavier / manette)
 var tray_node: Control
 var menu_hi: TextureRect
@@ -153,6 +154,8 @@ func _top_ids() -> Array:
 	return APPS.keys().filter(func(k): return not inside.has(k) and not HIDDEN.has(k) and (k != "android_apps" or android))
 var active := ""
 var menu_reset := Callable()
+var menu_sc: ScrollContainer
+var menu_search: LineEdit
 var set_cfg := {"bg": 0, "font": 22, "ollama": "http://127.0.0.1:11434", "kb": "osk", "cursor": "auto", "pad": false, "pad_speed": 0.7, "zoom": 1.0, "model": "", "engine": -1, "src": "spa", "tgt": "fra", "light": false, "wall": false, "icons": {}, "layout": {}, "open": [], "accent": "5aa2ff", "anim": true, "wtrans": 1.0, "radius": 12, "isize": 56, "pins": ["notepad", "settings", "calc", "music"], "desk": ["trash"], "installed": [], "dock_hide": false, "keys": {}, "padmap": {}, "clip_save": true, "clip_nopw": true}
 var kb: PanelContainer
 var ui_root: VBoxContainer
@@ -416,7 +419,7 @@ func _build_theme() -> void:
 	# États d'un type de bouton : [état, voile (float) ou couleur]
 	var states := func(type: String, vals: Array, r: int, mh: int, mv: int) -> void:
 		for st in vals: th.set_stylebox(st[0], type, mk.call(st[1] if st[1] is Color else UI.veil(st[1]), r, mh, mv))
-		th.set_stylebox("focus", type, StyleBoxEmpty.new())
+		th.set_stylebox("focus", type, UI.focus_box(r))
 	var colors := func(type: String, c: Color) -> void:
 		for k in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color",
 				"icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_hover_pressed_color", "icon_focus_color"]: th.set_color(k, type, c)
@@ -428,7 +431,7 @@ func _build_theme() -> void:
 	th.set_constant("icon_max_width", "Button", 18); th.set_constant("h_separation", "Button", 6)
 	for ty in ["OptionButton", "MenuButton"]:
 		for st in ["normal", "hover", "pressed", "disabled"]: th.set_stylebox(st, ty, th.get_stylebox(st, "Button"))
-		th.set_stylebox("focus", ty, StyleBoxEmpty.new()); colors.call(ty, tx)
+		th.set_stylebox("focus", ty, UI.focus_box(rb)); colors.call(ty, tx)
 		th.set_font("font", ty, UI.font()); th.set_font_size("font_size", ty, UI.T_BODY)
 	th.set_icon("arrow", "OptionButton", UI.glyph("chevron-down", Color.WHITE)); th.set_constant("modulate_arrow", "OptionButton", 1); th.set_constant("arrow_margin", "OptionButton", 10)
 	# Boutons plats (barres d'en-tête), plats cochés, lignes de navigation, ronds (contrôles de fenêtre)
@@ -455,7 +458,7 @@ func _build_theme() -> void:
 	# Cases, interrupteurs, liens : pas de fond de bouton
 	for ty in ["CheckBox", "CheckButton"]:
 		for st in ["normal", "hover", "pressed", "hover_pressed", "disabled", "hover_disabled"]: th.set_stylebox(st, ty, mk.call(none, 0, 2, 4))
-		th.set_stylebox("focus", ty, StyleBoxEmpty.new())
+		th.set_stylebox("focus", ty, UI.focus_box(4))
 		colors.call(ty, tx); th.set_font("font", ty, UI.font()); th.set_constant("h_separation", ty, 8)
 	colors.call("LinkButton", UI.accent_text())
 	for pr in [["checked", true, false], ["unchecked", false, false], ["checked_disabled", true, true], ["unchecked_disabled", false, true]]:
@@ -514,9 +517,19 @@ func _build_theme() -> void:
 		th.set_stylebox("grabber_area", ty, mk.call(ACCENT, 99, 0 if hz else 3, 3 if hz else 0)); th.set_stylebox("grabber_area_highlight", ty, mk.call(ACCENT, 99, 0 if hz else 3, 3 if hz else 0))
 		th.set_icon("grabber", ty, UI.knob_tex()); th.set_icon("grabber_highlight", ty, UI.knob_tex(true)); th.set_icon("grabber_disabled", ty, UI.knob_tex())
 	# Barres de défilement fines
+	var sbw := 26 if UI.touch() else 14   # largeur de la barre (doigt : facile à saisir)
+	var sbm := (sbw - 8) / 2              # marge de la piste : le curseur arrondi fait 8 px de large, la zone saisissable toute la barre
 	for ty in ["VScrollBar", "HScrollBar"]:
-		th.set_stylebox("scroll", ty, mk.call(none, 4, 4, 4)); th.set_stylebox("scroll_focus", ty, mk.call(none, 4, 4, 4))
-		th.set_stylebox("grabber", ty, mk.call(w.call(0.2), 4, 4, 4)); th.set_stylebox("grabber_highlight", ty, mk.call(w.call(0.35), 4, 4, 4)); th.set_stylebox("grabber_pressed", ty, mk.call(w.call(0.5), 4, 4, 4))
+		var vt: bool = ty == "VScrollBar"
+		var sm := func(c: Color) -> StyleBoxFlat:
+			var sb := _box(c, 99); sb.content_margin_left = sbm if vt else 4; sb.content_margin_right = sbm if vt else 4
+			sb.content_margin_top = 4 if vt else sbm; sb.content_margin_bottom = 4 if vt else sbm
+			return sb
+		var track: StyleBoxFlat = sm.call(w.call(0.05)); track.set_content_margin_all(0)
+		track.content_margin_left = sbm if vt else 0; track.content_margin_right = sbm if vt else 0; track.content_margin_top = 0 if vt else sbm; track.content_margin_bottom = 0 if vt else sbm
+		track.bg_color = none
+		th.set_stylebox("scroll", ty, track); th.set_stylebox("scroll_focus", ty, track)
+		th.set_stylebox("grabber", ty, sm.call(Color(tx, 0.4))); th.set_stylebox("grabber_highlight", ty, sm.call(Color(tx, 0.6))); th.set_stylebox("grabber_pressed", ty, sm.call(ACCENT))
 	# Filets, infobulles
 	th.set_stylebox("separator", "HSeparator", sl); th.set_constant("separation", "HSeparator", 1)
 	var vl := StyleBoxLine.new(); vl.color = _p("edge"); vl.thickness = 1; vl.vertical = true
@@ -528,12 +541,12 @@ func _build_theme() -> void:
 
 func _mk_btn(txt: String, w := 56, h := 56) -> Button:
 	var b := Button.new(); b.text = txt
-	b.custom_minimum_size = Vector2(w, h)
+	b.custom_minimum_size = Vector2(w, UI.tp(h))
 	b.focus_mode = Control.FOCUS_NONE
 	return b
 
 func _icon_btn(icon: String, variation := "Flat", w := 40, h := 36, isz := 18) -> Button:
-	var b := _mk_btn("", w, h); b.theme_type_variation = variation
+	var b := _mk_btn("", int(UI.tp(w)), int(UI.tp(h))); b.theme_type_variation = variation
 	b.icon = _ico(icon); b.add_theme_constant_override("icon_max_width", isz)
 	b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	return b
@@ -585,6 +598,8 @@ func _build_desktop() -> void:
 	var tray := Control.new(); tray.set_script(load("res://apps/systray.gd")); bh.add_child(tray); tray_node = tray
 	clock = Label.new(); clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	clock.add_theme_font_size_override("font_size", UI.T_SMALL); clock.add_theme_constant_override("line_spacing", 0); bh.add_child(clock)
+	clock.mouse_filter = Control.MOUSE_FILTER_STOP; clock.tooltip_text = "Notifications et calendrier"
+	clock.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT: _toggle_notifs())
 	bar_h = 54.0
 	_build_keyboard()
 	get_tree().node_added.connect(_on_node_added)
@@ -602,6 +617,7 @@ func _build_desktop() -> void:
 	_build_menu()
 	fx = load("res://apps/fx.gd").new(); fx.m = self; add_child(fx)
 	ccenter = load("res://apps/control_center.gd").new(); ccenter.m = self; add_child(ccenter)
+	overview = load("res://apps/overview.gd").new(); overview.m = self; add_child(overview)
 	dock = load("res://apps/dock.gd").new(); add_child(dock); dock.setup(self)
 	prof = load("res://apps/profiles.gd").new(); prof.m = self; prof.visible = false; add_child(prof)
 	srch = load("res://apps/search.gd").new(); srch.m = self; add_child(srch)
@@ -617,9 +633,13 @@ func _clamp_windows() -> void:
 		var d: Dictionary = wins[id]
 		var w: PanelContainer = d["win"]
 		if d["maxed"]: w.position = Vector2.ZERO; w.size = desk.size; continue
-		var mn := w.get_combined_minimum_size()
-		w.size = Vector2(minf(maxf(w.size.x, mn.x), desk.size.x - 8.0), minf(maxf(w.size.y, mn.y), desk.size.y - 8.0))
-		w.position = Vector2(clampf(w.position.x, 0.0, maxf(0.0, desk.size.x - w.size.x)), clampf(w.position.y, 0.0, maxf(0.0, desk.size.y - w.size.y)))
+		_keep_in(w, desk.size)
+
+## Garde une fenêtre entièrement dans le bureau (barre de titre toujours atteignable) ; taille réduite si besoin.
+func _keep_in(w: Control, ds: Vector2) -> void:
+	var mn := w.get_combined_minimum_size()
+	w.size = Vector2(minf(maxf(w.size.x, mn.x), maxf(ds.x - 8.0, 80.0)), minf(maxf(w.size.y, mn.y), maxf(ds.y - 8.0, 80.0)))
+	w.position = Vector2(clampf(w.position.x, 0.0, maxf(0.0, ds.x - w.size.x)), clampf(w.position.y, 0.0, maxf(0.0, ds.y - w.size.y)))
 
 func _layout_icons() -> void:
 	var rows := maxi(1, int((desk.size.y - 16.0) / GRID)); var cols := maxi(1, int((desk.size.x - 16.0) / GRID))
@@ -704,7 +724,7 @@ func _build_menu() -> void:
 		g.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_RIGHT: _app_ctx(id))
 		grid.add_child(g)
 	var all_box := VBoxContainer.new(); all_box.visible = false; v.add_child(all_box)
-	var sc := ScrollContainer.new(); sc.custom_minimum_size = Vector2(380, 330); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; all_box.add_child(sc)
+	var sc := ScrollContainer.new(); menu_sc = sc; sc.custom_minimum_size = Vector2(380, 330); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED; all_box.add_child(sc)
 	var lst := VBoxContainer.new(); lst.size_flags_horizontal = Control.SIZE_EXPAND_FILL; lst.add_theme_constant_override("separation", 2); sc.add_child(lst)
 	var rows := {}
 	for id in all_ids:
@@ -718,9 +738,10 @@ func _build_menu() -> void:
 	var show_all := func(on: bool):
 		pin_box.visible = not on; all_box.visible = on
 		toggle.text = "‹  Retour" if on else "Toutes les applications  ›"
-		menu.size = menu.get_combined_minimum_size()
-		menu.position.y = size.y - bar_h - 10 - menu.size.y
+		_place_menu()
 	toggle.pressed.connect(func(): show_all.call(not all_box.visible))
+	search.focus_entered.connect(func(): if set_cfg["kb"] == "osk" and not kb.visible: _toggle_kb())
+	menu_search = search
 	search.text_changed.connect(func(t: String):
 		var q := t.strip_edges().to_lower()
 		if q != "" and not all_box.visible: show_all.call(true)
@@ -741,12 +762,25 @@ func _toggle_menu() -> void:
 	catcher.visible = menu.visible
 	if menu.visible:
 		if menu_reset.is_valid(): menu_reset.call()
-		menu.size = menu.get_combined_minimum_size()
-		var end := Vector2(10, size.y - bar_h - 10 - menu.size.y)
-		menu.position = end + Vector2(0, 14); menu.modulate.a = 0.0
 		catcher.move_to_front(); menu.move_to_front()
+		if kb.visible: kb.move_to_front()
+		var end := _place_menu()
+		menu.position = end + Vector2(0, 14); menu.modulate.a = 0.0
 		var tw := create_tween().set_parallel(true).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 		tw.tween_property(menu, "position", end, 0.16); tw.tween_property(menu, "modulate:a", 1.0, 0.16)
+	elif is_instance_valid(menu_search): menu_search.release_focus()
+
+## Place le menu au-dessus de la barre, dans la zone utile : en mode Flex / écran plié l'interface n'occupe que la moitié haute
+## (le bas est le pavé tactile) ; si le clavier tactile est ouvert, le menu se loge au-dessus de lui. Retourne la position finale.
+func _place_menu() -> Vector2:
+	var bottom := ui_root.size.y - bar_h - 10.0
+	if kb.visible: bottom = minf(bottom, size.y - bar_h - kb.get_combined_minimum_size().y - 10.0)
+	if is_instance_valid(menu_sc):
+		menu_sc.custom_minimum_size.y = clampf(bottom - 250.0, 110.0, 330.0)
+	menu.size = menu.get_combined_minimum_size()
+	var end := Vector2(10, maxf(8.0, bottom - menu.size.y))
+	menu.position = end
+	return end
 
 ## Réinitialisation usine : confirmation, puis effacement de user:// (hors modèles IA et mises à jour) et fermeture.
 func _factory_confirm() -> void:
@@ -762,7 +796,7 @@ func _factory_confirm() -> void:
 	var h := HBoxContainer.new(); h.add_theme_constant_override("separation", 10); h.alignment = BoxContainer.ALIGNMENT_END; v.add_child(h)
 	var no := _mk_btn("Annuler", 120, 42); no.pressed.connect(dim.queue_free); h.add_child(no)
 	var yes := _mk_btn("Tout effacer", 140, 42)
-	yes.add_theme_color_override("font_color", Color("ef4444")); yes.pressed.connect(_factory_reset); h.add_child(yes)
+	yes.add_theme_color_override("font_color", _p("err")); yes.pressed.connect(_factory_reset); h.add_child(yes)
 
 func _factory_reset() -> void:
 	var keep := ["models", "update.pck", "update.cfg"]
@@ -917,9 +951,11 @@ func _update_flex() -> void:
 		pointer.move_to(cp.clamp(Vector2.ZERO, Vector2(size.x - 1.0, maxf(1.0, top - 1.0))))   # sinon on garde la place (pas de saut quand la charnière bouge)
 	else:
 		ui_root.offset_bottom = 0.0
+	if desk != null: _clamp_windows.call_deferred()
 
 func _on_node_added(n: Node) -> void:
 	if n is LineEdit or n is TextEdit: n.virtual_keyboard_enabled = set_cfg["kb"] == "system"
+	elif n is ScrollContainer and UI.touch(): n.scroll_deadzone = 10   # défilement au doigt : un petit glissé n'active pas le bouton touché
 
 func _apply_kb() -> void:
 	var mode: String = set_cfg["kb"]
@@ -945,6 +981,7 @@ func _toggle_kb() -> void:
 	kb.visible = not kb.visible
 	kb.offset_top = -(bar_h + kb.get_combined_minimum_size().y)
 	kb.offset_bottom = -bar_h
+	if menu.visible: _place_menu()
 
 # ---------------------------------------------------------------- Fenêtres
 
@@ -1048,10 +1085,9 @@ func _make_window(id: String, _title: String, sz: Vector2, pos: Vector2) -> VBox
 		for k in wins:
 			if int(wins[k]["vd"]) == cur_vd and wins[k]["win"].visible: n += 1
 		pos += Vector2(34, 30) * float(n % 6)
-	sz = Vector2(minf(sz.x, ds.x - 8.0), minf(sz.y, ds.y - 8.0))
-	pos = Vector2(clampf(pos.x, 0.0, maxf(0.0, ds.x - sz.x)), clampf(pos.y, 0.0, maxf(0.0, ds.y - sz.y)))
 	w.size = sz; w.position = pos
 	desk.add_child(w)
+	_keep_in(w, ds)
 	var wv := VBoxContainer.new(); wv.add_theme_constant_override("separation", 0)
 	w.add_child(wv)
 	var tb := PanelContainer.new()
@@ -1059,7 +1095,7 @@ func _make_window(id: String, _title: String, sz: Vector2, pos: Vector2) -> VBox
 	wv.add_child(tb)
 	# Barre de titre façon headerbar : icône à gauche, titre gras centré, contrôles ronds à droite
 	var tbh := HBoxContainer.new(); tbh.add_theme_constant_override("separation", 6); tb.add_child(tbh)
-	var lead := HBoxContainer.new(); lead.custom_minimum_size.x = 26 * 3 + 8 * 2; tbh.add_child(lead)
+	var lead := HBoxContainer.new(); lead.custom_minimum_size.x = UI.tp(26) * 3 + 8 * 2; tbh.add_child(lead)
 	var ti := TextureRect.new(); ti.texture = app_icon(id); ti.custom_minimum_size = Vector2(20, 20)
 	ti.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; ti.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	ti.size_flags_vertical = Control.SIZE_SHRINK_CENTER; ti.mouse_filter = Control.MOUSE_FILTER_PASS; lead.add_child(ti)
@@ -1078,6 +1114,7 @@ func _make_window(id: String, _title: String, sz: Vector2, pos: Vector2) -> VBox
 	tk.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	tk.gui_input.connect(func(ev: InputEvent): if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_RIGHT: _win_menu(id, Vector2(tk.global_position.x, tk.global_position.y - 6.0), true))
 	tk.pressed.connect(func(): if active == id and w.visible: _toggle_win(id) else: (_show(id) if w.visible else _toggle_win(id)))
+	if overview != null: overview.attach(tk, id)
 	task_box.add_child(tk)
 	tb.set_meta("wid", id)
 	wins[id] = {"win": w, "task": tk, "tb": tb, "maxed": false, "saved": Rect2(), "title": tl, "vd": restore_vd if restore_vd >= 0 else cur_vd, "min": false, "snapped": false}
@@ -1104,8 +1141,7 @@ func _title_input(ev: InputEvent, id: String) -> void:
 			d["snapped"] = false
 			if d["saved"].size.x > 0: w.size = d["saved"].size
 		var p: Vector2 = w.position + ev.relative
-		var lim: Vector2 = desk.size - Vector2(120, 40)
-		w.position = Vector2(clampf(p.x, -w.size.x + 120, lim.x), clampf(p.y, 0, lim.y))
+		w.position = Vector2(clampf(p.x, 0.0, maxf(0.0, desk.size.x - w.size.x)), clampf(p.y, 0.0, maxf(0.0, desk.size.y - w.size.y)))
 		fx.show_preview(fx.zone_at(get_viewport().get_mouse_position() - desk.global_position, desk.size))
 
 ## Fin du déplacement d'une fenêtre : au bord du bureau elle s'ancre (haut = agrandie, côtés = moitié, coins = quart).
@@ -1131,7 +1167,7 @@ func _toggle_max(id: String) -> void:
 	var d: Dictionary = wins[id]
 	var w: PanelContainer = d["win"]
 	if d["maxed"]:
-		w.position = d["saved"].position; w.size = d["saved"].size
+		w.position = d["saved"].position; w.size = d["saved"].size; _keep_in(w, desk.size)
 	else:
 		d["saved"] = Rect2(w.position, w.size)
 		w.position = Vector2.ZERO; w.size = desk.size
@@ -1194,7 +1230,7 @@ func _s_opt(items: Array, current: int, cb: Callable) -> OptionButton:
 func _s_slider(lo: float, hi: float, step: float, val: float, cb: Callable) -> HBoxContainer:
 	var hb := HBoxContainer.new(); hb.add_theme_constant_override("separation", 6)
 	var s := HSlider.new(); s.min_value = lo; s.max_value = hi; s.step = step; s.value = val; s.focus_mode = Control.FOCUS_NONE
-	s.custom_minimum_size = Vector2(110, 32); s.size_flags_horizontal = Control.SIZE_EXPAND_FILL; s.size_flags_vertical = Control.SIZE_SHRINK_CENTER; hb.add_child(s)
+	s.custom_minimum_size = Vector2(110, UI.tp(32)); s.size_flags_horizontal = Control.SIZE_EXPAND_FILL; s.size_flags_vertical = Control.SIZE_SHRINK_CENTER; hb.add_child(s)
 	var v := UI.small(""); v.custom_minimum_size.x = 48; v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT; hb.add_child(v)
 	s.value_changed.connect(func(x: float): cb.call(x, v)); cb.call(val, v)
 	return hb
@@ -1598,7 +1634,7 @@ func _on_tr_local_done(t: String) -> void:
 	tr_btn.disabled = false
 	var out := t.get_slice("<|im_end|>", 0).strip_edges()
 	tr_out.text = out
-	tr_status.text = "✓ %.1f s — traduit sur l'appareil" % ((Time.get_ticks_msec() - tr_t0) / 1000.0)
+	tr_status.text = "%.1f s — traduit sur l'appareil" % ((Time.get_ticks_msec() - tr_t0) / 1000.0)
 
 func _tr_swap() -> void:
 	var s: String = set_cfg["src"]; set_cfg["src"] = set_cfg["tgt"]; set_cfg["tgt"] = s
@@ -1662,7 +1698,7 @@ func _on_tr_done(result: int, code: int, _h: PackedStringArray, body: PackedByte
 		tr_status.text = "Échec de la traduction (serveur local arrêté ?)."; return
 	var rx := RegEx.create_from_string("(?s)<think>.*?</think>")
 	tr_out.text = rx.sub(str(info["message"]["content"]), "", true).strip_edges()
-	tr_status.text = "✓ %.1f s — traduit localement" % ((Time.get_ticks_msec() - tr_t0) / 1000.0)
+	tr_status.text = "%.1f s — traduit localement" % ((Time.get_ticks_msec() - tr_t0) / 1000.0)
 
 # ---------------------------------------------------------------- RemoteDesk (app intégrée)
 
@@ -2107,7 +2143,7 @@ func _apk_prompt() -> void:
 
 func _on_version_json(result: int, code: int, _h: PackedStringArray, body: PackedByteArray) -> void:
 	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
-		_set_upd("✓ v%s (aucune version publiée)" % VERSION if code == 404 else "Vérification impossible (hors ligne ?).", "Vérifier")
+		_set_upd("v%s (aucune version publiée)" % VERSION if code == 404 else "Vérification impossible (hors ligne ?).", "Vérifier")
 		return
 	var info = JSON.parse_string(body.get_string_from_utf8())
 	if not (info is Dictionary) or not info.has("version"):
@@ -2116,7 +2152,7 @@ func _on_version_json(result: int, code: int, _h: PackedStringArray, body: Packe
 		_set_upd("Nouvelle APK requise : la partie Android de cette version (niveau %d, installé %d) doit être réinstallée." % [int(info["native"]), _native_level()], "Télécharger l'APK")
 		_apk_prompt(); return
 	if not preload("res://boot.gd").newer(str(info["version"]), VERSION):
-		_set_upd("✓ À jour (v%s)" % VERSION, "Vérifier"); return
+		_set_upd("À jour (v%s)" % VERSION, "Vérifier"); return
 	upd_info = info
 	notify("Mise à jour", "Version %s disponible." % info["version"])
 	var v := Engine.get_version_info()
@@ -2365,12 +2401,13 @@ func _begin_resize(pos: Vector2) -> bool:
 		var id := ""
 		for k in wins:
 			if wins[k]["win"] == c: id = k
-		if id == "" or not Rect2(c.position, c.size).grow(6).has_point(p): continue
+		var eg := 24.0 if UI.touch() else 8.0   # poignée plus large au doigt
+		if id == "" or not Rect2(c.position, c.size).grow(eg - 2.0).has_point(p): continue
 		if wins[id]["maxed"]: return false
 		var r := Rect2(c.position, c.size)
-		var l := p.x < r.position.x + 8 and p.y > r.position.y + 40
-		var rr := p.x > r.end.x - 8 and p.y > r.position.y + 40
-		var b := p.y > r.end.y - 8
+		var l := p.x < r.position.x + eg and p.y > r.position.y + 40
+		var rr := p.x > r.end.x - eg and p.y > r.position.y + 40
+		var b := p.y > r.end.y - eg
 		if not (l or rr or b): return false
 		rs = {"win": c, "id": id, "rect": r, "p0": p, "l": l, "r": rr, "b": b}
 		lp_active = false
@@ -2386,7 +2423,7 @@ func _do_resize(pos: Vector2) -> void:
 	if rs["l"]: x0 = maxf(minf(r.position.x + dp.x, x1 - mn.x), 0.0)
 	if rs["r"]: x1 = minf(maxf(r.end.x + dp.x, x0 + mn.x), desk.size.x)
 	if rs["b"]: y1 = minf(maxf(r.end.y + dp.y, r.position.y + mn.y), desk.size.y)
-	w.position = Vector2(x0, r.position.y); w.size = Vector2(x1 - x0, y1 - r.position.y)
+	w.position = Vector2(x0, clampf(r.position.y, 0.0, maxf(0.0, desk.size.y - 40.0))); w.size = Vector2(x1 - x0, y1 - w.position.y)
 	wins[rs["id"]]["snapped"] = false
 
 # --- Icônes : glisser-déposer sur une grille
@@ -2422,6 +2459,7 @@ func _reset_icons() -> void:
 
 # --- Bureaux virtuels
 func _goto_vd(i: int) -> void:
+	if overview != null and _real() and i != cur_vd: overview.snap_all()
 	var old_vd := cur_vd
 	cur_vd = clampi(i, 0, n_vd - 1)
 	for id in wins:
@@ -2445,7 +2483,7 @@ func _vd_remove() -> void:
 	n_vd -= 1; _goto_vd(mini(cur_vd, n_vd - 1)); _save_layout()
 
 func _vd_menu() -> void:
-	var it := []
+	var it := [["Vue d'ensemble (Ctrl+Alt+Tab)", func(): overview.open()], null]
 	for i in n_vd: it.append(["%sBureau %d" % ["✓ " if i == cur_vd else "", i + 1], func(): _goto_vd(i)])
 	it.append(null)
 	if n_vd < 6: it.append(["Nouveau bureau", _vd_add])
@@ -2496,6 +2534,40 @@ func _close_notifs() -> void:
 	if is_instance_valid(np_panel): np_panel.queue_free()
 	if is_instance_valid(np_catcher): np_catcher.queue_free()
 
+const MOIS := ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
+
+## Petit calendrier du mois (lundi en premier) avec navigation ; le jour courant est surligné.
+func _np_calendar(parent: Control, y: int, mo: int) -> VBoxContainer:
+	var box := VBoxContainer.new(); box.add_theme_constant_override("separation", 4); parent.add_child(box)
+	var now := Time.get_date_dict_from_system()
+	var hd := HBoxContainer.new(); box.add_child(hd)
+	var tl := UI.heading("%s %d" % [str(MOIS[mo - 1]).capitalize(), y]); tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL; hd.add_child(tl)
+	var go := func(dm: int):
+		var n := mo + dm; var yy := y
+		if n < 1: n = 12; yy -= 1
+		elif n > 12: n = 1; yy += 1
+		var idx := box.get_index(); box.queue_free()
+		parent.move_child(_np_calendar(parent, yy, n), idx)
+	var pb := _icon_btn("chevron-left", "Flat", 32, 30, 14); pb.tooltip_text = "Mois précédent"; pb.pressed.connect(func(): go.call(-1)); hd.add_child(pb)
+	var nb := _icon_btn("chevron-right", "Flat", 32, 30, 14); nb.tooltip_text = "Mois suivant"; nb.pressed.connect(func(): go.call(1)); hd.add_child(nb)
+	var g := GridContainer.new(); g.columns = 7; g.add_theme_constant_override("h_separation", 2); g.add_theme_constant_override("v_separation", 2); box.add_child(g)
+	for d in ["L", "M", "M", "J", "V", "S", "D"]:
+		var l := UI.small(d); l.custom_minimum_size = Vector2(42, 20); l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; g.add_child(l)
+	var first := Time.get_datetime_dict_from_unix_time(int(Time.get_unix_time_from_datetime_dict({"year": y, "month": mo, "day": 1, "hour": 12, "minute": 0, "second": 0})))
+	var lead := posmod(int(first["weekday"]) - 1, 7)
+	var dim := 31
+	if mo == 2: dim = 29 if (y % 4 == 0 and (y % 100 != 0 or y % 400 == 0)) else 28
+	elif mo in [4, 6, 9, 11]: dim = 30
+	for i in lead + dim:
+		var c := Label.new(); c.custom_minimum_size = Vector2(42, 28); c.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; c.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		c.add_theme_font_size_override("font_size", UI.T_SMALL)
+		if i >= lead:
+			var dd := i - lead + 1; c.text = str(dd)
+			if y == int(now["year"]) and mo == int(now["month"]) and dd == int(now["day"]):
+				c.add_theme_stylebox_override("normal", _box(ACCENT, 14)); c.add_theme_color_override("font_color", UI.on(ACCENT))
+		g.add_child(c)
+	return box
+
 func _toggle_notifs() -> void:
 	if is_instance_valid(np_panel): _close_notifs(); return
 	unread = 0; _upd_bell(); _hide_ctx()
@@ -2509,9 +2581,14 @@ func _toggle_notifs() -> void:
 	var t := UI.heading("Notifications"); t.size_flags_horizontal = Control.SIZE_EXPAND_FILL; h.add_child(t)
 	var clr := _mk_btn("Tout effacer", 0, UI.BTN); clr.theme_type_variation = "Flat"; clr.visible = not notifs.is_empty()
 	clr.pressed.connect(func(): notifs.clear(); _close_notifs()); h.add_child(clr)
+	var cal_h := 0.0
+	if size.y >= 620.0:
+		var now := Time.get_date_dict_from_system()
+		_np_calendar(v, int(now["year"]), int(now["month"])); cal_h = 235.0
+		v.add_child(HSeparator.new())
 	var sc := ScrollContainer.new(); sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	var lw := minf(330.0, size.x - 40.0)
-	sc.custom_minimum_size = Vector2(lw, minf(380.0, size.y - bar_h - 130.0)); v.add_child(sc)
+	sc.custom_minimum_size = Vector2(lw, maxf(110.0, minf(380.0, size.y - bar_h - 130.0 - cal_h))); v.add_child(sc)
 	var list := VBoxContainer.new(); list.add_theme_constant_override("separation", 6); list.size_flags_horizontal = Control.SIZE_EXPAND_FILL; list.size_flags_vertical = Control.SIZE_EXPAND_FILL; sc.add_child(list)
 	if notifs.is_empty(): list.add_child(UI.status_page("bell", "Aucune notification", "", null, true))
 	for n in notifs:

@@ -58,7 +58,7 @@ func _slider(icon_name: String, label: String, val: float, cb: Callable) -> Cont
 	var h := HBoxContainer.new(); h.add_theme_constant_override("separation", UI.S3)
 	var ic := UI.icon_rect(icon_name, 16); ic.tooltip_text = label; ic.mouse_filter = Control.MOUSE_FILTER_PASS; h.add_child(ic)
 	var s := HSlider.new(); s.min_value = 0; s.max_value = 100; s.step = 1; s.value = val; s.focus_mode = Control.FOCUS_NONE; s.tooltip_text = label
-	s.custom_minimum_size = Vector2(200, 30); s.size_flags_horizontal = Control.SIZE_EXPAND_FILL; s.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	s.custom_minimum_size = Vector2(200, UI.tp(30)); s.size_flags_horizontal = Control.SIZE_EXPAND_FILL; s.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	s.value_changed.connect(cb); h.add_child(s); return h
 
 ## Volume en % (Linux, PulseAudio/PipeWire) ou -1 si indisponible (le curseur est alors masqué).
