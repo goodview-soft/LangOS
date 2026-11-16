@@ -41,6 +41,9 @@
         <meta-data
             android:name="org.godotengine.plugin.v2.LangWebView"
             android:value="fr.goodview.blocnote.LangWebViewPlugin" />
+        <meta-data
+            android:name="org.godotengine.plugin.v2.LangDisplay"
+            android:value="fr.goodview.blocnote.LangDisplayPlugin" />
 
         <profileable
             android:shell="true"
