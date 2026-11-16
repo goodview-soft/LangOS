@@ -31,6 +31,9 @@ var list: Label
 var menu: GameMenu
 var net := false             # partie réseau en cours
 var ai := ""                 # couleur jouée par l'IA ("" = pas d'IA)
+const LEVELS := ["Débutant", "Facile", "Moyen", "Fort"]
+var level := 1
+var lvl_btn: Button
 var my_col := ""
 var peer_name := ""
 var resign_btn: Button
@@ -44,6 +47,7 @@ func _ready() -> void:
 	for it in [["Nouvelle partie", func(): if not net: _new()], ["Annuler le coup", _undo], ["Retourner", func(): flipped = not flipped; queue_redraw()]]:
 		var bt := Button.new(); bt.text = it[0]; bt.custom_minimum_size.y = 40; bt.pressed.connect(it[1]); side.add_child(bt)
 	var mb := Button.new(); mb.text = "Menu"; mb.custom_minimum_size.y = 40; mb.pressed.connect(func(): net = false; ai = ""; menu.show_menu()); side.add_child(mb)
+	lvl_btn = Button.new(); lvl_btn.custom_minimum_size.y = 40; lvl_btn.visible = false; lvl_btn.pressed.connect(func(): level = (level + 1) % 4; _refresh()); side.add_child(lvl_btn)
 	resign_btn = Button.new(); resign_btn.text = "Abandonner"; resign_btn.custom_minimum_size.y = 40; resign_btn.visible = false
 	resign_btn.pressed.connect(func(): menu.send({"t": "resign"}); over = "fin"; over_msg = "Tu as abandonné."; _refresh()); side.add_child(resign_btn)
 	list = Label.new(); list.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -220,6 +224,7 @@ func _undo_one() -> void:
 
 func _refresh() -> void:
 	resign_btn.visible = net and over == ""
+	lvl_btn.visible = ai != "" and not net; lvl_btn.text = "Niveau : " + LEVELS[level]
 	var who := "Blancs" if turn == "w" else "Noirs"
 	if over == "mat": status.text = "Échec et mat ! %s gagnent." % ("Noirs" if turn == "w" else "Blancs")
 	elif over == "pat": status.text = "Pat : partie nulle."
@@ -227,7 +232,7 @@ func _refresh() -> void:
 	if net:
 		status.text = ("Tu joues les %s contre %s\n" % ["Blancs" if my_col == "w" else "Noirs", peer_name]) + status.text
 		if over == "" and turn == my_col: status.text += "\nÀ toi de jouer."
-	elif ai != "": status.text = "Contre l'IA (tu joues les Blancs)\n" + status.text
+	elif ai != "": status.text = "Contre l'IA – %s (tu joues les Blancs)\n" % LEVELS[level] + status.text
 	if over != "" and over_msg != "": status.text = over_msg + "\n" + status.text
 	var s := ""
 	for i in san.size():
@@ -376,28 +381,48 @@ func _eval(bd: Array, col: String) -> int:
 		sc += v if bd[i][0] == col else -v
 	return sc
 
-## IA : un coup + meilleure réponse adverse (profondeur 2), avec un peu de hasard.
+## IA à 4 niveaux : Débutant (surtout au hasard), Facile (1 coup, bruit fort), Moyen (2 coups, quelques erreurs), Fort (2 coups, presque sans bruit).
 func _ai_move() -> void:
 	if ai == "" or over != "" or turn != ai or net: return
 	var foe := "w" if ai == "b" else "b"
 	var saved := b; var saved_ep := ep
-	var best := {}; var best_i := -1; var best_s := -INF
+	var cands: Array = []   # {i, m, s1 (après mon coup), s2 (après la meilleure réponse adverse)}
 	for i in 64:
 		if b[i] == "" or b[i][0] != ai: continue
 		for m in _legal(i):
 			var m2: Dictionary = m.duplicate()
 			if b[i][1] == "P" and (m["to"] / 8 == 0 or m["to"] / 8 == 7): m2["promo"] = "Q"
 			var nb := saved.duplicate(); _apply(nb, i, m2)
-			b = nb; ep = -1
-			var worst := INF; var any := false
-			for j in 64:
-				if nb[j] == "" or nb[j][0] != foe: continue
-				for r in _legal(j):
-					any = true
-					var nb2 := nb.duplicate(); _apply(nb2, j, r)
-					worst = minf(worst, _eval(nb2, ai))
-			if not any: worst = 100000.0 if _in_check(nb, foe) else 0.0
-			b = saved; ep = saved_ep
-			var sc := worst + randf() * 6.0
-			if sc > best_s: best_s = sc; best = m2; best_i = i
-	if best_i >= 0: _play(best_i, best)
+			var s2 := float(_eval(nb, ai))
+			if level >= 2:
+				b = nb; ep = -1
+				var worst := INF; var any := false
+				for j in 64:
+					if nb[j] == "" or nb[j][0] != foe: continue
+					for r in _legal(j):
+						any = true
+						var nb2 := nb.duplicate(); _apply(nb2, j, r)
+						worst = minf(worst, _eval(nb2, ai))
+				if not any: worst = 100000.0 if _in_check(nb, foe) else 0.0
+				b = saved; ep = saved_ep
+				s2 = worst
+			cands.append({"i": i, "m": m2, "s": s2})
+	if cands.is_empty(): return
+	var pick: Dictionary
+	match level:
+		0:
+			if randf() < 0.65: pick = cands[randi() % cands.size()]   # coup au hasard
+			else: pick = _best_of(cands, 0.0)
+		1: pick = _best_of(cands, 110.0)
+		2:
+			cands.sort_custom(func(x, y): return x["s"] > y["s"])
+			pick = cands[1] if cands.size() > 1 and randf() < 0.25 else _best_of(cands, 50.0)
+		_: pick = _best_of(cands, 6.0)
+	_play(pick["i"], pick["m"])
+
+func _best_of(cands: Array, noise: float) -> Dictionary:
+	var best: Dictionary = cands[0]; var best_s := -INF
+	for c in cands:
+		var sc: float = c["s"] + (randf() * 2.0 - 1.0) * noise if noise > 6.0 else c["s"] + randf() * noise
+		if sc > best_s: best_s = sc; best = c
+	return best

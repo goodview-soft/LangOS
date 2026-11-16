@@ -115,11 +115,12 @@ const APPS := {
 	"scanner": ["Scanner", ""],
 	"gallery": ["Galerie", ""],
 	"airhockey": ["Air Hockey", ""],
+	"deepminer": ["Deep Miner", ""],
 }
 ## Dossiers du bureau : id -> applications contenues (affichées seulement dans le dossier).
 const FOLDERS := {
 	"f_lang": ["translate", "dict", "music"],
-	"f_games": ["chess", "hika", "airhockey"],
+	"f_games": ["chess", "hika", "airhockey", "deepminer"],
 	"f_soft": ["chromium", "notes", "files", "terminal", "code", "profiles", "clipboard", "devices"],
 	"f_comm": ["messenger", "remote", "chat", "soundlink"],
 	"f_office": ["sheet", "imgview", "pdf", "calendar", "scanner", "gallery"],
@@ -131,12 +132,13 @@ const TRASH_SVG := '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="
 const SCANNER_SVG := '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fb923c"/><stop offset="1" stop-color="#c2410c"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="15" fill="url(#g)"/><path d="M19 12h20l8 8v32a2 2 0 0 1-2 2H19a2 2 0 0 1-2-2V14a2 2 0 0 1 2-2z" fill="#fff" fill-opacity=".95"/><path d="M24 28h16M24 34h16M24 40h10" stroke="#c2410c" stroke-width="2.6" stroke-linecap="round"/><path d="M8 32h48" stroke="#fde68a" stroke-width="3" stroke-linecap="round"/></svg>'
 const GALLERY_SVG := '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a78bfa"/><stop offset="1" stop-color="#6d28d9"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="15" fill="url(#g)"/><rect x="13" y="15" width="38" height="34" rx="5" fill="#fff" fill-opacity=".95"/><circle cx="24" cy="26" r="4.5" fill="#fbbf24"/><path d="M13 43l12-11 9 8 7-6 10 9v1a5 5 0 0 1-5 5H18a5 5 0 0 1-5-5z" fill="#7c3aed"/></svg>'
 const AIRHOCKEY_SVG := '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="15" fill="url(#g)"/><rect x="12" y="10" width="40" height="44" rx="6" fill="#fff" fill-opacity=".15" stroke="#fff" stroke-opacity=".9" stroke-width="2.5"/><path d="M12 32h40" stroke="#fff" stroke-opacity=".8" stroke-width="2.5"/><circle cx="32" cy="32" r="6" fill="none" stroke="#fff" stroke-opacity=".8" stroke-width="2"/><circle cx="25" cy="42" r="6.5" fill="#f87171"/><circle cx="25" cy="42" r="3" fill="#fecaca"/><circle cx="38" cy="22" r="3.2" fill="#fff"/></svg>'
+const DEEPMINER_SVG := '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#78716c"/><stop offset="1" stop-color="#1c1917"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="15" fill="url(#g)"/><path d="M8 50h12v-8h10v-8h10v-8h16v24z" fill="#57534e"/><rect x="30" y="34" width="10" height="8" fill="#a8a29e"/><rect x="40" y="26" width="8" height="8" fill="#78716c"/><rect x="22" y="42" width="8" height="8" fill="#fbbf24"/><rect x="48" y="42" width="8" height="8" fill="#38bdf8"/><path d="M20 12l16 8" stroke="#d6d3d1" stroke-width="4" stroke-linecap="round"/><path d="M30 8c8 0 14 5 16 12l-7 1c-1-4-4-7-9-8z" fill="#e7e5e4"/><path d="M36 20L24 36" stroke="#92400e" stroke-width="3.5" stroke-linecap="round"/></svg>'
 const MARKET_SVG := '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#047857"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="15" fill="url(#g)"/><path d="M15 23h34l-2.6 24a4 4 0 0 1-4 3.5H21.6a4 4 0 0 1-4-3.5z" fill="#fff" fill-opacity=".93"/><path d="M24 27v-4a8 8 0 0 1 16 0v4" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/></svg>'
 var _svg_tex := {}
 func app_icon(id: String) -> Texture2D:
-	if id == "trash" or id == "market" or id == "scanner" or id == "gallery" or id == "airhockey":
+	if id == "trash" or id == "market" or id == "scanner" or id == "gallery" or id == "airhockey" or id == "deepminer":
 		if not _svg_tex.has(id):
-			var img := Image.new(); img.load_svg_from_buffer(({"trash": TRASH_SVG, "market": MARKET_SVG, "scanner": SCANNER_SVG, "gallery": GALLERY_SVG, "airhockey": AIRHOCKEY_SVG}[id]).to_utf8_buffer(), 1.0)
+			var img := Image.new(); img.load_svg_from_buffer(({"trash": TRASH_SVG, "market": MARKET_SVG, "scanner": SCANNER_SVG, "gallery": GALLERY_SVG, "airhockey": AIRHOCKEY_SVG, "deepminer": DEEPMINER_SVG}[id]).to_utf8_buffer(), 1.0)
 			_svg_tex[id] = ImageTexture.create_from_image(img)
 		return _svg_tex[id]
 	return load(APPS[id][1])
@@ -1080,6 +1082,7 @@ func _open_app(id: String) -> void:
 		"hika": _app_hika()
 		"chess": _app_chess()
 		"airhockey": _app_airhockey()
+		"deepminer": _app_deepminer()
 		"calc": _app_tool("calc", Vector2(620, 520))
 		"units": _app_tool("units", Vector2(460, 560))
 		"timer": _app_tool("timer", Vector2(460, 600))
@@ -1463,7 +1466,7 @@ const MARKET_DESC := {
 	"terminal": "Terminal de commandes intégré.", "code": "Éditeur de code avec coloration syntaxique.", "profiles": "Profils d'environnement : fenêtres et applis par contexte.",
 	"clipboard": "Historique du presse-papiers.", "devices": "Liste des périphériques connectés.", "messenger": "Messagerie instantanée.",
 	"remote": "Contrôle un autre ordinateur à distance.", "chat": "Discute avec une IA.", "soundlink": "Partage du son entre appareils.",
-	"sheet": "Tableur : cellules, formules et calculs.", "imgview": "Visionneuse d'images.", "pdf": "Lecteur de documents PDF.", "calendar": "Agenda et rendez-vous.", "airhockey": "Air Hockey contre l'IA, à deux ou en réseau local.", "gallery": "Photos et vidéos de ton appareil en grille, avec visionneuse.", "scanner": "Photographie un document : bords détectés, page redressée, texte net, export PDF.",
+	"sheet": "Tableur : cellules, formules et calculs.", "imgview": "Visionneuse d'images.", "pdf": "Lecteur de documents PDF.", "calendar": "Agenda et rendez-vous.", "airhockey": "Air Hockey contre l'IA, à deux ou en réseau local.", "deepminer": "Deep Miner : creuse la caverne, fabrique, survis (3D, clavier/souris ou tactile).", "gallery": "Photos et vidéos de ton appareil en grille, avec visionneuse.", "scanner": "Photographie un document : bords détectés, page redressée, texte net, export PDF.",
 	"calc": "Calculatrice simple et scientifique.", "units": "Convertis longueurs, poids, devises et plus.", "timer": "Minuteur et chronomètre.",
 	"todo": "Listes de tâches.", "vault": "Coffre-fort chiffré pour tes mots de passe.", "cards": "Cartes mémoire pour réviser.", "android_apps": "Lance les applis Android installées.",
 }
@@ -1958,6 +1961,14 @@ func _app_hika() -> void:
 	h.size_flags_vertical = Control.SIZE_EXPAND_FILL; h.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.custom_minimum_size = Vector2(200, 300); wv.add_child(h)
 
+func _app_deepminer() -> void:
+	var big := Vector2(minf(1100.0, desk.size.x - 24.0), minf(700.0, desk.size.y - 16.0))
+	var wv := _make_window("deepminer", "", big, Vector2(12, 8))
+	var h := Control.new(); h.set_script(load("res://apps/dm_host.gd"))
+	h.set("on_exit", Callable(self, "_close_win").bind("deepminer"))
+	h.size_flags_vertical = Control.SIZE_EXPAND_FILL; h.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h.custom_minimum_size = Vector2(200, 300); wv.add_child(h)
+
 ## Petits outils (dossier Outils) : un script apps/tool_<id>.gd par outil.
 func _app_tool(id: String, sz: Vector2) -> void:
 	var wv := _make_window(id, "", sz + Vector2(0, 60), Vector2(200 + randi() % 80, 20 + randi() % 40))
@@ -2346,7 +2357,7 @@ var np_catcher: Control
 var rs := {}       # redimensionnement en cours
 var idrag := {}    # glisser d'une icône en cours
 const GRID := 108.0
-const NO_RESTORE := ["hika", "chromium", "chromium2", "chromium3", "update"]
+const NO_RESTORE := ["hika", "deepminer", "chromium", "chromium2", "chromium3", "update"]
 
 func _real() -> bool:
 	return get_tree().current_scene == self

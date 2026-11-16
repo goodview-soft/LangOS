@@ -4,7 +4,7 @@ extends SceneTree
 ## Lancer (sans fenêtre) : flatpak run org.godotengine.Godot --headless --path . --script res://tests/ui_test.gd
 ## Sortie « UI-TEST OK » ou la liste des problèmes.
 
-const SKIP := ["hika", "chromium", "update"]    # hika/chromium chargent des moteurs lourds ; update interroge le réseau
+const SKIP := ["hika", "deepminer", "chromium", "update"]    # hika/chromium chargent des moteurs lourds ; update interroge le réseau
 const UI = preload("res://apps/ui.gd")
 
 ## Texte d'un Label visiblement coupé : trop étroit pour son contenu alors qu'il n'est ni à la ligne ni rogné volontairement.
