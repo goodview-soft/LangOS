@@ -8,6 +8,9 @@ func _init() -> void:
 		h.set_anchors_preset(Control.PRESET_TOP_LEFT); h.size = sz
 		for i in 40: await process_frame
 		var g: Node = h.game
+		var tw := 0
+		while g != null and g.booting and tw < 3000: await process_frame; tw += 1   # génération asynchrone
+		for i in 10: await process_frame
 		if g == null: print("pas de jeu ", sz); fails += 1
 		else:
 			g.menu.play.emit()

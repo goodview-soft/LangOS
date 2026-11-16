@@ -16,7 +16,7 @@ func setup(main) -> void:
 	refresh()
 
 func enabled() -> bool:
-	return OS.get_name() != "Android" and m.size.x >= 700.0
+	return OS.get_name() != "Android" and m.size.x >= 700.0 and not m.immersive
 
 func pins() -> Array:
 	var p = m.set_cfg.get("pins", DEFAULT_PINS)

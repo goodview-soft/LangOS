@@ -192,8 +192,7 @@ func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	DMSettings.init()
 	DMSfx.host = self
-	DMNet.reset()  # retour au menu / nouvelle scène : plus de partie réseau en cours
-	DMNet.main = self
+	DMNet.setup(self)  # nœud réseau LAN + MultiplayerAPI dédié à ce jeu
 	for a in args:
 		if a.begins_with("--dm-net-"):
 			nettest = true
@@ -229,7 +228,13 @@ func _ready() -> void:
 		seed_v = save_data.get("seed", seed_v)
 	elif next_seed != 0:
 		seed_v = next_seed
-	world.generate(seed_v)
+	# Génération hors du fil principal : le jeu (et la fenêtre « Chargement ») reste fluide pendant ~2 s.
+	set_process(false); set_physics_process(false); set_process_unhandled_input(false)
+	var gen_task := WorkerThreadPool.add_task(func(): world.generate(seed_v), false, "génération")
+	while not WorkerThreadPool.is_task_completed(gen_task):
+		await get_tree().process_frame
+	WorkerThreadPool.wait_for_task_completion(gen_task)
+	print("[DM] génération : %d ms" % (Time.get_ticks_msec() - t0))
 	var hub := SpawnHub.new()  # --- SPAWN HUB --- salle de spawn (déterministe pour une graine donnée)
 	hub.build(world)
 	if save_data != null:
@@ -243,14 +248,21 @@ func _ready() -> void:
 		for cy in ceili(World.SY / float(World.CS)):
 			for cx in ceili(World.SX / float(World.CS)):
 				all_keys.append(Vector3i(cx, cy, cz))
-	var all_meshes := _mesh_chunks(all_keys)
-	for i in all_keys.size():
+	# Maillage progressif : les morceaux proches du spawn tout de suite (en parallèle), le reste en tâche de fond,
+	# appliqué par petites tranches dans _process (plus de gel au chargement).
+	var spk := Vector3(world.spawn / float(World.CS))
+	all_keys.sort_custom(func(a, b): return Vector3(a).distance_squared_to(spk) < Vector3(b).distance_squared_to(spk))
+	for k in all_keys:
 		var mi := MeshInstance3D.new()
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		mi.mesh = all_meshes[i]
 		add_child(mi)
-		chunks[all_keys[i]] = mi
-	print("[DM] monde généré + maillé en %d ms" % (Time.get_ticks_msec() - t0))
+		chunks[k] = mi
+	var near_keys: Array = all_keys.slice(0, mini(NEAR_CHUNKS, all_keys.size()))
+	var near_meshes := _mesh_chunks(near_keys)
+	for i in near_keys.size():
+		(chunks[near_keys[i]] as MeshInstance3D).mesh = near_meshes[i]
+	_stream_start(all_keys.slice(near_keys.size()))
+	print("[DM] monde généré + zone de départ maillée en %d ms (le reste en tâche de fond)" % (Time.get_ticks_msec() - t0))
 	cap = MeshInstance3D.new()
 	add_child(cap)
 	cap_old = MeshInstance3D.new()
@@ -390,6 +402,11 @@ func _ready() -> void:
 		_fit_player()
 		abilities.refresh())
 	menu.quit_requested.connect(func(): exit_requested.emit())
+	menu.host_requested.connect(_net_host)
+	menu.join_requested.connect(_net_join)
+	DMNet.i.status.connect(menu.set_net_status)
+	DMNet.i.world_received.connect(_net_joined)
+	DMNet.i.lost.connect(func(): restart_requested.emit())
 	if "--dm-test" in args or shot_path != "" or auto_play or prof_s > 0.0 or nettest:
 		auto_play = false
 		_start_play(true)
@@ -401,10 +418,12 @@ func _ready() -> void:
 	if testing:
 		call_deferred("_run_tests")  # defined by tests/main_tests.gd (test scene only)
 	if nettest:
-		DMNet.start_test.call_deferred(args)
+		DMNet.i.start_test.call_deferred(args)
 	if diag:
 		_start_play(false)
 		get_tree().create_timer(4.0).timeout.connect(_diag_report)
+	set_process(true); set_physics_process(true); set_process_unhandled_input(true)
+	booting = false
 
 ## Displayed (interpolated) player centre: what the cameras follow between physics ticks.
 func vis_center() -> Vector3:
@@ -1228,6 +1247,7 @@ func _pf(key: String, t0: int) -> int:
 	return t
 
 func _process(dt: float) -> void:
+	_stream_tick()
 	if perf_lbl == null and not testing and hud != null:
 		perf_lbl = Label.new()
 		perf_lbl.position = Vector2(250, 2)
@@ -1303,8 +1323,8 @@ func _physics_process(dt: float) -> void:
 	var sw_on: bool = hotbar[sel] == -3 and int(gear.get("sword", 0)) > 0  # épée sélectionnée dans la barre : portée, dégâts et cadence de l'épée
 	if sw_on != _sword_on:
 		_sword_on = sw_on
-		if DMNet.is_client():
-			DMNet.send_gear(gear_active())
+		if DMNet.i.is_client():
+			DMNet.i.send_gear(gear_active())
 	player.sword = int(gear.get("sword", 0)) if sw_on else 0
 	player.dmg_mult = Gear.dmg_mult(gear, sw_on)
 	tool_mine = 0.35 if sw_on else 1.0  # l'épée creuse mal : la pioche pour miner
@@ -1529,9 +1549,9 @@ func move_player(dt: float, mx: float, mz: float, jump: bool) -> void:
 		for k in hits.keys():
 			if hits[k].victim == "player":
 				hits.erase(k)
-		if DMNet.pvp_att.id != 0 and Time.get_ticks_msec() - int(DMNet.pvp_att.t) < 5000:
-			DMNet.report_kill(int(DMNet.pvp_att.id))
-			DMNet.pvp_att = {"id": 0, "t": 0}
+		if DMNet.i.pvp_att.id != 0 and Time.get_ticks_msec() - int(DMNet.i.pvp_att.t) < 5000:
+			DMNet.i.report_kill(int(DMNet.i.pvp_att.id))
+			DMNet.i.pvp_att = {"id": 0, "t": 0}
 		player.combat_t = 0.0
 		player.pos = world.spawn
 		player.position = player.pos
@@ -1769,7 +1789,7 @@ func _chip_tick(_dt: float) -> void:
 ## Effritement : à 1/3 et 2/3 de la progression, deux morceaux (côté joueur) sautent pour de bon et sont ramassés
 ## tout de suite ; le bloc ne se reforme jamais. La casse finale ne donne que ce qui reste (le total fait 1 bloc).
 func _chip_cell(c: Vector3i, prog: float) -> void:
-	if DMNet.is_client() or World.KIND[world.get_v(c)] != World.K_CUBE:
+	if DMNet.i.is_client() or World.KIND[world.get_v(c)] != World.K_CUBE:
 		return  # (client : l'hôte seul modifie le monde)
 	if dmg_on and dmg_cell != c:
 		dmg_on = false
@@ -1801,8 +1821,8 @@ func _chip_cell(c: Vector3i, prog: float) -> void:
 		mask &= ~(1 << int(bits[k]))
 	world.set_pieces(c, id, mask)
 	_remesh(c)
-	if DMNet.is_host():
-		DMNet.broadcast_pieces(c)
+	if DMNet.i.is_host():
+		DMNet.i.broadcast_pieces(c)
 	chip_burst(c, id, 0.9)
 	DMSfx.play("break", Vector3(c) + Vector3(0.5, 0.5, 0.5), -3.0)
 	shake = minf(shake + 0.02, 0.18)
@@ -1828,12 +1848,12 @@ func _mining(dt: float, held: bool) -> void:
 		if held and try_hit("player", player, pm.mname, pm):
 			chip_burst(Vector3i(pm.center()), World.DIRT, 0.4)
 		return
-	var rid := pick_remote(mp, held) if DMNet.mode != "solo" else 0
+	var rid := pick_remote(mp, held) if DMNet.i.mode != "solo" else 0
 	if rid != 0:  # un joueur distant sous le curseur : coup PvP (l'hôte valide)
 		target = {}
 		player.mining = false
 		mine_prog = 0.0
-		if held and player.atk_cd <= 0.0 and player.health > 0.0 and _pvp_in_reach((DMNet.remotes[rid].node as Node3D).position) and DMNet.attack(rid):
+		if held and player.atk_cd <= 0.0 and player.health > 0.0 and _pvp_in_reach((DMNet.i.remotes[rid].node as Node3D).position) and DMNet.i.attack(rid):
 			player.atk_cd = Player.HIT_CD * (Gear.SWORD_CD if player.sword > 0 else 1.0)
 			player.swing_t = 0.25
 			player.combat_t = 6.0
@@ -1980,9 +2000,9 @@ func _break_piece_raw(c: Vector3i, b: int) -> int:
 	var id := world.get_v(c)
 	if id == World.AIR or World.HARD[id] < 0.0 or World.KIND[id] != World.K_CUBE or (hub_n and hub_n.guard(c)):
 		return -1
-	if DMNet.is_client():
+	if DMNet.i.is_client():
 		if (world.pieces(c) >> b) & 1 == 1:
-			DMNet.send_pbreak(c, b)
+			DMNet.i.send_pbreak(c, b)
 			return id
 		return -1
 	return edit_piece_break(c, b, true)
@@ -2036,8 +2056,8 @@ func edit_piece_break(c: Vector3i, b: int, by_player := false) -> int:
 	if mask & ~(1 << b) == 0 and hub_n:
 		hub_n.on_broken(c, id)
 	_remesh(c)
-	if DMNet.is_host():
-		DMNet.broadcast_pieces(c)
+	if DMNet.i.is_host():
+		DMNet.i.broadcast_pieces(c)
 	return id
 
 ## Place un morceau (bit b) dans la cellule c : cellule vide ou bloc entamé de la même matière.
@@ -2060,8 +2080,8 @@ func edit_piece_place(c: Vector3i, b: int, item: int) -> bool:
 		return false
 	world.set_pieces(c, item, mask | (1 << b))
 	_remesh(c)
-	if DMNet.is_host():
-		DMNet.broadcast_pieces(c)
+	if DMNet.i.is_host():
+		DMNet.i.broadcast_pieces(c)
 	return true
 
 func _piece_free_of_bodies(c: Vector3i, b: int) -> bool:
@@ -2086,11 +2106,11 @@ func place_piece_at_target(item: int) -> void:
 		if int(frac.get(item, 0)) <= 0 and inv.get(item, 0) <= 0:
 			hud.toast("Plus de " + World.NAMES[item])
 			break
-		if DMNet.is_client():
+		if DMNet.i.is_client():
 			var cur := world.get_v(c)
 			if not (cur == World.AIR or cur == item) or (world.pieces(c) >> b) & 1 == 1 or not _piece_free_of_bodies(c, b):
 				continue
-			DMNet.send_pplace(c, b, item)
+			DMNet.i.send_pplace(c, b, item)
 			world.set_pieces(c, item, world.pieces(c) | (1 << b))  # affichage immédiat ; l'hôte confirme ou corrige
 			_remesh(c)
 		elif not edit_piece_place(c, b, item):
@@ -2102,7 +2122,7 @@ func place_piece_at_target(item: int) -> void:
 		placed += 1
 
 func break_block(c: Vector3i) -> bool:
-	if DMNet.is_client():  # l'hôte valide et diffuse ; on ne modifie rien localement
+	if DMNet.i.is_client():  # l'hôte valide et diffuse ; on ne modifie rien localement
 		return _net_break(c)
 	var mask0 := world.pieces(c)
 	var drop := edit_break(c, true)
@@ -2145,17 +2165,30 @@ func edit_break(c: Vector3i, by_player := false) -> int:
 	if hub_n: hub_n.on_broken(c, id)  # --- SPAWN HUB ---
 	_remove_torch_light(c)
 	_remesh(c)
-	if DMNet.is_host():
-		DMNet.broadcast_edit(c, World.AIR)
+	if DMNet.i.is_host():
+		DMNet.i.broadcast_edit(c, World.AIR)
 	return drop
 
-# ---------------------------------------------------------------- réseau (désactivé dans LangOS : DMNet est un remplaçant solo)
+# ---------------------------------------------------------------- réseau LAN (scripts/net/dm_net.gd)
+func _net_host(port: int) -> void:
+	if DMNet.i.host(port) == OK:
+		_start_play(true)
+		hud.toast("Hôte : %s:%d" % [DMNet.local_ip(), port])
+
+func _net_join(ip: String, port: int) -> void:
+	DMNet.i.join(ip, port)
+
+func _net_joined() -> void:
+	_start_play(true)
+	apply_gear()  # envoie l'équipement à l'hôte
+	hud.toast("Connecté à la partie de l'hôte")
+
 ## Client : casser = requête à l'hôte (rien n'est modifié ici avant sa diffusion).
 func _net_break(c: Vector3i) -> bool:
 	var id := world.get_v(c)
 	if id == World.AIR or World.HARD[id] < 0.0 or World.KIND[id] == World.K_FLUID or (hub_n and hub_n.guard(c)):
 		return false
-	DMNet.send_break(c)
+	DMNet.i.send_break(c)
 	var drop := World.STONE if id in [World.MOSS, World.STALAG, World.STALACT, World.WARMROCK] else (World.MUSHROOM if id == World.GLOWPLANT else id)
 	inv[drop] = inv.get(drop, 0) + 1
 	hud.toast("+1 " + World.NAMES[drop])
@@ -2178,8 +2211,9 @@ func net_make_body(look: Dictionary) -> Node3D:
 
 ## Client : le monde de l'hôte remplace le monde local (blocs + eau), puis lumières et maillage.
 func net_apply_world(blocks: PackedByteArray, fluid: PackedByteArray, spawn: Vector3, seed_n: int) -> void:
+	_stream_stop()  # le maillage de fond lit l'ancien monde : on l'arrête avant de le remplacer
 	world.blocks = blocks
-	world.partial = DMNet.pending_partial.duplicate()
+	world.partial = DMNet.i.pending_partial.duplicate()
 	world.compute_styles(seed_n)
 	world.fluid_lvl = fluid
 	world._fw.clear()
@@ -2248,8 +2282,8 @@ func edit_place(c: Vector3i, id: int) -> bool:
 		_add_torch_light(c)
 		_update_lights()
 	_remesh(c)
-	if DMNet.is_host():
-		DMNet.broadcast_edit(c, id)
+	if DMNet.i.is_host():
+		DMNet.i.broadcast_edit(c, id)
 	return true
 
 ## No player / miner body inside cell c (only solid blocks matter).
@@ -2302,8 +2336,8 @@ func place_block(c: Vector3i, item: int) -> bool:
 		return false
 	if not can_place(c, item):
 		return false
-	if DMNet.is_client():
-		DMNet.send_place(c, item)
+	if DMNet.i.is_client():
+		DMNet.i.send_place(c, item)
 		inv[item] -= 1
 		return true
 	if not edit_place(c, item):
@@ -2342,12 +2376,12 @@ func _fluid_step(dt: float) -> void:
 	if fluid_t < 1.0 / FLUID_HZ:
 		return
 	fluid_t = 0.0
-	if DMNet.is_client():
+	if DMNet.i.is_client():
 		return  # l'eau est simulée chez l'hôte (cellules reçues via net_apply_cells)
 	var t0 := Time.get_ticks_usec()
 	var ch := world.fluid_tick(FLUID_BUDGET_US)
-	if DMNet.is_host():
-		DMNet.send_fluid(ch)
+	if DMNet.i.is_host():
+		DMNet.i.send_fluid(ch)
 	fluid_max_us = maxi(fluid_max_us, Time.get_ticks_usec() - t0)
 	var seen := {}
 	for i in ch:
@@ -2361,6 +2395,56 @@ func _fluid_step(dt: float) -> void:
 				dirty[k] = true
 		if fog:
 			fog.notify_edit(c)
+
+## --- PERF --- maillage de fond (voir _ready) : calcul des tampons sur les cœurs, création des maillages au fil des images.
+const NEAR_CHUNKS := 96
+const STREAM_US := 3000
+var bg_keys: Array = []
+var bg_bufs: Array = []
+var bg_ok := PackedByteArray()
+var bg_pos := 0
+var bg_gid := -1
+var bg_cancel := false
+var bg_pending := {}
+var booting := true   # _ready pas fini (génération asynchrone)
+
+func _stream_start(keys: Array) -> void:
+	bg_keys = keys; bg_bufs = []; bg_bufs.resize(keys.size()); bg_ok = PackedByteArray(); bg_ok.resize(keys.size()); bg_pos = 0
+	bg_pending = {}
+	for k in keys: bg_pending[k] = true
+	if keys.is_empty(): return
+	var task := func(i: int) -> void:
+		if bg_cancel: return
+		bg_bufs[i] = world.chunk_bufs(bg_keys[i].x, bg_keys[i].y, bg_keys[i].z)
+		bg_ok[i] = 1
+	bg_gid = WorkerThreadPool.add_group_task(task, keys.size(), -1, false, "maillage de fond")
+
+func _stream_stop() -> void:
+	bg_cancel = true
+	if bg_gid >= 0:
+		WorkerThreadPool.wait_for_group_task_completion(bg_gid)
+		bg_gid = -1
+	bg_pending.clear(); bg_keys = []; bg_bufs = []; bg_ok = PackedByteArray(); bg_pos = 0
+	bg_cancel = false
+
+func stream_progress() -> float:
+	return 1.0 if bg_keys.is_empty() else float(bg_pos) / float(bg_keys.size())
+
+func _stream_tick() -> void:
+	if bg_pos >= bg_keys.size(): return
+	var t0 := Time.get_ticks_usec()
+	while bg_pos < bg_keys.size() and bg_ok[bg_pos] == 1 and Time.get_ticks_usec() - t0 < STREAM_US:
+		var k: Vector3i = bg_keys[bg_pos]
+		if bg_pending.has(k) and not dirty.has(k):   # déjà remaillé / modifié entre-temps : on garde la version récente
+			(chunks[k] as MeshInstance3D).mesh = world.chunk_mesh(bg_bufs[bg_pos], mat_s, mat_f)
+		bg_pending.erase(k)
+		bg_bufs[bg_pos] = null
+		bg_pos += 1
+	if bg_pos >= bg_keys.size():
+		bg_gid = -1
+
+func _exit_tree() -> void:
+	_stream_stop()
 
 ## Rebuilds the chunks touched this frame (player + miners), then the cut cap once.
 ## Maille des morceaux : le calcul (le plus long) est réparti sur les cœurs, la création des maillages reste sur le fil principal.
@@ -2407,6 +2491,7 @@ func _flush_remesh(all := false) -> void:  # all: no time budget (loading: the w
 			(chunks[k] as MeshInstance3D).mesh = world.build_chunk(k.x, k.y, k.z, mat_s, mat_f)
 			dirty.erase(k)
 			done.append(k)
+	for k in done: bg_pending.erase(k)
 	var pt := _pf("rm_chunks", t0)
 	if view:  # --- VIEW --- block-id texture + caps of the 3/4 view
 		view.iso.on_remesh(done)
@@ -2479,8 +2564,8 @@ func zombie_gone(z: Zombie) -> void:
 ## Client : les zombies suivent ce que l'hôte diffuse.
 func _client_zombies(dt: float) -> void:
 	var seen_ids := {}
-	for zid in DMNet.zpup:
-		var a: Array = DMNet.zpup[zid]
+	for zid in DMNet.i.zpup:
+		var a: Array = DMNet.i.zpup[zid]
 		seen_ids[zid] = true
 		var z: Zombie = zpuppets.get(zid)
 		if z == null:
@@ -2507,10 +2592,10 @@ func _client_zombies(dt: float) -> void:
 			z.queue_free()
 
 func tick_zombies(dt: float) -> void:
-	if DMNet.is_client() and state == "play" and not testing and not nettest:
+	if DMNet.i.is_client() and state == "play" and not testing and not nettest:
 		_client_zombies(dt)
 		return
-	if testing or nettest or DMNet.is_client() or state != "play" or zombies_off:
+	if testing or nettest or DMNet.i.is_client() or state != "play" or zombies_off:
 		return
 	zombie_t -= dt
 	if zombie_t <= 0.0:
@@ -2521,8 +2606,8 @@ func tick_zombies(dt: float) -> void:
 		var z: Zombie = zz
 		var d := z.center().distance_to(player.center())
 		var dn := d  # en multijoueur : simulé aussi près d'un joueur distant
-		for pid in DMNet.peers:
-			dn = minf(dn, z.center().distance_to((DMNet.peers[pid].pos as Vector3) + Vector3(0, 0.9, 0)))
+		for pid in DMNet.i.peers:
+			dn = minf(dn, z.center().distance_to((DMNet.i.peers[pid].pos as Vector3) + Vector3(0, 0.9, 0)))
 		if dn > 50.0:
 			z.visible = false
 			if dn > 90.0:  # trop loin : il disparaît (un autre apparaîtra près du joueur)
@@ -2554,8 +2639,8 @@ func tick_miners(dt: float) -> void:
 	path_cd -= dt
 	path_budget = 1 if path_cd <= 0.0 else 0  # at most one A* search every 0.15 s (they were running every frame)
 	game_t += dt
-	if DMNet.is_client():
-		DMNet.puppet_tick(dt)  # mineurs IA simulés chez l'hôte
+	if DMNet.i.is_client():
+		DMNet.i.puppet_tick(dt)  # mineurs IA simulés chez l'hôte
 	else:
 		for m in miners:
 			if (m as Miner).active:
@@ -3217,8 +3302,8 @@ func apply_gear() -> void:
 	if hud:
 		hud.sword_lvl = int(gear.get("sword", 1))
 		hud.sync_hotbar(hotbar)
-	if DMNet.is_client():
-		DMNet.send_gear(gear_active())
+	if DMNet.i.is_client():
+		DMNet.i.send_gear(gear_active())
 
 var _sword_on := false
 var tool_mine := 1.0
@@ -3236,7 +3321,7 @@ func pvp_hurt(dmg: float, from: Vector3, kb: float, att: int) -> void:
 		return
 	var fresh_tag := player.tag_t <= 0.0
 	if player.hurt(dmg, from, kb, "net%d" % att):
-		DMNet.pvp_att = {"id": att, "t": Time.get_ticks_msec()}
+		DMNet.i.pvp_att = {"id": att, "t": Time.get_ticks_msec()}
 		if fresh_tag:
 			hud.toast("En combat (15 s) : plus de refuge en zone sûre")
 
@@ -3245,8 +3330,8 @@ func pick_remote(screen: Vector2, assist := false) -> int:
 	var k: float = 360.0 / cam.size
 	var best := 0
 	var bd := INF
-	for id in DMNet.remotes:
-		var node: Node3D = DMNet.remotes[id].node
+	for id in DMNet.i.remotes:
+		var node: Node3D = DMNet.i.remotes[id].node
 		var c := node.position + Vector3(0, 0.9, 0)
 		var sp := cam.unproject_position(c)
 		# zone de visée généreuse ; en frappant (assist) un joueur à portée est touché même si le curseur dérive (au-dessus de lui, en mouvement...)
@@ -3366,7 +3451,7 @@ func can_grab(g: Player, v: Player) -> bool:
 		and g.holding == null and g.held_by == null and v.held_by == null and v.holding == null and v.thrown_t <= 0.0
 
 func _try_grab(g: Player, v: Player, force := false) -> bool:
-	if DMNet.is_client() or not can_grab(g, v) or (not force and randf() > 0.55):
+	if DMNet.i.is_client() or not can_grab(g, v) or (not force and randf() > 0.55):
 		return false
 	var d := v.pos - g.pos
 	d.y = 0.0

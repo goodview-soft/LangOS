@@ -254,7 +254,7 @@ func tick(dt: float, m: Node) -> void:
 		if dist <= HIT_RANGE + 0.25 and atk_cd <= 0.0:
 			if tent != null:
 				m.try_hit("zombie", self, tid, tent)
-			elif tpeer != 0 and DMNet.is_host():
+			elif tpeer != 0 and DMNet.i.is_host():
 				_bite_peer(m)
 	if _hit_pending or (_bite_t > 0.0 and dist <= HIT_RANGE):
 		wish = Vector3.ZERO  # il reste planté pendant la morsure
@@ -293,9 +293,9 @@ func _pick_target(m: Node) -> Dictionary:
 		if d < bd and d < SIGHT and (d < 5.0 or bool(m.sees(self, e))):
 			bd = d
 			best = {"id": c[0], "ent": e, "pos": e.center(), "feet": e.feet_cell(), "peer": 0}
-	if DMNet.is_host():
-		for pid in DMNet.peers:
-			var pp: Vector3 = (DMNet.peers[pid].pos as Vector3) + Vector3(0, 0.9, 0)
+	if DMNet.i.is_host():
+		for pid in DMNet.i.peers:
+			var pp: Vector3 = (DMNet.i.peers[pid].pos as Vector3) + Vector3(0, 0.9, 0)
 			var d2 := center().distance_to(pp)
 			if d2 < bd and d2 < 9.0 and not m.is_safe_zone(pp):
 				bd = d2
@@ -304,10 +304,10 @@ func _pick_target(m: Node) -> Dictionary:
 
 ## Morsure d'un joueur distant : l'hôte envoie les dégâts.
 func _bite_peer(m: Node) -> void:
-	if atk_cd > 0.0 or not DMNet.peers.has(tpeer):
+	if atk_cd > 0.0 or not DMNet.i.peers.has(tpeer):
 		return
 	atk_cd = Player.HIT_CD
-	DMNet._deliver(tpeer, Player.DMG * dmg_mult, pos, 0.5, 0)
+	DMNet.i._deliver(tpeer, Player.DMG * dmg_mult, pos, 0.5, 0)
 
 ## Orientation et clip d'animation selon l'état.
 func _update_model(dt: float, p: Player, chasing: bool, dist: float) -> void:

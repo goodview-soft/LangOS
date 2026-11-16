@@ -7,6 +7,8 @@ signal to_main
 signal look_changed
 signal new_game
 signal quit_requested
+signal host_requested(port: int)
+signal join_requested(ip: String, port: int)
 
 const GOLD := Color(1.0, 0.85, 0.4)
 const HERO_POS := Vector2(470, 300)  # pieds du mineur sur le fond du menu principal
@@ -124,6 +126,7 @@ func _ready() -> void:
 	screens.pause = _build_pause()
 	screens.character = _build_character()
 	screens.options = _build_options()
+	screens.net = _build_net()
 	for s in screens.values():
 		s.theme = UiTheme.theme()  # police lissée
 		add_child(s)
@@ -185,7 +188,9 @@ func _unhandled_input(ev: InputEvent) -> void:
 	if not visible or not (ev is InputEventKey and ev.pressed and not ev.echo and ev.keycode == KEY_ESCAPE):
 		return
 	get_viewport().set_input_as_handled()
-	if screens.character.visible or screens.options.visible:
+	if screens.net.visible:
+		_show("main")
+	elif screens.character.visible or screens.options.visible:
 		_back()
 	elif screens.pause.visible:
 		resume.emit()
@@ -317,6 +322,7 @@ func _build_main() -> Control:
 	vb.add_child(new_btn)
 	vb.add_child(_btn("Personnage", func(): _show("character")))
 	vb.add_child(_btn("Options", func(): _show("options")))
+	vb.add_child(_btn("Multijoueur", func(): _show("net")))
 	vb.add_child(_btn("Quitter", func(): quit_requested.emit()))
 	var ver := _lbl("prototype", 8, Color(0.5, 0.5, 0.6))
 	ver.position = Vector2(560, 344)
@@ -508,3 +514,41 @@ func _sync_options() -> void:
 	(o.find_child("volume", true, false) as HSlider).set_value_no_signal(DMSettings.volume)
 	zoom_lbl.text = "%d / 6" % (DMSettings.zoom + 1)
 
+# ---------------------------------------------------------------- multijoueur LAN
+var ip_edit: LineEdit
+var port_edit: LineEdit
+var net_status: Label
+
+func _build_net() -> Control:
+	var p := _panel("Multijoueur (LAN)")
+	_center(p[1], 260, 190)
+	var vb: VBoxContainer = p[2]
+	vb.add_child(_lbl("Héberger : tes amis rejoignent ton IP", 9))
+	port_edit = LineEdit.new()
+	port_edit.text = "7777"
+	port_edit.custom_minimum_size = Vector2(60, 16)
+	port_edit.add_theme_font_size_override("font_size", 10)
+	var row := HBoxContainer.new()
+	row.add_child(_lbl("Port ", 10))
+	row.add_child(port_edit)
+	vb.add_child(row)
+	vb.add_child(_btn("Héberger", func(): host_requested.emit(_port()), 146))
+	net_status = _lbl("", 9, GOLD)
+	vb.add_child(net_status)
+	ip_edit = LineEdit.new()
+	ip_edit.placeholder_text = "IP de l'hôte"
+	ip_edit.text = "127.0.0.1"
+	ip_edit.custom_minimum_size = Vector2(120, 16)
+	ip_edit.add_theme_font_size_override("font_size", 10)
+	vb.add_child(ip_edit)
+	vb.add_child(_btn("Rejoindre", func(): join_requested.emit(ip_edit.text.strip_edges(), _port()), 146))
+	vb.add_child(_btn("Retour", func(): _show("main"), 146))
+	return p[0]
+
+func _port() -> int:
+	var n := port_edit.text.to_int() if port_edit else 7777
+	return n if n > 0 and n < 65536 else 7777
+
+func set_net_status(t: String) -> void:
+	if net_status:
+		net_status.text = t

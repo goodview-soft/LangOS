@@ -14,16 +14,23 @@ var game: Node
 var active := true      # dernier clic dans cette fenêtre ?
 var _scale := 1.0       # pixels de la fenêtre par pixel logique
 var _lh := 360.0
+var _load_lbl: Label
+var _touch := false     # tactile / mobile : rendu 3D allégé (échelle réduite, sans MSAA), 60 FPS visés
+const MOBILE_W := 960.0 # largeur de rendu 3D visée sur tactile (le HUD reste net à la résolution de l'écran)
 
 func _ready() -> void:
 	clip_contents = true
 	var bg := ColorRect.new(); bg.color = Color.BLACK; bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE; add_child(bg)
-	sv = SubViewport.new(); sv.own_world_3d = true; sv.msaa_3d = Viewport.MSAA_2X
+	_touch = DisplayServer.is_touchscreen_available() or OS.has_feature("mobile")
+	sv = SubViewport.new(); sv.own_world_3d = true; sv.msaa_3d = Viewport.MSAA_DISABLED if _touch else Viewport.MSAA_2X
 	sv.handle_input_locally = false; sv.gui_embed_subwindows = true
 	add_child(sv)
 	view = TextureRect.new(); view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; view.stretch_mode = TextureRect.STRETCH_SCALE
 	view.mouse_filter = Control.MOUSE_FILTER_IGNORE; view.texture = sv.get_texture(); add_child(view)
+	_load_lbl = Label.new(); _load_lbl.text = "Chargement de la caverne…"; _load_lbl.set_anchors_preset(Control.PRESET_CENTER)
+	_load_lbl.grow_horizontal = Control.GROW_DIRECTION_BOTH; _load_lbl.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_load_lbl.add_theme_font_size_override("font_size", 20); _load_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE; add_child(_load_lbl)
 	resized.connect(_layout)
 	visibility_changed.connect(_vis)
 	_layout()
@@ -44,6 +51,7 @@ func _layout() -> void:
 	sv.size = Vector2i(maxi(64, int(vw)), maxi(64, int(vh)))
 	sv.size_2d_override = Vector2i(int(LW), int(roundf(_lh)))
 	sv.size_2d_override_stretch = true
+	sv.scaling_3d_scale = clampf(MOBILE_W / maxf(1.0, vw), 0.5, 1.0) if _touch else 1.0   # résolution 3D adaptée à l'écran
 	view.position = Vector2(roundf((w - vw) / 2.0), roundf((h - vh) / 2.0)); view.size = Vector2(vw, vh)
 	if game and game.has_method("set_extra_h"): game.set_extra_h(maxf(0.0, roundf(_lh) - 360.0))
 
@@ -57,6 +65,7 @@ func _start() -> void:
 	sv.add_child(game)
 	game.set_extra_h(maxf(0.0, roundf(_lh) - 360.0))
 	OS.low_processor_usage_mode = false
+	if _touch: Engine.max_fps = 60
 	active = true
 
 func _stop() -> void:
@@ -66,6 +75,13 @@ func _stop() -> void:
 	game = null
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	OS.low_processor_usage_mode = true
+	if _touch: Engine.max_fps = 0
+
+func _process(_dt: float) -> void:
+	if _load_lbl == null: return
+	var boot: bool = game != null and bool(game.get("booting"))
+	_load_lbl.visible = game == null or boot
+	if boot: _load_lbl.text = "Génération de la caverne…"
 
 func _exit_tree() -> void: _stop()
 

@@ -1132,7 +1132,7 @@ func _set_active(id: String) -> void:
 	for k in wins:
 		var on: bool = k == id
 		var tb: PanelContainer = wins[k]["tb"]
-		wins[k]["win"].add_theme_stylebox_override("panel", _winbox(on))
+		wins[k]["win"].add_theme_stylebox_override("panel", StyleBoxEmpty.new() if wins[k].get("immersive", false) else _winbox(on))
 		var st := _box(_p("tb_on") if on else _p("tb_off"), maxi(0, _rad() - 1))
 		st.corner_radius_bottom_left = 0; st.corner_radius_bottom_right = 0
 		st.content_margin_left = 10; st.content_margin_right = 9; st.content_margin_top = 8; st.content_margin_bottom = 8
@@ -1145,7 +1145,7 @@ func _set_active(id: String) -> void:
 			t.add_theme_stylebox_override("normal", sb)
 		else:
 			t.remove_theme_stylebox_override("normal")
-	if dock != null: dock.refresh()
+	_sync_immersive()
 
 ## Crée une fenêtre déplaçable ; renvoie son conteneur vertical.
 func _make_window(id: String, _title: String, sz: Vector2, pos: Vector2) -> VBoxContainer:
@@ -1302,8 +1302,44 @@ func _toggle_win(id: String) -> void:
 		wins[id]["min"] = true; fx.minimize(id); _set_active("")
 	else: _show(id)
 
+# ---------------------------------------------------------------- Jeux : plein écran tactile + icône de sortie
+var immersive := false   # un jeu occupe tout l'écran : barre des tâches et dock masqués
+
+func _is_touch() -> bool:
+	return DisplayServer.is_touchscreen_available() or OS.has_feature("mobile")
+
+## Appelé par chaque jeu après _make_window : icône flottante (haut droite, >= 44 px) qui ferme le jeu et revient au bureau ;
+## sur écran tactile, la fenêtre devient plein écran sans barre de titre, barre des tâches ni dock.
+func _game_chrome(id: String, host: Control, force_touch := false) -> void:
+	var b := Button.new(); b.set_script(load("res://apps/game_exit.gd"))
+	var sz := maxf(44.0, UI.tp(44))
+	b.icon = _ico("close"); b.expand_icon = true; b.add_theme_constant_override("icon_max_width", int(sz * 0.55))
+	b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	b.add_theme_color_override("icon_normal_color", Color.WHITE); b.add_theme_color_override("icon_hover_color", Color.WHITE); b.add_theme_color_override("icon_pressed_color", Color.WHITE)
+	var bg := StyleBoxFlat.new(); bg.bg_color = Color(0, 0, 0, 0.55); bg.set_corner_radius_all(int(sz / 2)); bg.set_content_margin_all(0)
+	for st in ["normal", "hover", "pressed"]: b.add_theme_stylebox_override(st, bg)
+	b.custom_minimum_size = Vector2(sz, sz); b.tooltip_text = "Quitter le jeu"
+	host.add_child(b)
+	b.set_anchors_preset(Control.PRESET_TOP_RIGHT); b.offset_left = -sz - 8.0; b.offset_right = -8.0; b.offset_top = 8.0; b.offset_bottom = 8.0 + sz
+	b.connect("pressed_exit", Callable(self, "_close_win").bind(id))
+	var d: Dictionary = wins[id]
+	if _is_touch() or force_touch:
+		d["immersive"] = true; d["maxed"] = true; d["saved"] = Rect2(d["win"].position, d["win"].size)
+		(d["tb"] as Control).visible = false
+		var em := StyleBoxEmpty.new(); (d["win"] as PanelContainer).add_theme_stylebox_override("panel", em)
+		_sync_immersive()
+		_clamp_windows.call_deferred()
+
+func _sync_immersive() -> void:
+	var on: bool = active != "" and wins.has(active) and bool(wins[active].get("immersive", false)) and wins[active]["win"].visible
+	immersive = on
+	if bar_panel: bar_panel.visible = not on
+	if dock != null: dock.refresh()
+	_clamp_windows.call_deferred()
+
 func _toggle_max(id: String) -> void:
 	var d: Dictionary = wins[id]
+	if d.get("immersive", false): return
 	var w: PanelContainer = d["win"]
 	if d["maxed"]:
 		w.position = d["saved"].position; w.size = d["saved"].size; _keep_in(w, desk.size)
@@ -1318,6 +1354,7 @@ func _close_win(id: String) -> void:
 	fx.reset_win(wins[id]); fx.close_win(wins[id]["win"]); wins[id]["task"].queue_free()
 	wins.erase(id)
 	_set_active("")
+	_sync_immersive()
 	_save_layout()
 
 # ---------------------------------------------------------------- Applications
@@ -1960,6 +1997,7 @@ func _app_hika() -> void:
 	var h := Control.new(); h.set_script(load("res://apps/hika_host.gd"))
 	h.size_flags_vertical = Control.SIZE_EXPAND_FILL; h.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.custom_minimum_size = Vector2(200, 300); wv.add_child(h)
+	_game_chrome("hika", h)
 
 func _app_deepminer() -> void:
 	var big := Vector2(minf(1100.0, desk.size.x - 24.0), minf(700.0, desk.size.y - 16.0))
@@ -1968,6 +2006,7 @@ func _app_deepminer() -> void:
 	h.set("on_exit", Callable(self, "_close_win").bind("deepminer"))
 	h.size_flags_vertical = Control.SIZE_EXPAND_FILL; h.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.custom_minimum_size = Vector2(200, 300); wv.add_child(h)
+	_game_chrome("deepminer", h)
 
 ## Petits outils (dossier Outils) : un script apps/tool_<id>.gd par outil.
 func _app_tool(id: String, sz: Vector2) -> void:
@@ -2047,6 +2086,7 @@ func _app_airhockey() -> void:
 	ah.size_flags_vertical = Control.SIZE_EXPAND_FILL; ah.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ah.custom_minimum_size = Vector2(minf(280.0, maxf(200.0, desk.size.x - 16.0)), 340); ah.clip_contents = true
 	wv.add_child(ah)
+	_game_chrome("airhockey", ah)
 
 func _app_chess() -> void:
 	var wv := _make_window("chess", "", Vector2(900, 680), Vector2(180, 10))
@@ -2055,6 +2095,7 @@ func _app_chess() -> void:
 	ch.size_flags_vertical = Control.SIZE_EXPAND_FILL; ch.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ch.custom_minimum_size = Vector2(200, 300); ch.clip_contents = true
 	wv.add_child(ch)
+	_game_chrome("chess", ch)
 
 # ---------------------------------------------------------------- Sound Link (app intégrée)
 
