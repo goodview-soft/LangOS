@@ -1630,7 +1630,7 @@ func _app_system() -> void:
 		["Processeur", "%s (%d cœurs)" % [OS.get_processor_name(), OS.get_processor_count()], "server"],
 		["Carte graphique", RenderingServer.get_video_adapter_name(), "image"],
 		["Mémoire", "%d Mo" % (int(mem.get("physical", 0)) / 1048576) if int(mem.get("physical", 0)) > 0 else "inconnue", "hard-drive"],
-		["Écran", "%dx%d" % [DisplayServer.window_get_size().x, DisplayServer.window_get_size().y], "maximize-2"],
+		["Écran", "%dx%d px, %d dpi, %dx%d dp" % [DisplayServer.window_get_size().x, DisplayServer.window_get_size().y, DisplayServer.screen_get_dpi(), roundi(DisplayServer.window_get_size().x * 160.0 / maxf(1.0, DisplayServer.screen_get_dpi())), roundi(DisplayServer.window_get_size().y * 160.0 / maxf(1.0, DisplayServer.screen_get_dpi()))], "maximize-2"],
 		["Données", ProjectSettings.globalize_path("user://"), "folder"],
 	]
 	var c := UI.prefs_group(page, "Cet appareil")
