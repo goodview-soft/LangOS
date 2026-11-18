@@ -1015,7 +1015,7 @@ func _update_flex() -> void:
 	var small_screen := DisplayServer.get_name() != "headless" and mini(DisplayServer.window_get_size().x, DisplayServer.window_get_size().y) < 900
 	if small_screen: on = false
 	# Petit écran : mini-pavé (carré en bas à droite) qui déplace le curseur ; le doigt reste libre ailleurs.
-	var mini_on: bool = small_screen and bool(set_cfg.get("mini", true))
+	var mini_on := false   # mini-pavé retiré (demande utilisateur)
 	flex.call("set_mini", mini_on)
 	flex.visible = on or mini_on
 	if pad_btn: pad_btn.modulate = ACCENT.lightened(0.3) if (on or mini_on) else Color.WHITE; pad_btn.visible = fold_half or OS.get_name() == "Android" or bool(set_cfg["pad"]) or pad_always or small_screen
