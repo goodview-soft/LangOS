@@ -18,7 +18,7 @@ var btns: Array = []
 var qs: Array = []
 var qi := -1
 var score := 0
-var mode := 0               # 0 mot manquant, 1 suite des paroles, 2 mélange
+var qmode := 0               # 0 mot manquant, 1 suite des paroles, 2 mélange
 var stop_at := 0.0
 var waiting := false        # musique en cours, attend la coupure
 var answered := false
@@ -74,7 +74,7 @@ func _words(s: String) -> Array:
 
 
 func _start(m: int) -> void:
-	mode = m; score = 0; qi = -1
+	qmode = m; score = 0; qi = -1
 	qs = _build()
 	if qs.size() < 3:
 		q_lbl.text = "[center]Pas assez de paroles synchronisées pour jouer.[/center]"
@@ -96,7 +96,7 @@ func _build() -> Array:
 	var res := []
 	for i in cand:
 		if res.size() >= QUESTIONS: break
-		var kind := mode if mode < 2 else randi() % 2
+		var kind := qmode if qmode < 2 else randi() % 2
 		var txt: String = lines[i][1]
 		var t0: float = lines[i][0]
 		var t1: float = lines[i + 1][0]
