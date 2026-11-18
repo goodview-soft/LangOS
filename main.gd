@@ -2113,11 +2113,11 @@ func _app_airhockey() -> void:
 	_game_chrome("airhockey", ah)
 
 func _app_lyricsgame() -> void:
-	var wv := _make_window("lyricsgame", "", Vector2(760, 560), Vector2(200, 20))
+	var wv := _make_window("lyricsgame", "", Vector2(1060, 800), Vector2(120, 6))
 	var g := Control.new()
 	g.set_script(load("res://apps/lyrics_quiz.gd"))
 	g.size_flags_vertical = Control.SIZE_EXPAND_FILL; g.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	g.custom_minimum_size = Vector2(300, 360); g.clip_contents = true
+	g.custom_minimum_size = Vector2(420, 480); g.clip_contents = true
 	wv.add_child(g)
 
 func _app_chess() -> void:
