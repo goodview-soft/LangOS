@@ -491,6 +491,7 @@ func _build_home() -> Control:
 		var b := Button.new()
 		b.text = "%s   %s\n%s" % [MODES[i].i, MODES[i].n, MODES[i].d]
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.clip_text = true
 		b.add_theme_font_size_override("font_size", 15)
 		b.pressed.connect(func(): sel_mode = i; _refresh_home())
 		c1.add_child(b); mode_btns.append(b)
@@ -500,6 +501,7 @@ func _build_home() -> Control:
 		var b := Button.new()
 		b.text = "%s   ·   %s" % [DIFFS[i].n, DIFFS[i].d]
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.clip_text = true
 		b.custom_minimum_size = Vector2(0, 44)
 		b.add_theme_font_size_override("font_size", 16)
 		b.pressed.connect(func(): sel_diff = i; _refresh_home())
@@ -510,6 +512,7 @@ func _build_home() -> Control:
 		var b := Button.new()
 		b.text = "Tout le morceau" if LENS[i] == 0 else "%d phrases" % LENS[i]
 		b.size_flags_horizontal = SIZE_EXPAND_FILL
+		b.clip_text = true
 		b.custom_minimum_size = Vector2(0, 44)
 		b.add_theme_font_size_override("font_size", 15)
 		b.pressed.connect(func(): sel_len = i; _refresh_home())
@@ -759,7 +762,7 @@ func _mastery_pct(t: Dictionary) -> int:
 func _toggle_pause() -> void:
 	paused = not paused
 	player.stream_paused = paused
-	btn_play.text = "▶" if paused else "⏸"
+	btn_play.text = "⏵" if paused else "⏸"
 
 
 func _step_line(dir: int) -> void:
