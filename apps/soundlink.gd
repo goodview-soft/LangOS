@@ -644,6 +644,8 @@ func _build_ui() -> void:
 		mon.toggled.connect(_set_monitor)
 		gl.add_child(mon)
 	vsink_lbl = _hint("", gl)
+	if mobile and Engine.has_singleton("LangWebView"):
+		_audio_out_row(gl)
 
 	var gi := _vbox(gs, 8)
 	_hint("Adresse d'un appareil non détecté", gi)
@@ -940,6 +942,35 @@ func _slider_row(parent: Node, title: String, mn: float, mx: float, val: float, 
 	s.value_changed.connect(func(x: float) -> void: vl.text = fmt.call(x))
 	vl.text = fmt.call(val)
 	return s
+
+
+## Android : choix de la sortie (haut-parleur, écouteur, casque) pour ne pas sonner « appel ».
+## Nécessite le plugin natif à jour (sinon la ligne n'apparaît pas).
+func _audio_out_row(parent: Node) -> void:
+	var wv := Engine.get_singleton("LangWebView")
+	if not wv.has_method("audioDevices"):
+		return
+	_hint("Sortie audio du téléphone", parent)
+	var opt := OptionButton.new()
+	parent.add_child(opt)
+	opt.add_item("Automatique")
+	opt.set_item_metadata(0, -1)
+	for e in wv.audioDevices(true):
+		var p := String(e).split("|")
+		if p.size() == 2:
+			opt.add_item(p[1])
+			opt.set_item_metadata(opt.item_count - 1, int(p[0]))
+	var saved: String = cfg.get_value("share", "out_name", "")
+	for i in opt.item_count:
+		if opt.get_item_text(i) == saved:
+			opt.select(i)
+	var apply := func(i: int) -> void:
+		cfg.set_value("share", "out_name", opt.get_item_text(i))
+		cfg.save(CFG_PATH)
+		wv.setOutput(int(opt.get_item_metadata(i)))
+	opt.item_selected.connect(apply)
+	if opt.selected > 0:
+		apply.call(opt.selected)
 
 
 func _refresh_devices() -> void:
