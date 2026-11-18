@@ -160,10 +160,7 @@ func _build_ui() -> void:
 	var lt := Label.new(); lt.text = "Bibliothèque"; lt.add_theme_font_size_override("font_size", 18); lv.add_child(lt)
 	list = ItemList.new(); list.size_flags_vertical = SIZE_EXPAND_FILL
 	list.add_theme_stylebox_override("panel", _panel(Color(0, 0, 0, 0), 0, 0))
-	list.item_clicked.connect(func(i, _p, b):
-		if b == MOUSE_BUTTON_LEFT: _list_pick(i)
-		elif b == MOUSE_BUTTON_RIGHT: _list_menu(i))
-	lv.add_child(list)
+	list.item_clicked.connect(func(i, _p, b): if b == MOUSE_BUTTON_LEFT: _list_pick(i)); lv.add_child(list)
 	var br := HBoxContainer.new(); br.add_theme_constant_override("separation", 4); lv.add_child(br)
 	br.add_child(_btn("Paroles", func(): _fetch_lyrics(current, true)))
 	tr_btn = _btn("Retraduire", _retranslate); tr_btn.visible = false; br.add_child(_btn("Coller LRC", _paste_lrc))
@@ -418,37 +415,6 @@ func set_langs(s: String, t: String) -> void:
 
 func _wrap(i: int) -> int:
 	return posmod(i, tracks.size()) if tracks.size() > 0 else -1
-
-
-func _list_menu(i: int) -> void:
-	if i < 0 or i >= tracks.size(): return
-	list.select(i)
-	var pm := PopupMenu.new()
-	pm.add_item("Jouer", 0)
-	pm.add_item("Jouer : deviner les paroles", 1)
-	pm.id_pressed.connect(func(id: int):
-		if id == 0: _play(i)
-		else: _quiz(i)
-		pm.queue_free())
-	pm.close_requested.connect(func(): pm.queue_free())
-	add_child(pm)
-	pm.position = Vector2i(get_viewport().get_mouse_position()) if get_viewport().is_embedding_subwindows() else DisplayServer.mouse_get_position()
-	pm.popup()
-
-
-func _quiz(i: int) -> void:
-	var t: Dictionary = tracks[i]
-	if t.get("lrc", "") == "" or not FileAccess.file_exists(t.lrc):
-		status.text = "Jeu impossible : ce morceau n'a pas de paroles synchronisées (bouton Paroles)."; return
-	var s := _load_stream(t.file)
-	if s == null: status.text = "Fichier illisible : " + t.file; return
-	var ls: Array = Lyrics.parse(FileAccess.get_file_as_string(t.lrc))
-	if player.playing: _toggle()
-	var w := Window.new()
-	w.set_script(load("res://apps/lyrics_quiz.gd"))
-	add_child(w)
-	w.setup(s, ls, float(t.get("offset", 0.0)), "%s — %s" % [t.artist, t.track])
-	w.popup_centered()
 
 
 func _list_pick(i: int) -> void:

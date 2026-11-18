@@ -82,6 +82,7 @@ const APPS := {
 	"soundlink": ["Sound Link", "res://icons/app_soundlink.svg"],
 	"update": ["Mise à jour", "res://icons/app_update.svg"],
 	"chess": ["Échecs", "res://icons/app_chess.svg"],
+	"lyricsgame": ["Jeu des paroles", "res://icons/app_lyricsgame.svg"],
 	"f_lang": ["Langue", "res://icons/app_f_lang.svg"],
 	"f_games": ["Jeux", "res://icons/app_f_games.svg"],
 	"f_comm": ["Communication", "res://icons/app_f_comm.svg"],
@@ -121,7 +122,7 @@ const APPS := {
 const DeskFiles = preload("res://apps/desk_files.gd")
 const FOLDERS := {
 	"f_lang": ["translate", "dict", "music"],
-	"f_games": ["chess", "hika", "airhockey", "deepminer"],
+	"f_games": ["chess", "hika", "airhockey", "deepminer", "lyricsgame"],
 	"f_soft": ["chromium", "notes", "files", "terminal", "code", "profiles", "clipboard", "devices"],
 	"f_comm": ["messenger", "remote", "chat", "soundlink"],
 	"f_office": ["sheet", "imgview", "pdf", "calendar", "scanner", "gallery"],
@@ -1103,6 +1104,7 @@ func _open_app(id: String) -> void:
 		"android_apps": _app_android_apps()
 		"hika": _app_hika()
 		"chess": _app_chess()
+		"lyricsgame": _app_lyricsgame()
 		"airhockey": _app_airhockey()
 		"deepminer": _app_deepminer()
 		"calc": _app_tool("calc", Vector2(620, 520))
@@ -1520,7 +1522,7 @@ func _app_settings() -> void:
 
 const MARKET_DESC := {
 	"translate": "Traduis du texte hors ligne avec un modèle local.", "dict": "Dictionnaire intégré avec définitions.", "music": "Lecteur de musique de ta bibliothèque.",
-	"chess": "Joue aux échecs contre l'ordinateur.", "hika": "Jeu de combat en ligne Hikabrain.",
+	"chess": "Joue aux échecs contre l'ordinateur.", "lyricsgame": "Devine les paroles : la musique s'arrête avant le mot.", "hika": "Jeu de combat en ligne Hikabrain.",
 	"chromium": "Navigateur web avec onglets, favoris, historique et bloqueur de pubs.", "notes": "Prends des notes rapides, classées et recherchables.",
 	"terminal": "Terminal de commandes intégré.", "code": "Éditeur de code avec coloration syntaxique.", "profiles": "Profils d'environnement : fenêtres et applis par contexte.",
 	"clipboard": "Historique du presse-papiers.", "devices": "Liste des périphériques connectés.", "messenger": "Messagerie instantanée.",
@@ -2109,6 +2111,14 @@ func _app_airhockey() -> void:
 	ah.custom_minimum_size = Vector2(minf(280.0, maxf(200.0, desk.size.x - 16.0)), 340); ah.clip_contents = true
 	wv.add_child(ah)
 	_game_chrome("airhockey", ah)
+
+func _app_lyricsgame() -> void:
+	var wv := _make_window("lyricsgame", "", Vector2(760, 560), Vector2(200, 20))
+	var g := Control.new()
+	g.set_script(load("res://apps/lyrics_quiz.gd"))
+	g.size_flags_vertical = Control.SIZE_EXPAND_FILL; g.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	g.custom_minimum_size = Vector2(300, 360); g.clip_contents = true
+	wv.add_child(g)
 
 func _app_chess() -> void:
 	var wv := _make_window("chess", "", Vector2(900, 680), Vector2(180, 10))

@@ -1,4 +1,4 @@
-extends Window
+extends Control
 ## Jeu « Deviner les paroles » : la musique s'arrête juste avant un mot (ou à la fin d'une phrase)
 ## et il faut choisir la bonne réponse parmi trois. Utilise les paroles synchronisées (.lrc) du morceau.
 ## Timing des mots : interpolé dans la ligne (proportionnel au nombre de lettres).
@@ -22,42 +22,95 @@ var qmode := 0               # 0 mot manquant, 1 suite des paroles, 2 mélange
 var stop_at := 0.0
 var waiting := false        # musique en cours, attend la coupure
 var answered := false
+var waiting_next := false
 var cur := {}
 
 
-func setup(s: AudioStream, lrc_lines: Array, off: float, name_: String) -> void:
-	stream = s; lines = lrc_lines; offset = off
-	title = "Deviner les paroles — " + name_
-	size = Vector2i(720, 520); min_size = Vector2i(420, 380)
-	exclusive = false
-	close_requested.connect(func(): queue_free())
-	player = AudioStreamPlayer.new(); player.stream = s; add_child(player)
+const LIB_PATH := "user://library.json"
+var lib: Array = []
+var back_btn: Button
+
+
+func _ready() -> void:
+	player = AudioStreamPlayer.new(); add_child(player)
 	var bg := PanelContainer.new(); bg.set_anchors_preset(Control.PRESET_FULL_RECT); add_child(bg)
 	var m := MarginContainer.new()
-	for k in ["left", "right", "top", "bottom"]: m.add_theme_constant_override("margin_" + k, 24)
+	for k in ["left", "right", "top", "bottom"]: m.add_theme_constant_override("margin_" + k, 20)
 	bg.add_child(m)
-	box = VBoxContainer.new(); box.add_theme_constant_override("separation", 14); m.add_child(box)
+	box = VBoxContainer.new(); box.add_theme_constant_override("separation", 12); m.add_child(box)
 	title_lbl = Label.new(); title_lbl.add_theme_font_size_override("font_size", 22)
 	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; box.add_child(title_lbl)
-	q_lbl = RichTextLabel.new(); q_lbl.bbcode_enabled = true; q_lbl.fit_content = true
+	q_lbl = RichTextLabel.new(); q_lbl.bbcode_enabled = true; q_lbl.fit_content = false
 	q_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	q_lbl.add_theme_font_size_override("normal_font_size", 26); box.add_child(q_lbl)
 	info_lbl = Label.new(); info_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; box.add_child(info_lbl)
 	for i in 3:
 		var b := Button.new(); b.custom_minimum_size = Vector2(0, 48)
-		b.add_theme_font_size_override("font_size", 18)
-		b.pressed.connect(_answer.bind(i)); box.add_child(b); btns.append(b)
+		b.add_theme_font_size_override("font_size", 18); box.add_child(b); btns.append(b)
+	back_btn = Button.new(); back_btn.text = "Changer de morceau"; back_btn.pressed.connect(_picker); box.add_child(back_btn)
+	_picker()
+
+
+## Écran 1 : choix d'un morceau de la bibliothèque Music qui a des paroles synchronisées.
+func _picker() -> void:
+	waiting = false; answered = true; player.stop(); qi = -1
+	back_btn.visible = false
+	lib = []
+	if FileAccess.file_exists(LIB_PATH):
+		var d = JSON.parse_string(FileAccess.get_file_as_string(LIB_PATH))
+		if d is Array: lib = d
+	var ok := []
+	for t in lib:
+		if String(t.get("lrc", "")) != "" and FileAccess.file_exists(t.lrc): ok.append(t)
+	title_lbl.text = "Jeu des paroles"
+	if ok.is_empty():
+		q_lbl.text = "[center]Aucun morceau avec paroles synchronisées.\nOuvre Music, joue un morceau et récupère ses paroles (bouton Paroles).[/center]"
+		info_lbl.text = ""
+		for b in btns: b.visible = false
+		return
+	q_lbl.text = "[center]Choisis un morceau[/center]"
+	info_lbl.text = "Les morceaux affichés ont leurs paroles."
+	for i in 3:
+		btns[i].visible = true
+		if i < ok.size():
+			var t: Dictionary = ok[(i + picker_off) % ok.size()]
+			btns[i].text = "%s — %s" % [t.get("artist", ""), t.get("track", "")]; btns[i].disabled = false
+			_rebind(btns[i], _load_track.bind(t))
+		else:
+			btns[i].text = ""; btns[i].disabled = true
+	if ok.size() > 3:
+		back_btn.visible = true; back_btn.text = "Autres morceaux ›"
+		_rebind(back_btn, func(): picker_off = (picker_off + 3) % ok.size(); _picker())
+
+
+var picker_off := 0
+
+
+func _load_track(t: Dictionary) -> void:
+	var path: String = t.file
+	var g := ProjectSettings.globalize_path(path)
+	var s: AudioStream = AudioStreamOggVorbis.load_from_file(g) if path.get_extension().to_lower() == "ogg" else AudioStreamMP3.load_from_file(g)
+	if s == null:
+		info_lbl.text = "Fichier illisible."; return
+	stream = s; player.stream = s
+	lines = Lyrics.parse(FileAccess.get_file_as_string(t.lrc))
+	offset = float(t.get("offset", 0.0))
+	song = "%s — %s" % [t.get("artist", ""), t.get("track", "")]
+	back_btn.text = "Changer de morceau"; _rebind(back_btn, _picker); back_btn.visible = true
 	_menu()
+
+
+var song := ""
 
 
 func _menu() -> void:
 	waiting = false; player.stop()
-	title_lbl.text = "Deviner les paroles"
+	title_lbl.text = "Deviner les paroles — " + song
 	q_lbl.text = "[center]Choisis un mode[/center]"
 	info_lbl.text = "%d questions, d'après les paroles synchronisées du morceau." % QUESTIONS
 	var labels := ["Mot manquant", "Suite des paroles", "Mélange"]
 	for i in 3:
-		btns[i].text = labels[i]; btns[i].disabled = false
+		btns[i].visible = true; btns[i].text = labels[i]; btns[i].disabled = false
 		_rebind(btns[i], func(): _start(i))
 
 
@@ -176,7 +229,7 @@ func _ask() -> void:
 
 func _answer(i: int) -> void:
 	if answered: return
-	answered = true
+	answered = true; waiting_next = true
 	var ok: bool = String(cur.opts[i]).to_lower() == String(cur.answer).to_lower()
 	if ok: score += 1
 	for b in btns: b.disabled = true
@@ -185,7 +238,8 @@ func _answer(i: int) -> void:
 	q_lbl.text = "[center]%s[/center]" % full
 	player.play(maxf(0.0, stop_at - 0.3))   # on laisse entendre la suite
 	await get_tree().create_timer(3.0).timeout
-	if not is_inside_tree() or qi < 0: return
+	if not is_inside_tree() or qi < 0 or not waiting_next: return
+	waiting_next = false
 	player.stop()
 	_next()
 
@@ -196,5 +250,5 @@ func _end() -> void:
 	q_lbl.text = "[center]Score : %d / %d[/center]" % [score, qs.size()]
 	info_lbl.text = ""
 	btns[0].text = "Rejouer"; btns[0].disabled = false; _rebind(btns[0], _menu)
-	btns[1].text = "Fermer"; btns[1].disabled = false; _rebind(btns[1], func(): queue_free())
+	btns[1].text = "Autre morceau"; btns[1].disabled = false; _rebind(btns[1], _picker)
 	btns[2].text = ""; btns[2].disabled = true
